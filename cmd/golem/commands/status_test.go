@@ -22,4 +22,7 @@ func TestStatusCommand_PrintsConfig(t *testing.T) {
     if !strings.Contains(output, "Config:") {
         t.Fatalf("expected config line, got: %s", output)
     }
+    if !strings.Contains(output, "Mode: default") {
+        t.Fatalf("expected workspace mode line, got: %s", output)
+    }
 }
