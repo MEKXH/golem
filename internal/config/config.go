@@ -1,0 +1,155 @@
+package config
+
+import (
+    "os"
+    "path/filepath"
+    "strings"
+)
+
+// Config root configuration
+type Config struct {
+    Agents    AgentsConfig    `mapstructure:"agents"`
+    Channels  ChannelsConfig  `mapstructure:"channels"`
+    Providers ProvidersConfig `mapstructure:"providers"`
+    Gateway   GatewayConfig   `mapstructure:"gateway"`
+    Tools     ToolsConfig     `mapstructure:"tools"`
+}
+
+// AgentsConfig agent settings
+type AgentsConfig struct {
+    Defaults AgentDefaults `mapstructure:"defaults"`
+}
+
+// AgentDefaults default agent parameters
+type AgentDefaults struct {
+    Workspace         string  `mapstructure:"workspace"`
+    Model             string  `mapstructure:"model"`
+    MaxTokens         int     `mapstructure:"max_tokens"`
+    Temperature       float64 `mapstructure:"temperature"`
+    MaxToolIterations int     `mapstructure:"max_tool_iterations"`
+}
+
+// ChannelsConfig channel settings
+type ChannelsConfig struct {
+    Telegram TelegramConfig `mapstructure:"telegram"`
+}
+
+// TelegramConfig telegram bot settings
+type TelegramConfig struct {
+    Enabled   bool     `mapstructure:"enabled"`
+    Token     string   `mapstructure:"token"`
+    AllowFrom []string `mapstructure:"allow_from"`
+}
+
+// ProvidersConfig LLM provider settings
+type ProvidersConfig struct {
+    OpenRouter ProviderConfig `mapstructure:"openrouter"`
+    Claude     ProviderConfig `mapstructure:"claude"`
+    OpenAI     ProviderConfig `mapstructure:"openai"`
+    DeepSeek   ProviderConfig `mapstructure:"deepseek"`
+    Gemini     ProviderConfig `mapstructure:"gemini"`
+    Ark        ProviderConfig `mapstructure:"ark"`
+    Qianfan    ProviderConfig `mapstructure:"qianfan"`
+    Qwen       ProviderConfig `mapstructure:"qwen"`
+    Ollama     ProviderConfig `mapstructure:"ollama"`
+}
+
+// ProviderConfig single provider settings
+type ProviderConfig struct {
+    APIKey    string `mapstructure:"api_key"`
+    SecretKey string `mapstructure:"secret_key"`
+    BaseURL   string `mapstructure:"base_url"`
+}
+
+// GatewayConfig server settings
+type GatewayConfig struct {
+    Host string `mapstructure:"host"`
+    Port int    `mapstructure:"port"`
+}
+
+// ToolsConfig tool settings
+type ToolsConfig struct {
+    Web  WebToolsConfig `mapstructure:"web"`
+    Exec ExecToolConfig `mapstructure:"exec"`
+}
+
+// WebToolsConfig web tool settings
+type WebToolsConfig struct {
+    Search WebSearchConfig `mapstructure:"search"`
+}
+
+// WebSearchConfig brave search settings
+type WebSearchConfig struct {
+    APIKey     string `mapstructure:"api_key"`
+    MaxResults int    `mapstructure:"max_results"`
+}
+
+// ExecToolConfig shell exec settings
+type ExecToolConfig struct {
+    Timeout             int  `mapstructure:"timeout"`
+    RestrictToWorkspace bool `mapstructure:"restrict_to_workspace"`
+}
+
+// DefaultConfig returns config with sensible defaults
+func DefaultConfig() *Config {
+    homeDir, _ := os.UserHomeDir()
+    return &Config{
+        Agents: AgentsConfig{
+            Defaults: AgentDefaults{
+                Workspace:         filepath.Join(homeDir, ".golem", "workspace"),
+                Model:             "anthropic/claude-sonnet-4-5",
+                MaxTokens:         8192,
+                Temperature:       0.7,
+                MaxToolIterations: 20,
+            },
+        },
+        Channels: ChannelsConfig{
+            Telegram: TelegramConfig{
+                Enabled:   false,
+                AllowFrom: []string{},
+            },
+        },
+        Providers: ProvidersConfig{},
+        Gateway: GatewayConfig{
+            Host: "0.0.0.0",
+            Port: 18790,
+        },
+        Tools: ToolsConfig{
+            Web: WebToolsConfig{
+                Search: WebSearchConfig{
+                    MaxResults: 5,
+                },
+            },
+            Exec: ExecToolConfig{
+                Timeout:             60,
+                RestrictToWorkspace: false,
+            },
+        },
+    }
+}
+
+// ConfigDir returns the golem config directory
+func ConfigDir() string {
+    homeDir, _ := os.UserHomeDir()
+    return filepath.Join(homeDir, ".golem")
+}
+
+// ConfigPath returns the config file path
+func ConfigPath() string {
+    return filepath.Join(ConfigDir(), "config.json")
+}
+
+// WorkspacePath returns the expanded workspace path
+func (c *Config) WorkspacePath() string {
+    if c.Agents.Defaults.Workspace == "" {
+        return filepath.Join(ConfigDir(), "workspace")
+    }
+    if len(c.Agents.Defaults.Workspace) > 0 && c.Agents.Defaults.Workspace[0] == '~' {
+        homeDir, _ := os.UserHomeDir()
+        rest := c.Agents.Defaults.Workspace[1:]
+        rest = strings.TrimPrefix(rest, string(filepath.Separator))
+        rest = strings.TrimPrefix(rest, "/")
+        return filepath.Join(homeDir, rest)
+    }
+    return c.Agents.Defaults.Workspace
+}
