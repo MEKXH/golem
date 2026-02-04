@@ -32,6 +32,48 @@ type (
 	errMsg error
 )
 
+type markdownRenderer interface {
+	Render(string) (string, error)
+}
+
+func renderMarkdown(r markdownRenderer, input string) string {
+	if r == nil {
+		return input
+	}
+	rendered, err := r.Render(input)
+	if err != nil {
+		return input + fmt.Sprintf("\n(Markdown render error: %v)", err)
+	}
+	return rendered
+}
+
+func splitThink(content string) (string, string, bool) {
+	re := regexp.MustCompile(`(?s)<think>(.*?)</think>`)
+	matches := re.FindStringSubmatch(content)
+	if len(matches) > 1 {
+		think := strings.TrimSpace(matches[1])
+		main := strings.TrimSpace(re.ReplaceAllString(content, ""))
+		return think, main, true
+	}
+	return "", content, false
+}
+
+func renderResponseParts(content string, r markdownRenderer) (string, string, bool) {
+	think, main, hasThink := splitThink(content)
+	if hasThink {
+		return renderMarkdown(r, think), renderMarkdown(r, main), true
+	}
+	return "", renderMarkdown(r, main), false
+}
+
+func indentLines(s, prefix string) string {
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = prefix + lines[i]
+	}
+	return strings.Join(lines, "\n")
+}
+
 type model struct {
 	viewport      viewport.Model
 	textarea      textarea.Model
@@ -39,7 +81,7 @@ type model struct {
 	aiStyle       lipgloss.Style
 	thinkingStyle lipgloss.Style
 	toolStyle     lipgloss.Style
-	renderer      *glamour.TermRenderer
+	renderer      markdownRenderer
 	history       *strings.Builder
 	err           error
 	loop          *agent.Loop
@@ -47,6 +89,14 @@ type model struct {
 }
 
 func initialModel(ctx context.Context, loop *agent.Loop) model {
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStandardStyle("dark"),
+		glamour.WithWordWrap(30),
+	)
+	if err != nil {
+		renderer = nil
+	}
+
 	ta := textarea.New()
 	ta.Placeholder = "Send a message..."
 	ta.Focus()
@@ -69,11 +119,6 @@ Type a message and press Enter to send.`)
 	vp.SetContent(history.String())
 
 	ta.KeyMap.InsertNewline.SetEnabled(false)
-
-	renderer, _ := glamour.NewTermRenderer(
-		glamour.WithStandardStyle("dark"),
-		glamour.WithWordWrap(30),
-	)
 
 	return model{
 		textarea:      ta,
@@ -126,10 +171,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update renderer width
 		if m.renderer != nil {
-			m.renderer, _ = glamour.NewTermRenderer(
+			newRenderer, err := glamour.NewTermRenderer(
 				glamour.WithStandardStyle("dark"),
 				glamour.WithWordWrap(msg.Width),
 			)
+			if err == nil {
+				m.renderer = newRenderer
+			}
 		}
 
 	case tea.KeyMsg:
@@ -158,28 +206,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case responseMsg:
 		content := string(msg)
-		re := regexp.MustCompile(`(?s)<think>(.*?)</think>`)
-		matches := re.FindStringSubmatch(content)
-
 		var viewContent string
-		if len(matches) > 1 {
-			thinkContent := strings.TrimSpace(matches[1])
-			mainContent := strings.TrimSpace(re.ReplaceAllString(content, ""))
-
-			// Indent thinking content slightly for better visual separation
-			thinkContent = strings.ReplaceAll(thinkContent, "\n", "\n  ")
-
-			viewContent = "\n\n" + m.thinkingStyle.Render("💭 Thinking:\n  "+thinkContent) +
-				"\n\n" + m.aiStyle.Render("Golem: ") + mainContent
+		thinkRendered, mainRendered, hasThink := renderResponseParts(content, m.renderer)
+		if hasThink {
+			thinkRendered = indentLines(thinkRendered, "  ")
+			viewContent = "\n\n" + m.thinkingStyle.Render("💭 Thinking:\n"+thinkRendered) +
+				"\n\n" + m.aiStyle.Render("Golem: ") + mainRendered
 		} else {
-			mainContent := content
-			rendered, err := m.renderer.Render(mainContent)
-			if err == nil {
-				mainContent = rendered
-			} else {
-				mainContent += fmt.Sprintf("\n(Markdown render error: %v)", err)
-			}
-			viewContent = "\n\n" + m.aiStyle.Render("Golem: ") + mainContent
+			viewContent = "\n\n" + m.aiStyle.Render("Golem: ") + mainRendered
 		}
 
 		m.history.WriteString(viewContent)
