@@ -2,6 +2,7 @@ package config
 
 import (
     "encoding/json"
+    "fmt"
     "os"
     "path/filepath"
     "strings"
@@ -203,19 +204,38 @@ func Save(cfg *Config) error {
 
 // WorkspacePath returns the expanded workspace path
 func (c *Config) WorkspacePath() string {
-    mode := strings.TrimSpace(c.Agents.Defaults.WorkspaceMode)
-    if mode == "" || strings.EqualFold(mode, "default") {
+    path, err := c.WorkspacePathChecked()
+    if err != nil {
         return filepath.Join(ConfigDir(), "workspace")
     }
+    return path
+}
+
+// WorkspacePathChecked returns the expanded workspace path or an error if invalid.
+func (c *Config) WorkspacePathChecked() (string, error) {
+    mode := strings.TrimSpace(c.Agents.Defaults.WorkspaceMode)
+    if mode == "" || strings.EqualFold(mode, "default") {
+        return filepath.Join(ConfigDir(), "workspace"), nil
+    }
+    if strings.EqualFold(mode, "cwd") {
+        wd, err := os.Getwd()
+        if err != nil {
+            return "", fmt.Errorf("failed to resolve cwd: %w", err)
+        }
+        return wd, nil
+    }
+    if !strings.EqualFold(mode, "path") {
+        return "", fmt.Errorf("unknown workspace_mode: %s", mode)
+    }
     if c.Agents.Defaults.Workspace == "" {
-        return filepath.Join(ConfigDir(), "workspace")
+        return "", fmt.Errorf("workspace is required when workspace_mode=path")
     }
     if len(c.Agents.Defaults.Workspace) > 0 && c.Agents.Defaults.Workspace[0] == '~' {
         homeDir, _ := os.UserHomeDir()
         rest := c.Agents.Defaults.Workspace[1:]
         rest = strings.TrimPrefix(rest, string(filepath.Separator))
         rest = strings.TrimPrefix(rest, "/")
-        return filepath.Join(homeDir, rest)
+        return filepath.Join(homeDir, rest), nil
     }
-    return c.Agents.Defaults.Workspace
+    return c.Agents.Defaults.Workspace, nil
 }
