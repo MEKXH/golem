@@ -178,6 +178,16 @@ func runChat(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to register tools: %w", err)
 	}
 
+	if len(args) > 0 {
+		message := strings.Join(args, " ")
+		resp, err := loop.ProcessDirect(ctx, message)
+		if err != nil {
+			return err
+		}
+		fmt.Println(resp)
+		return nil
+	}
+
 	p := tea.NewProgram(initialModel(ctx, loop))
 
 	if _, err := p.Run(); err != nil {
