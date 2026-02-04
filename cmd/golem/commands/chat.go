@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
@@ -63,18 +64,32 @@ func renderResponseParts(content string, r markdownRenderer) (string, string, bo
 	return "", renderMarkdown(r, main), false
 }
 
+func indentLines(s, prefix string) string {
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = prefix + lines[i]
+	}
+	return strings.Join(lines, "\n")
+}
+
 type model struct {
 	viewport      viewport.Model
 	textarea      textarea.Model
 	senderStyle   lipgloss.Style
 	aiStyle       lipgloss.Style
 	thinkingStyle lipgloss.Style
+	renderer      markdownRenderer
 	err           error
 	loop          *agent.Loop
 	ctx           context.Context
 }
 
 func initialModel(ctx context.Context, loop *agent.Loop) model {
+	renderer, err := glamour.NewTermRenderer(glamour.WithAutoStyle())
+	if err != nil {
+		renderer = nil
+	}
+
 	ta := textarea.New()
 	ta.Placeholder = "Send a message..."
 	ta.Focus()
@@ -101,6 +116,7 @@ Type a message and press Enter to send.`)
 		senderStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
 		aiStyle:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
 		thinkingStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true),
+		renderer:      renderer,
 		loop:          loop,
 		ctx:           ctx,
 		err:           nil,
@@ -154,21 +170,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case responseMsg:
 		content := string(msg)
-		re := regexp.MustCompile(`(?s)<think>(.*?)</think>`)
-		matches := re.FindStringSubmatch(content)
-
 		var viewContent string
-		if len(matches) > 1 {
-			thinkContent := strings.TrimSpace(matches[1])
-			mainContent := strings.TrimSpace(re.ReplaceAllString(content, ""))
-
-			// Indent thinking content slightly for better visual separation
-			thinkContent = strings.ReplaceAll(thinkContent, "\n", "\n  ")
-
-			viewContent = "\n\n" + m.thinkingStyle.Render("💭 Thinking:\n  "+thinkContent) +
-				"\n\n" + m.aiStyle.Render("Golem: ") + mainContent
+		thinkRendered, mainRendered, hasThink := renderResponseParts(content, m.renderer)
+		if hasThink {
+			thinkRendered = indentLines(thinkRendered, "  ")
+			viewContent = "\n\n" + m.thinkingStyle.Render("💭 Thinking:\n"+thinkRendered) +
+				"\n\n" + m.aiStyle.Render("Golem: ") + mainRendered
 		} else {
-			viewContent = "\n\n" + m.aiStyle.Render("Golem: ") + content
+			viewContent = "\n\n" + m.aiStyle.Render("Golem: ") + mainRendered
 		}
 
 		m.viewport.SetContent(m.viewport.View() + viewContent)
