@@ -1,6 +1,7 @@
 package agent
 
 import (
+    "strings"
     "testing"
 
     "github.com/MEKXH/golem/internal/bus"
@@ -17,5 +18,15 @@ func TestNewLoop(t *testing.T) {
     }
     if loop.maxIterations != 20 {
         t.Errorf("expected maxIterations=20, got %d", loop.maxIterations)
+    }
+}
+
+func TestContextBuilder_BuildSystemPrompt(t *testing.T) {
+    tmpDir := t.TempDir()
+    cb := NewContextBuilder(tmpDir)
+
+    prompt := cb.BuildSystemPrompt()
+    if !strings.Contains(prompt, "Golem") {
+        t.Error("expected system prompt to contain 'Golem'")
     }
 }
