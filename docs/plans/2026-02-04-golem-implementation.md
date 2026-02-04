@@ -23,7 +23,7 @@
 Run:
 ```bash
 cd D:\Work\Self_Projects\OpenSource\golem
-go mod init github.com/anthropic/golem
+go mod init github.com/MEKXH/golem
 ```
 
 **Step 2: Create minimal main.go**
@@ -1309,7 +1309,7 @@ package provider
 import (
     "testing"
 
-    "github.com/yourname/golem/internal/config"
+    "github.com/MEKXH/golem/internal/config"
 )
 
 func TestNewChatModel_NoProvider(t *testing.T) {
@@ -1339,7 +1339,7 @@ import (
 
     "github.com/cloudwego/eino/components/model"
     "github.com/cloudwego/eino-ext/components/model/openai"
-    "github.com/yourname/golem/internal/config"
+    "github.com/MEKXH/golem/internal/config"
 )
 
 // NewChatModel creates a ChatModel based on configuration
@@ -1463,8 +1463,8 @@ import (
     "context"
     "testing"
 
-    "github.com/yourname/golem/internal/bus"
-    "github.com/yourname/golem/internal/config"
+    "github.com/MEKXH/golem/internal/bus"
+    "github.com/MEKXH/golem/internal/config"
 )
 
 func TestNewLoop(t *testing.T) {
@@ -1499,10 +1499,10 @@ import (
 
     "github.com/cloudwego/eino/components/model"
     "github.com/cloudwego/eino/schema"
-    "github.com/yourname/golem/internal/bus"
-    "github.com/yourname/golem/internal/config"
-    "github.com/yourname/golem/internal/session"
-    "github.com/yourname/golem/internal/tools"
+    "github.com/MEKXH/golem/internal/bus"
+    "github.com/MEKXH/golem/internal/config"
+    "github.com/MEKXH/golem/internal/session"
+    "github.com/MEKXH/golem/internal/tools"
 )
 
 // Loop is the main agent processing loop
@@ -1736,7 +1736,7 @@ import (
     "strings"
 
     "github.com/cloudwego/eino/schema"
-    "github.com/yourname/golem/internal/session"
+    "github.com/MEKXH/golem/internal/session"
 )
 
 // ContextBuilder builds LLM context
@@ -1879,7 +1879,7 @@ package main
 import (
     "os"
 
-    "github.com/yourname/golem/cmd/golem/commands"
+    "github.com/MEKXH/golem/cmd/golem/commands"
 )
 
 func main() {
@@ -1999,7 +1999,7 @@ import (
     "path/filepath"
 
     "github.com/spf13/cobra"
-    "github.com/yourname/golem/internal/config"
+    "github.com/MEKXH/golem/internal/config"
 )
 
 func NewInitCmd() *cobra.Command {
@@ -2101,10 +2101,10 @@ import (
     "strings"
 
     "github.com/spf13/cobra"
-    "github.com/yourname/golem/internal/agent"
-    "github.com/yourname/golem/internal/bus"
-    "github.com/yourname/golem/internal/config"
-    "github.com/yourname/golem/internal/provider"
+    "github.com/MEKXH/golem/internal/agent"
+    "github.com/MEKXH/golem/internal/bus"
+    "github.com/MEKXH/golem/internal/config"
+    "github.com/MEKXH/golem/internal/provider"
 )
 
 func NewChatCmd() *cobra.Command {
@@ -2212,7 +2212,7 @@ import (
     "os"
 
     "github.com/spf13/cobra"
-    "github.com/yourname/golem/internal/config"
+    "github.com/MEKXH/golem/internal/config"
 )
 
 func NewStatusCmd() *cobra.Command {
@@ -2308,7 +2308,7 @@ package channel
 import (
     "context"
 
-    "github.com/yourname/golem/internal/bus"
+    "github.com/MEKXH/golem/internal/bus"
 )
 
 // Channel interface for chat platforms
@@ -2369,9 +2369,9 @@ import (
     "time"
 
     tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-    "github.com/yourname/golem/internal/bus"
-    "github.com/yourname/golem/internal/channel"
-    "github.com/yourname/golem/internal/config"
+    "github.com/MEKXH/golem/internal/bus"
+    "github.com/MEKXH/golem/internal/channel"
+    "github.com/MEKXH/golem/internal/config"
 )
 
 // Channel implements Telegram bot
@@ -2525,7 +2525,7 @@ import (
     "log/slog"
     "sync"
 
-    "github.com/yourname/golem/internal/bus"
+    "github.com/MEKXH/golem/internal/bus"
 )
 
 // Manager coordinates all channels
@@ -2607,12 +2607,12 @@ import (
     "syscall"
 
     "github.com/spf13/cobra"
-    "github.com/yourname/golem/internal/agent"
-    "github.com/yourname/golem/internal/bus"
-    "github.com/yourname/golem/internal/channel"
-    "github.com/yourname/golem/internal/channel/telegram"
-    "github.com/yourname/golem/internal/config"
-    "github.com/yourname/golem/internal/provider"
+    "github.com/MEKXH/golem/internal/agent"
+    "github.com/MEKXH/golem/internal/bus"
+    "github.com/MEKXH/golem/internal/channel"
+    "github.com/MEKXH/golem/internal/channel/telegram"
+    "github.com/MEKXH/golem/internal/config"
+    "github.com/MEKXH/golem/internal/provider"
 )
 
 func NewRunCmd() *cobra.Command {
@@ -2696,7 +2696,7 @@ git commit -m "feat(cli): implement run command with channel manager"
 
 **Step 1: Update all imports to use correct module path**
 
-Replace `github.com/yourname/golem` with `github.com/anthropic/golem` (or your actual module name) in all files.
+Replace `github.com/MEKXH/golem` with `github.com/MEKXH/golem` (or your actual module name) in all files.
 
 **Step 2: Run tests**
 
@@ -2737,7 +2737,7 @@ Lightweight personal AI assistant built with Go and Eino.
 ## Installation
 
 ```bash
-go install github.com/anthropic/golem/cmd/golem@latest
+go install github.com/MEKXH/golem/cmd/golem@latest
 ```
 
 ## Quick Start
