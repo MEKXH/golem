@@ -22,7 +22,10 @@ func TestRunCommand_WiresComponents(t *testing.T) {
 
     msgBus := bus.NewMessageBus(10)
     model, _ := provider.NewChatModel(context.Background(), cfg)
-    loop := agent.NewLoop(cfg, msgBus, model)
+    loop, err := agent.NewLoop(cfg, msgBus, model)
+    if err != nil {
+        t.Fatalf("NewLoop error: %v", err)
+    }
     _ = loop.RegisterDefaultTools(cfg)
 
     mgr := channel.NewManager(msgBus)

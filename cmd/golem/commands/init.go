@@ -26,12 +26,16 @@ func runInit(cmd *cobra.Command, args []string) error {
     }
 
     cfg := config.DefaultConfig()
+    workspacePath, err := cfg.WorkspacePathChecked()
+    if err != nil {
+        return fmt.Errorf("invalid workspace: %w", err)
+    }
 
     dirs := []string{
         config.ConfigDir(),
-        cfg.WorkspacePath(),
-        filepath.Join(cfg.WorkspacePath(), "memory"),
-        filepath.Join(cfg.WorkspacePath(), "skills"),
+        workspacePath,
+        filepath.Join(workspacePath, "memory"),
+        filepath.Join(workspacePath, "skills"),
         filepath.Join(config.ConfigDir(), "sessions"),
     }
 
@@ -53,7 +57,7 @@ func runInit(cmd *cobra.Command, args []string) error {
     }
 
     for name, content := range workspaceFiles {
-        path := filepath.Join(cfg.WorkspacePath(), name)
+        path := filepath.Join(workspacePath, name)
         if _, err := os.Stat(path); os.IsNotExist(err) {
             _ = os.WriteFile(path, []byte(content), 0644)
         }
@@ -61,7 +65,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
     fmt.Printf("Golem initialized!\n")
     fmt.Printf("Config: %s\n", configPath)
-    fmt.Printf("Workspace: %s\n", cfg.WorkspacePath())
+    fmt.Printf("Workspace: %s\n", workspacePath)
     fmt.Printf("\nNext steps:\n")
     fmt.Printf("1. Edit %s to add your API keys\n", configPath)
     fmt.Printf("2. Run 'golem chat' to start chatting\n")

@@ -38,7 +38,10 @@ func runChat(cmd *cobra.Command, args []string) error {
     }
 
     msgBus := bus.NewMessageBus(10)
-    loop := agent.NewLoop(cfg, msgBus, model)
+    loop, err := agent.NewLoop(cfg, msgBus, model)
+    if err != nil {
+        return fmt.Errorf("invalid workspace: %w", err)
+    }
 
     if err := loop.RegisterDefaultTools(cfg); err != nil {
         return fmt.Errorf("failed to register tools: %w", err)

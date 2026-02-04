@@ -34,12 +34,26 @@ func TestNewLoop(t *testing.T) {
     cfg := config.DefaultConfig()
     msgBus := bus.NewMessageBus(10)
 
-    loop := NewLoop(cfg, msgBus, nil)
+    loop, err := NewLoop(cfg, msgBus, nil)
+    if err != nil {
+        t.Fatalf("NewLoop error: %v", err)
+    }
     if loop == nil {
         t.Fatal("expected non-nil Loop")
     }
     if loop.maxIterations != 20 {
         t.Errorf("expected maxIterations=20, got %d", loop.maxIterations)
+    }
+}
+
+func TestNewLoop_InvalidWorkspaceMode(t *testing.T) {
+    cfg := config.DefaultConfig()
+    cfg.Agents.Defaults.WorkspaceMode = "path"
+    cfg.Agents.Defaults.Workspace = ""
+    msgBus := bus.NewMessageBus(10)
+
+    if _, err := NewLoop(cfg, msgBus, nil); err == nil {
+        t.Fatal("expected error")
     }
 }
 
@@ -62,7 +76,10 @@ func TestProcessDirect_BindsTools(t *testing.T) {
     msgBus := bus.NewMessageBus(1)
     model := &mockChatModel{}
 
-    loop := NewLoop(cfg, msgBus, model)
+    loop, err := NewLoop(cfg, msgBus, model)
+    if err != nil {
+        t.Fatalf("NewLoop error: %v", err)
+    }
     if err := loop.RegisterDefaultTools(cfg); err != nil {
         t.Fatalf("RegisterDefaultTools error: %v", err)
     }
@@ -71,7 +88,7 @@ func TestProcessDirect_BindsTools(t *testing.T) {
         t.Fatalf("expected tools registered, got %d", got)
     }
 
-    _, err := loop.ProcessDirect(context.Background(), "hi")
+    _, err = loop.ProcessDirect(context.Background(), "hi")
     if err != nil {
         t.Fatalf("ProcessDirect error: %v", err)
     }

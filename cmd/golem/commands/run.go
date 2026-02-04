@@ -45,7 +45,10 @@ func runServer(cmd *cobra.Command, args []string) error {
         slog.Warn("no model configured", "error", err)
     }
 
-    loop := agent.NewLoop(cfg, msgBus, model)
+    loop, err := agent.NewLoop(cfg, msgBus, model)
+    if err != nil {
+        return fmt.Errorf("invalid workspace: %w", err)
+    }
     if err := loop.RegisterDefaultTools(cfg); err != nil {
         return err
     }

@@ -22,6 +22,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
     if err != nil {
         return fmt.Errorf("failed to load config: %w", err)
     }
+    workspacePath, err := cfg.WorkspacePathChecked()
+    if err != nil {
+        return fmt.Errorf("invalid workspace: %w", err)
+    }
 
     fmt.Println("=== Golem Status ===")
     fmt.Println()
@@ -33,8 +37,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
         fmt.Println("  Status: Not found (run 'golem init')")
     }
 
-    fmt.Printf("\nWorkspace: %s\n", cfg.WorkspacePath())
-    if _, err := os.Stat(cfg.WorkspacePath()); err == nil {
+    fmt.Printf("\nWorkspace: %s\n", workspacePath)
+    if _, err := os.Stat(workspacePath); err == nil {
         fmt.Println("  Status: OK")
     } else {
         fmt.Println("  Status: Not found")

@@ -25,8 +25,11 @@ type Loop struct {
 }
 
 // NewLoop creates a new agent loop
-func NewLoop(cfg *config.Config, msgBus *bus.MessageBus, chatModel model.ChatModel) *Loop {
-    workspacePath := cfg.WorkspacePath()
+func NewLoop(cfg *config.Config, msgBus *bus.MessageBus, chatModel model.ChatModel) (*Loop, error) {
+    workspacePath, err := cfg.WorkspacePathChecked()
+    if err != nil {
+        return nil, err
+    }
     return &Loop{
         bus:           msgBus,
         model:         chatModel,
@@ -35,7 +38,7 @@ func NewLoop(cfg *config.Config, msgBus *bus.MessageBus, chatModel model.ChatMod
         context:       NewContextBuilder(workspacePath),
         maxIterations: cfg.Agents.Defaults.MaxToolIterations,
         workspacePath: workspacePath,
-    }
+    }, nil
 }
 
 // RegisterDefaultTools registers all built-in tools
