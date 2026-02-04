@@ -2,6 +2,8 @@
 
 Lightweight personal AI assistant built with Go and Eino.
 
+[中文文档](README.zh-CN.md)
+
 ## Installation
 
 ```bash
