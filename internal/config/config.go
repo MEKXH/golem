@@ -6,6 +6,7 @@ import (
     "path/filepath"
     "strings"
 
+    "github.com/go-viper/mapstructure/v2"
     "github.com/spf13/viper"
 )
 
@@ -164,11 +165,22 @@ func Load() (*Config, error) {
         return cfg, err
     }
 
-    if err := v.Unmarshal(cfg); err != nil {
+    if err := v.Unmarshal(cfg, func(dc *mapstructure.DecoderConfig) {
+        dc.TagName = "mapstructure"
+        dc.MatchName = func(mapKey, fieldName string) bool {
+            return normalizeKey(mapKey) == normalizeKey(fieldName)
+        }
+    }); err != nil {
         return cfg, err
     }
 
     return cfg, nil
+}
+
+func normalizeKey(input string) string {
+    input = strings.ReplaceAll(input, "_", "")
+    input = strings.ReplaceAll(input, "-", "")
+    return strings.ToLower(input)
 }
 
 // Save saves config to file

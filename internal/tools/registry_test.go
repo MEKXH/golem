@@ -1,14 +1,15 @@
 package tools
 
 import (
-    "context"
-    "fmt"
-    "os"
-    "path/filepath"
-    "strings"
-    "testing"
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
 
-    "github.com/cloudwego/eino/schema"
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
 )
 
 // Mock tool for testing
@@ -21,8 +22,8 @@ func (m *mockTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
     }, nil
 }
 
-func (m *mockTool) InvokableRun(ctx context.Context, args string, opts ...any) (string, error) {
-    return "mock result", nil
+func (m *mockTool) InvokableRun(ctx context.Context, args string, opts ...tool.Option) (string, error) {
+	return "mock result", nil
 }
 
 func TestRegistry_RegisterAndGet(t *testing.T) {

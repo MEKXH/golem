@@ -1,15 +1,16 @@
 package agent
 
 import (
-    "context"
-    "log/slog"
+	"context"
+	"log/slog"
 
-    "github.com/cloudwego/eino/components/model"
-    "github.com/cloudwego/eino/schema"
-    "github.com/MEKXH/golem/internal/bus"
-    "github.com/MEKXH/golem/internal/config"
-    "github.com/MEKXH/golem/internal/session"
-    "github.com/MEKXH/golem/internal/tools"
+	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
+	"github.com/MEKXH/golem/internal/bus"
+	"github.com/MEKXH/golem/internal/config"
+	"github.com/MEKXH/golem/internal/session"
+	"github.com/MEKXH/golem/internal/tools"
 )
 
 // Loop is the main agent processing loop
@@ -57,31 +58,34 @@ func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
         if err != nil {
             return err
         }
-        if invokable, ok := t.(interface {
-            Info(context.Context) (*schema.ToolInfo, error)
-            InvokableRun(context.Context, string, ...any) (string, error)
-        }); ok {
-            if err := l.tools.Register(invokable); err != nil {
-                return err
-            }
-        }
+		if invokable, ok := t.(tool.InvokableTool); ok {
+			if err := l.tools.Register(invokable); err != nil {
+				return err
+			}
+		}
     }
-    return nil
+	return nil
+}
+
+func (l *Loop) bindTools(ctx context.Context) error {
+	if l.model == nil {
+		return nil
+	}
+	toolInfos, err := l.tools.GetToolInfos(ctx)
+	if err != nil {
+		return err
+	}
+	if binder, ok := l.model.(interface{ BindTools([]*schema.ToolInfo) error }); ok {
+		return binder.BindTools(toolInfos)
+	}
+	return nil
 }
 
 // Run starts the agent loop
 func (l *Loop) Run(ctx context.Context) error {
-    if l.model != nil {
-        toolInfos, err := l.tools.GetToolInfos(ctx)
-        if err != nil {
-            return err
-        }
-        if binder, ok := l.model.(interface{ BindTools([]*schema.ToolInfo) error }); ok {
-            if err := binder.BindTools(toolInfos); err != nil {
-                return err
-            }
-        }
-    }
+	if err := l.bindTools(ctx); err != nil {
+		return err
+	}
 
     slog.Info("agent loop started")
 
@@ -167,7 +171,10 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 
 // ProcessDirect processes a message directly (for CLI)
 func (l *Loop) ProcessDirect(ctx context.Context, content string) (string, error) {
-    msg := &bus.InboundMessage{
+	if err := l.bindTools(ctx); err != nil {
+		return "", err
+	}
+	msg := &bus.InboundMessage{
         Channel:  "cli",
         SenderID: "user",
         ChatID:   "direct",
