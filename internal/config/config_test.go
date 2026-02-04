@@ -69,3 +69,14 @@ func TestLoadConfig_PascalCaseKeys(t *testing.T) {
         t.Fatalf("expected BaseURL loaded, got %q", cfg.Providers.OpenRouter.BaseURL)
     }
 }
+
+func TestWorkspacePath_Default(t *testing.T) {
+    cfg := DefaultConfig()
+    cfg.Agents.Defaults.Workspace = ""
+    cfg.Agents.Defaults.WorkspaceMode = "default"
+    got := cfg.WorkspacePath()
+    want := filepath.Join(ConfigDir(), "workspace")
+    if got != want {
+        t.Fatalf("got %s want %s", got, want)
+    }
+}

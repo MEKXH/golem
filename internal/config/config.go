@@ -27,6 +27,7 @@ type AgentsConfig struct {
 // AgentDefaults default agent parameters
 type AgentDefaults struct {
     Workspace         string  `mapstructure:"workspace"`
+    WorkspaceMode     string  `mapstructure:"workspace_mode"`
     Model             string  `mapstructure:"model"`
     MaxTokens         int     `mapstructure:"max_tokens"`
     Temperature       float64 `mapstructure:"temperature"`
@@ -101,6 +102,7 @@ func DefaultConfig() *Config {
         Agents: AgentsConfig{
             Defaults: AgentDefaults{
                 Workspace:         filepath.Join(homeDir, ".golem", "workspace"),
+                WorkspaceMode:     "default",
                 Model:             "anthropic/claude-sonnet-4-5",
                 MaxTokens:         8192,
                 Temperature:       0.7,
@@ -201,6 +203,10 @@ func Save(cfg *Config) error {
 
 // WorkspacePath returns the expanded workspace path
 func (c *Config) WorkspacePath() string {
+    mode := strings.TrimSpace(c.Agents.Defaults.WorkspaceMode)
+    if mode == "" || strings.EqualFold(mode, "default") {
+        return filepath.Join(ConfigDir(), "workspace")
+    }
     if c.Agents.Defaults.Workspace == "" {
         return filepath.Join(ConfigDir(), "workspace")
     }

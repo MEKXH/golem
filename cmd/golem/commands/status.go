@@ -3,6 +3,7 @@ package commands
 import (
     "fmt"
     "os"
+    "strings"
 
     "github.com/MEKXH/golem/internal/config"
     "github.com/spf13/cobra"
@@ -38,6 +39,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
     } else {
         fmt.Println("  Status: Not found")
     }
+    workspaceMode := strings.TrimSpace(cfg.Agents.Defaults.WorkspaceMode)
+    if workspaceMode == "" {
+        workspaceMode = "default"
+    }
+    fmt.Printf("  Mode: %s\n", workspaceMode)
 
     fmt.Printf("\nModel: %s\n", cfg.Agents.Defaults.Model)
 
