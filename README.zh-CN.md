@@ -1,4 +1,15 @@
-# Golem
+# Golem (גּוֹלֶם)
+
+<div align="center">
+
+[![Go Version](https://img.shields.io/github/go-mod/go-version/MEKXH/golem?style=flat-square&logo=go)](https://go.dev/)
+[![Release](https://img.shields.io/github/v/release/MEKXH/golem?style=flat-square&logo=github)](https://github.com/MEKXH/golem/releases/latest)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/MEKXH/golem/release.yml?style=flat-square&logo=github-actions)](https://github.com/MEKXH/golem/actions)
+[![License](https://img.shields.io/github/license/MEKXH/golem?style=flat-square)](LICENSE)
+
+_一个现代化的、可扩展的终端 AI 助手。_
+
+</div>
 
 **Golem** 是一个基于 [Go](https://go.dev/) 和 [Eino](https://github.com/cloudwego/eino) 构建的轻量级、可扩展的个人 AI 助手。它允许你通过终端或 Telegram 等消息平台，在本地高效运行强大的 AI 智能体。
 
@@ -6,15 +17,16 @@
 
 [English Documentation](README.md)
 
-## 功能特性
+## ✨ 功能特性
 
-- **终端用户界面 (TUI)**: 在终端内提供丰富、交互流畅的聊天体验。
-- **服务端模式**: 将 Golem 作为后台服务运行，支持通过外部渠道交互（目前支持 **Telegram**）。
-- **工具调用能力**:
+- **🖥️ 终端用户界面 (TUI)**: 在终端内提供丰富、交互流畅的聊天体验。
+- **🤖 服务端模式**: 将 Golem 作为后台服务运行，支持通过外部渠道交互（目前支持 **Telegram**）。
+- **🛠️ 工具调用能力**:
   - **Shell 执行**: 智能体可以执行系统命令（提供安全模式）。
   - **文件系统**: 在指定工作区内读取和操作文件。
   - **网络搜索**: 集成网络搜索功能。
-- **多模型支持**: 无缝切换 OpenAI, Claude, DeepSeek, Ollama, Gemini 等多种模型提供商。
+- **🔌 多模型支持**: 无缝切换 OpenAI, Claude, DeepSeek, Ollama, Gemini 等多种模型提供商。
+
 - **工作区管理**: 提供沙箱化的执行环境，确保安全和上下文隔离。
 
 ## 安装指南
@@ -47,7 +59,7 @@ golem init
 {
   "agents": {
     "defaults": {
-      "model": "anthropic/claude-3-5-sonnet-20241022"
+      "model": "anthropic/claude-4-5-sonnet-20250929"
     }
   },
   "providers": {
@@ -93,7 +105,7 @@ golem run
   "agents": {
     "defaults": {
       "workspace_mode": "default", // 选项: "default" (~/.golem/workspace), "cwd" (当前目录), "path" (指定路径)
-      "model": "anthropic/claude-3-5-sonnet-20241022",
+      "model": "anthropic/claude-4-5-sonnet-20250929",
       "max_tokens": 8192,
       "temperature": 0.7
     }
