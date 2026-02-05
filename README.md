@@ -59,7 +59,7 @@ Edit `~/.golem/config.json` to add your API keys. For example, to use Anthropic'
 {
   "agents": {
     "defaults": {
-      "model": "anthropic/claude-3-5-sonnet-20241022"
+      "model": "anthropic/claude-4-5-sonnet-20250929"
     }
   },
   "providers": {
