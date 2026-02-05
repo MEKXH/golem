@@ -9,11 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build and Release
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     strategy:
       matrix:
         include:
@@ -42,9 +40,32 @@ jobs:
         run: |
           go build -ldflags="-s -w -X 'github.com/MEKXH/golem/internal/version.Version=${{ github.ref_name }}'" -o ${{ matrix.output_name }} ./cmd/golem
 
-      - name: Upload Release Asset
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}
+          path: ${{ matrix.output_name }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-linux
+
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-windows
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: ${{ matrix.output_name }}
+          files: |
+            golem
+            golem.exe
           generate_release_notes: true
