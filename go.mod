@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/glamour v0.9.1
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/cloudwego/eino v0.7.30
+	github.com/cloudwego/eino v0.7.31
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/go-viper/mapstructure/v2 v2.4.0
