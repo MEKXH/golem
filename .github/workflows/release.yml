@@ -38,7 +38,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -ldflags="-s -w" -o ${{ matrix.output_name }} ./cmd/golem
+          go build -ldflags="-s -w -X 'github.com/MEKXH/golem/internal/version.Version=${{ github.ref_name }}'" -o ${{ matrix.output_name }} ./cmd/golem
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2

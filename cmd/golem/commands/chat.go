@@ -12,6 +12,7 @@ import (
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/provider"
+	"github.com/MEKXH/golem/internal/version"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -192,7 +193,7 @@ func initialModel(ctx context.Context, loop *agent.Loop) model {
 
 	welcomeMsg := ChatMessage{
 		Role:    "system",
-		Content: golemArt + "\nWelcome to Golem Chat v0.1.0\nType a message and press Enter to send.",
+		Content: golemArt + fmt.Sprintf("\nWelcome to Golem Chat %s\nType a message and press Enter to send.", version.Version),
 	}
 
 	messages := []ChatMessage{welcomeMsg}
