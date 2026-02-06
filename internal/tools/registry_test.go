@@ -48,7 +48,7 @@ func TestReadFileTool(t *testing.T) {
     testFile := filepath.Join(tmpDir, "test.txt")
     os.WriteFile(testFile, []byte("line1\nline2\nline3"), 0644)
 
-    tool, err := NewReadFileTool()
+    tool, err := NewReadFileTool("")
     if err != nil {
         t.Fatalf("NewReadFileTool error: %v", err)
     }

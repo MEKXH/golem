@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"regexp"
 	"strings"
 
 	"github.com/MEKXH/golem/internal/agent"
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/provider"
+	"github.com/MEKXH/golem/internal/render"
 	"github.com/MEKXH/golem/internal/version"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -91,24 +91,11 @@ func renderMarkdown(r markdownRenderer, input string) string {
 	return rendered
 }
 
-func splitThink(content string) (string, string, bool) {
-	re := regexp.MustCompile(`(?s)<think>(.*?)</think>`)
-	matches := re.FindStringSubmatch(content)
-	if len(matches) > 1 {
-		think := strings.TrimSpace(matches[1])
-		main := strings.TrimSpace(re.ReplaceAllString(content, ""))
-		return think, main, true
-	}
-	return "", content, false
-}
-
 func renderResponseParts(content string, r markdownRenderer) (string, string, bool) {
-	think, main, hasThink := splitThink(content)
+	think, main, hasThink := render.SplitThink(content)
 	if hasThink {
-		// Return raw thinking text (cleaned up), render main content
-		// We avoid rendering markdown for thinking to ensure our Italic style works well
-		// and to distinguish it from main content.
-		return strings.TrimSpace(think), renderMarkdown(r, main), true
+		// Render both thinking and main content with markdown formatting.
+		return renderMarkdown(r, think), renderMarkdown(r, main), true
 	}
 	return "", renderMarkdown(r, main), false
 }
@@ -138,7 +125,6 @@ type model struct {
 	senderStyle   lipgloss.Style
 	aiStyle       lipgloss.Style
 	thinkingStyle lipgloss.Style
-	toolStyle     lipgloss.Style // We use global toolLogStyle mainly, but keep this for compat
 
 	renderer markdownRenderer
 
@@ -212,7 +198,6 @@ func initialModel(ctx context.Context, loop *agent.Loop) model {
 		senderStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true),
 		aiStyle:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true),
 		thinkingStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true),
-		toolStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		renderer:      renderer,
 		messages:      messages,
 		loop:          loop,

@@ -3,6 +3,7 @@ package config
 import (
     "encoding/json"
     "fmt"
+    "log/slog"
     "os"
     "path/filepath"
     "strings"
@@ -98,7 +99,11 @@ type ExecToolConfig struct {
 
 // DefaultConfig returns config with sensible defaults
 func DefaultConfig() *Config {
-    homeDir, _ := os.UserHomeDir()
+    homeDir, err := os.UserHomeDir()
+    if err != nil {
+        slog.Warn("failed to resolve home directory, using current directory as fallback", "error", err)
+        homeDir = "."
+    }
     return &Config{
         Agents: AgentsConfig{
             Defaults: AgentDefaults{
@@ -177,6 +182,10 @@ func Load() (*Config, error) {
         return cfg, err
     }
 
+    if err := cfg.Validate(); err != nil {
+        return cfg, fmt.Errorf("config validation failed: %w", err)
+    }
+
     return cfg, nil
 }
 
@@ -199,7 +208,40 @@ func Save(cfg *Config) error {
         return err
     }
 
-    return os.WriteFile(configPath, data, 0644)
+    return os.WriteFile(configPath, data, 0600)
+}
+
+// Validate checks that the configuration values are within acceptable ranges.
+func (c *Config) Validate() error {
+    d := &c.Agents.Defaults
+
+    if d.MaxToolIterations < 0 {
+        return fmt.Errorf("agents.defaults.max_tool_iterations must not be negative, got %d", d.MaxToolIterations)
+    }
+    if d.MaxToolIterations == 0 {
+        d.MaxToolIterations = 20
+    }
+
+    if d.Temperature < 0 || d.Temperature > 2.0 {
+        return fmt.Errorf("agents.defaults.temperature must be between 0 and 2.0, got %f", d.Temperature)
+    }
+
+    if d.MaxTokens <= 0 {
+        return fmt.Errorf("agents.defaults.max_tokens must be > 0, got %d", d.MaxTokens)
+    }
+
+    mode := strings.TrimSpace(d.WorkspaceMode)
+    if mode != "" {
+        validModes := map[string]bool{"default": true, "cwd": true, "path": true}
+        if !validModes[strings.ToLower(mode)] {
+            return fmt.Errorf("agents.defaults.workspace_mode must be one of: default, cwd, path; got %q", mode)
+        }
+        if strings.EqualFold(mode, "path") && strings.TrimSpace(d.Workspace) == "" {
+            return fmt.Errorf("agents.defaults.workspace must be non-empty when workspace_mode is \"path\"")
+        }
+    }
+
+    return nil
 }
 
 // WorkspacePath returns the expanded workspace path
@@ -231,7 +273,10 @@ func (c *Config) WorkspacePathChecked() (string, error) {
         return "", fmt.Errorf("workspace is required when workspace_mode=path")
     }
     if len(c.Agents.Defaults.Workspace) > 0 && c.Agents.Defaults.Workspace[0] == '~' {
-        homeDir, _ := os.UserHomeDir()
+        homeDir, err := os.UserHomeDir()
+        if err != nil {
+            return "", fmt.Errorf("failed to resolve home directory for workspace path: %w", err)
+        }
         rest := c.Agents.Defaults.Workspace[1:]
         rest = strings.TrimPrefix(rest, string(filepath.Separator))
         rest = strings.TrimPrefix(rest, "/")
