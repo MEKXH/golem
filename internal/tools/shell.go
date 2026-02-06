@@ -4,6 +4,7 @@ import (
     "context"
     "fmt"
     "os/exec"
+    "regexp"
     "runtime"
     "strings"
     "time"
@@ -25,15 +26,32 @@ type ExecOutput struct {
     ExitCode int    `json:"exit_code"`
 }
 
-// Dangerous commands to block
-var dangerousCommands = []string{
-    "rm -rf /",
-    "rm -rf ~",
-    "mkfs",
-    "dd if=",
-    ":(){:|:&};:",
-    "format c:",
-    "del /f /s /q",
+// dangerousPatterns are regex patterns that match dangerous commands.
+// These are compiled once at init time for efficiency.
+var dangerousPatterns = []*regexp.Regexp{
+    // rm with force/recursive targeting root or home
+    regexp.MustCompile(`(?i)\brm\s+(-[a-z]*r[a-z]*\s+-[a-z]*f[a-z]*|-[a-z]*f[a-z]*\s+-[a-z]*r[a-z]*|-[a-z]*rf[a-z]*|-[a-z]*fr[a-z]*)\s+/\s*$`),
+    regexp.MustCompile(`(?i)\brm\s+(-[a-z]*r[a-z]*\s+-[a-z]*f[a-z]*|-[a-z]*f[a-z]*\s+-[a-z]*r[a-z]*|-[a-z]*rf[a-z]*|-[a-z]*fr[a-z]*)\s+~`),
+    // sudo variants of rm
+    regexp.MustCompile(`(?i)\bsudo\s+rm\s+(-[a-z]*r[a-z]*\s+-[a-z]*f[a-z]*|-[a-z]*f[a-z]*\s+-[a-z]*r[a-z]*|-[a-z]*rf[a-z]*|-[a-z]*fr[a-z]*)\s+/\s*$`),
+    // filesystem format commands
+    regexp.MustCompile(`(?i)\bmkfs\b`),
+    regexp.MustCompile(`(?i)\bdd\s+if=`),
+    // fork bomb
+    regexp.MustCompile(`:\(\)\s*\{.*\|.*&\s*\}\s*;`),
+    // Windows dangerous commands
+    regexp.MustCompile(`(?i)\bformat\s+[a-z]:`),
+    regexp.MustCompile(`(?i)\bdel\s+/[a-z]\s+/[a-z]\s+/[a-z]`),
+}
+
+// isDangerous checks whether a command matches any dangerous command pattern.
+func isDangerous(cmd string) (bool, string) {
+    for _, pat := range dangerousPatterns {
+        if pat.MatchString(cmd) {
+            return true, pat.String()
+        }
+    }
+    return false, ""
 }
 
 type execToolImpl struct {
@@ -43,36 +61,42 @@ type execToolImpl struct {
 }
 
 func (e *execToolImpl) execute(ctx context.Context, input *ExecInput) (*ExecOutput, error) {
-    cmdLower := strings.ToLower(input.Command)
-    for _, dangerous := range dangerousCommands {
-        if strings.Contains(cmdLower, dangerous) {
-            return &ExecOutput{
-                Stderr:   fmt.Sprintf("Blocked dangerous command: %s", dangerous),
-                ExitCode: 1,
-            }, nil
+    if dangerous, pattern := isDangerous(input.Command); dangerous {
+        return &ExecOutput{
+            Stderr:   fmt.Sprintf("Blocked dangerous command matching pattern: %s", pattern),
+            ExitCode: 1,
+        }, nil
+    }
+
+    // Determine working directory and enforce workspace restriction
+    workDir := input.WorkingDir
+    if e.restrictToWorkspace && e.workspaceDir != "" {
+        if workDir != "" {
+            if err := validatePath(workDir, e.workspaceDir); err != nil {
+                return &ExecOutput{
+                    Stderr:   fmt.Sprintf("Working directory rejected: %s", err.Error()),
+                    ExitCode: 1,
+                }, nil
+            }
+        } else {
+            workDir = e.workspaceDir
         }
-    }
-
-    var cmd *exec.Cmd
-    if runtime.GOOS == "windows" {
-        cmd = exec.CommandContext(ctx, "cmd", "/C", input.Command)
-    } else {
-        cmd = exec.CommandContext(ctx, "sh", "-c", input.Command)
-    }
-
-    if input.WorkingDir != "" {
-        cmd.Dir = input.WorkingDir
-    } else if e.workspaceDir != "" {
-        cmd.Dir = e.workspaceDir
+    } else if workDir == "" && e.workspaceDir != "" {
+        workDir = e.workspaceDir
     }
 
     timeoutCtx, cancel := context.WithTimeout(ctx, e.timeout)
     defer cancel()
-    cmd = exec.CommandContext(timeoutCtx, cmd.Path, cmd.Args[1:]...)
-    if input.WorkingDir != "" {
-        cmd.Dir = input.WorkingDir
-    } else if e.workspaceDir != "" {
-        cmd.Dir = e.workspaceDir
+
+    var cmd *exec.Cmd
+    if runtime.GOOS == "windows" {
+        cmd = exec.CommandContext(timeoutCtx, "cmd", "/C", input.Command)
+    } else {
+        cmd = exec.CommandContext(timeoutCtx, "sh", "-c", input.Command)
+    }
+
+    if workDir != "" {
+        cmd.Dir = workDir
     }
 
     var stdout, stderr strings.Builder

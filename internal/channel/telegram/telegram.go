@@ -12,6 +12,13 @@ import (
     "github.com/MEKXH/golem/internal/bus"
     "github.com/MEKXH/golem/internal/channel"
     "github.com/MEKXH/golem/internal/config"
+    "github.com/MEKXH/golem/internal/render"
+)
+
+var (
+    boldStarRe   = regexp.MustCompile(`\*\*(.+?)\*\*`)
+    boldUnderRe  = regexp.MustCompile(`__(.+?)__`)
+    codeInlineRe = regexp.MustCompile("`([^`]+)`")
 )
 
 // Channel implements Telegram bot
@@ -127,7 +134,7 @@ func parseInt64(s string) int64 {
 }
 
 func renderMessageHTML(content string) string {
-    think, main, hasThink := splitThink(content)
+    think, main, hasThink := render.SplitThink(content)
     if hasThink {
         thinkHTML := markdownToHTML(think)
         mainHTML := markdownToHTML(main)
@@ -139,23 +146,12 @@ func renderMessageHTML(content string) string {
     return markdownToHTML(content)
 }
 
-func splitThink(content string) (string, string, bool) {
-    re := regexp.MustCompile(`(?s)<think>(.*?)</think>`)
-    matches := re.FindStringSubmatch(content)
-    if len(matches) > 1 {
-        think := strings.TrimSpace(matches[1])
-        main := strings.TrimSpace(re.ReplaceAllString(content, ""))
-        return think, main, true
-    }
-    return "", content, false
-}
-
 func markdownToHTML(text string) string {
     text = strings.ReplaceAll(text, "&", "&amp;")
     text = strings.ReplaceAll(text, "<", "&lt;")
     text = strings.ReplaceAll(text, ">", "&gt;")
-    text = regexp.MustCompile(`\*\*(.+?)\*\*`).ReplaceAllString(text, "<b>$1</b>")
-    text = regexp.MustCompile(`__(.+?)__`).ReplaceAllString(text, "<b>$1</b>")
-    text = regexp.MustCompile("`([^`]+)`").ReplaceAllString(text, "<code>$1</code>")
+    text = boldStarRe.ReplaceAllString(text, "<b>$1</b>")
+    text = boldUnderRe.ReplaceAllString(text, "<b>$1</b>")
+    text = codeInlineRe.ReplaceAllString(text, "<code>$1</code>")
     return text
 }

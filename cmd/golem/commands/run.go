@@ -17,15 +17,12 @@ import (
 )
 
 func NewRunCmd() *cobra.Command {
-    var port int
-
     cmd := &cobra.Command{
         Use:   "run",
         Short: "Start Golem server",
         RunE:  runServer,
     }
 
-    cmd.Flags().IntVarP(&port, "port", "p", 18790, "Server port")
     return cmd
 }
 

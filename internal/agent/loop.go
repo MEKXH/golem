@@ -47,9 +47,9 @@ func NewLoop(cfg *config.Config, msgBus *bus.MessageBus, chatModel model.ChatMod
 // RegisterDefaultTools registers all built-in tools
 func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 	toolFns := []func() (interface{}, error){
-		func() (interface{}, error) { return tools.NewReadFileTool() },
-		func() (interface{}, error) { return tools.NewWriteFileTool() },
-		func() (interface{}, error) { return tools.NewListDirTool() },
+		func() (interface{}, error) { return tools.NewReadFileTool(l.workspacePath) },
+		func() (interface{}, error) { return tools.NewWriteFileTool(l.workspacePath) },
+		func() (interface{}, error) { return tools.NewListDirTool(l.workspacePath) },
 		func() (interface{}, error) {
 			return tools.NewExecTool(
 				cfg.Tools.Exec.Timeout,
