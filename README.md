@@ -125,7 +125,7 @@ The configuration file is located at `~/.golem/config.json`. Below is a comprehe
   "tools": {
     "exec": {
       "timeout": 60,
-      "restrict_to_workspace": false
+      "restrict_to_workspace": true
     },
     "web": {
       "search": {

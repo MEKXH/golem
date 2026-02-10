@@ -166,3 +166,56 @@ func TestReadFile_EmptyWorkspace(t *testing.T) {
 		t.Errorf("expected content to contain 'content here', got: %s", output.Content)
 	}
 }
+
+func TestReadFile_SymlinkEscapeBlocked(t *testing.T) {
+	workspace := t.TempDir()
+	outside := t.TempDir()
+	secretFile := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(secretFile, []byte("top-secret"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	linkPath := filepath.Join(workspace, "link-out")
+	if err := os.Symlink(outside, linkPath); err != nil {
+		t.Skipf("symlink not supported on this environment: %v", err)
+	}
+
+	tool, err := NewReadFileTool(workspace)
+	if err != nil {
+		t.Fatalf("NewReadFileTool error: %v", err)
+	}
+
+	argsJSON := fmt.Sprintf(`{"path": %q}`, filepath.Join(linkPath, "secret.txt"))
+	_, err = tool.InvokableRun(context.Background(), argsJSON)
+	if err == nil {
+		t.Fatal("expected error for symlink escape, got nil")
+	}
+	if !strings.Contains(err.Error(), "access denied") {
+		t.Fatalf("expected access denied, got: %v", err)
+	}
+}
+
+func TestWriteFile_SymlinkEscapeBlocked(t *testing.T) {
+	workspace := t.TempDir()
+	outside := t.TempDir()
+
+	linkPath := filepath.Join(workspace, "link-out")
+	if err := os.Symlink(outside, linkPath); err != nil {
+		t.Skipf("symlink not supported on this environment: %v", err)
+	}
+
+	tool, err := NewWriteFileTool(workspace)
+	if err != nil {
+		t.Fatalf("NewWriteFileTool error: %v", err)
+	}
+
+	target := filepath.Join(linkPath, "evil.txt")
+	argsJSON := fmt.Sprintf(`{"path": %q, "content": "malicious"}`, target)
+	_, err = tool.InvokableRun(context.Background(), argsJSON)
+	if err == nil {
+		t.Fatal("expected error for symlink escape, got nil")
+	}
+	if !strings.Contains(err.Error(), "access denied") {
+		t.Fatalf("expected access denied, got: %v", err)
+	}
+}
