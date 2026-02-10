@@ -52,6 +52,9 @@ func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 		func() (tool.InvokableTool, error) { return tools.NewReadFileTool(l.workspacePath) },
 		func() (tool.InvokableTool, error) { return tools.NewWriteFileTool(l.workspacePath) },
 		func() (tool.InvokableTool, error) { return tools.NewListDirTool(l.workspacePath) },
+		func() (tool.InvokableTool, error) { return tools.NewReadMemoryTool(l.workspacePath) },
+		func() (tool.InvokableTool, error) { return tools.NewWriteMemoryTool(l.workspacePath) },
+		func() (tool.InvokableTool, error) { return tools.NewAppendDiaryTool(l.workspacePath) },
 		func() (tool.InvokableTool, error) {
 			return tools.NewExecTool(
 				cfg.Tools.Exec.Timeout,

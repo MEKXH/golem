@@ -317,6 +317,9 @@ func TestRegisterDefaultTools_WithoutWebSearchKey(t *testing.T) {
 	if !slices.Contains(names, "web_fetch") {
 		t.Fatalf("expected web_fetch to be registered, got: %v", names)
 	}
+	if !slices.Contains(names, "read_memory") || !slices.Contains(names, "write_memory") || !slices.Contains(names, "append_diary") {
+		t.Fatalf("expected memory tools to be registered, got: %v", names)
+	}
 	if slices.Contains(names, "web_search") {
 		t.Fatalf("did not expect web_search without API key, got: %v", names)
 	}
