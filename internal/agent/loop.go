@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/MEKXH/golem/internal/bus"
@@ -101,10 +102,17 @@ func (l *Loop) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case msg := <-l.bus.Inbound():
+		case msg, ok := <-l.bus.Inbound():
+			if !ok {
+				return fmt.Errorf("inbound channel closed")
+			}
+			if msg == nil {
+				slog.Warn("received nil inbound message")
+				continue
+			}
 			resp, err := l.processMessage(ctx, msg)
 			if err != nil {
-				slog.Error("process message failed", "error", err)
+				slog.Error("process message failed", "channel", msg.Channel, "chat_id", msg.ChatID, "session_key", msg.SessionKey(), "error", err)
 				l.bus.PublishOutbound(&bus.OutboundMessage{
 					Channel: msg.Channel,
 					ChatID:  msg.ChatID,
@@ -120,7 +128,7 @@ func (l *Loop) Run(ctx context.Context) error {
 }
 
 func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bus.OutboundMessage, error) {
-	slog.Info("processing message", "channel", msg.Channel, "sender", msg.SenderID)
+	slog.Info("processing message", "channel", msg.Channel, "chat_id", msg.ChatID, "sender", msg.SenderID, "session_key", msg.SessionKey())
 
 	sess := l.sessions.GetOrCreate(msg.SessionKey())
 

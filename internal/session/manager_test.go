@@ -3,32 +3,33 @@ package session
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 func TestSession_AddMessage(t *testing.T) {
-    sess := &Session{Key: "test"}
-    sess.AddMessage("user", "hello")
-    sess.AddMessage("assistant", "hi there")
+	sess := &Session{Key: "test"}
+	sess.AddMessage("user", "hello")
+	sess.AddMessage("assistant", "hi there")
 
-    history := sess.GetHistory(10)
-    if len(history) != 2 {
-        t.Fatalf("expected 2 messages, got %d", len(history))
-    }
-    if history[0].Role != "user" {
-        t.Errorf("expected role=user, got %s", history[0].Role)
-    }
+	history := sess.GetHistory(10)
+	if len(history) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(history))
+	}
+	if history[0].Role != "user" {
+		t.Errorf("expected role=user, got %s", history[0].Role)
+	}
 }
 
 func TestManager_GetOrCreate(t *testing.T) {
-    mgr := NewManager(t.TempDir())
+	mgr := NewManager(t.TempDir())
 
-    sess1 := mgr.GetOrCreate("test:123")
-    sess2 := mgr.GetOrCreate("test:123")
+	sess1 := mgr.GetOrCreate("test:123")
+	sess2 := mgr.GetOrCreate("test:123")
 
-    if sess1 != sess2 {
-        t.Error("expected same session instance")
-    }
+	if sess1 != sess2 {
+		t.Error("expected same session instance")
+	}
 }
 
 func TestSession_SaveAndLoad(t *testing.T) {
@@ -87,5 +88,27 @@ func TestSession_EmptySessionNotSaved(t *testing.T) {
 		if entry.Name() == "empty-session.jsonl" {
 			t.Fatal("expected no file for empty session, but file was created")
 		}
+	}
+}
+
+func TestSession_SaveAndLoad_LongMessage(t *testing.T) {
+	baseDir := t.TempDir()
+	mgr1 := NewManager(baseDir)
+	sess := mgr1.GetOrCreate("long-message")
+	longText := strings.Repeat("x", 200000)
+	sess.AddMessage("user", longText)
+
+	if err := mgr1.Save(sess); err != nil {
+		t.Fatalf("Save error: %v", err)
+	}
+
+	mgr2 := NewManager(baseDir)
+	loaded := mgr2.GetOrCreate("long-message")
+	history := loaded.GetHistory(0)
+	if len(history) != 1 {
+		t.Fatalf("expected 1 message after load, got %d", len(history))
+	}
+	if history[0].Content != longText {
+		t.Fatalf("expected long message content round-trip, got length %d", len(history[0].Content))
 	}
 }
