@@ -89,7 +89,7 @@ func (m *Manager) RouteOutbound(ctx context.Context) {
 					go func(c Channel, outbound *bus.OutboundMessage) {
 						defer func() { <-m.sendSem }()
 						if err := c.Send(ctx, outbound); err != nil {
-							slog.Error("send outbound failed", "channel", outbound.Channel, "chat_id", outbound.ChatID, "error", err)
+							slog.Error("send outbound failed", "request_id", outbound.RequestID, "channel", outbound.Channel, "chat_id", outbound.ChatID, "error", err)
 						}
 					}(ch, msg)
 				case <-ctx.Done():

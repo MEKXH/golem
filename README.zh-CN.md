@@ -139,6 +139,10 @@ golem run
     "host": "0.0.0.0",
     "port": 18790,
     "token": "YOUR_GATEWAY_BEARER_TOKEN" // 可选
+  },
+  "log": {
+    "level": "info", // debug | info | warn | error
+    "file": "" // 可选日志文件路径
   }
 }
 ```

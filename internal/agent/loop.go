@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
@@ -124,13 +125,17 @@ func (l *Loop) Run(ctx context.Context) error {
 				slog.Warn("received nil inbound message")
 				continue
 			}
+			if strings.TrimSpace(msg.RequestID) == "" {
+				msg.RequestID = bus.NewRequestID()
+			}
 			resp, err := l.processMessage(ctx, msg)
 			if err != nil {
-				slog.Error("process message failed", "channel", msg.Channel, "chat_id", msg.ChatID, "session_key", msg.SessionKey(), "error", err)
+				slog.Error("process message failed", "request_id", msg.RequestID, "channel", msg.Channel, "chat_id", msg.ChatID, "session_key", msg.SessionKey(), "error", err)
 				l.bus.PublishOutbound(&bus.OutboundMessage{
-					Channel: msg.Channel,
-					ChatID:  msg.ChatID,
-					Content: "Error: " + err.Error(),
+					Channel:   msg.Channel,
+					ChatID:    msg.ChatID,
+					Content:   "Error: " + err.Error(),
+					RequestID: msg.RequestID,
 				})
 				continue
 			}
@@ -142,7 +147,7 @@ func (l *Loop) Run(ctx context.Context) error {
 }
 
 func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bus.OutboundMessage, error) {
-	slog.Info("processing message", "channel", msg.Channel, "chat_id", msg.ChatID, "sender", msg.SenderID, "session_key", msg.SessionKey())
+	slog.Info("processing message", "request_id", msg.RequestID, "channel", msg.Channel, "chat_id", msg.ChatID, "sender", msg.SenderID, "session_key", msg.SessionKey())
 
 	sess := l.sessions.GetOrCreate(msg.SessionKey())
 
@@ -169,7 +174,8 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 		messages = append(messages, resp)
 
 		for _, tc := range resp.ToolCalls {
-			slog.Debug("executing tool", "name", tc.Function.Name)
+			toolStart := time.Now()
+			slog.Debug("executing tool", "request_id", msg.RequestID, "name", tc.Function.Name)
 
 			if l.OnToolStart != nil {
 				l.OnToolStart(tc.Function.Name, tc.Function.Arguments)
@@ -179,6 +185,12 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 			if err != nil {
 				result = "Error: " + err.Error()
 			}
+			slog.Info("tool execution finished",
+				"request_id", msg.RequestID,
+				"tool", tc.Function.Name,
+				"duration_ms", time.Since(toolStart).Milliseconds(),
+				"success", err == nil,
+			)
 
 			if l.OnToolFinish != nil {
 				l.OnToolFinish(tc.Function.Name, result, err)
@@ -201,9 +213,10 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 	l.sessions.Save(sess)
 
 	return &bus.OutboundMessage{
-		Channel: msg.Channel,
-		ChatID:  msg.ChatID,
-		Content: finalContent,
+		Channel:   msg.Channel,
+		ChatID:    msg.ChatID,
+		Content:   finalContent,
+		RequestID: msg.RequestID,
 	}, nil
 }
 
@@ -223,10 +236,14 @@ func (l *Loop) ProcessForChannel(ctx context.Context, channel, chatID, senderID,
 	}
 
 	msg := &bus.InboundMessage{
-		Channel:  channel,
-		SenderID: senderID,
-		ChatID:   chatID,
-		Content:  content,
+		Channel:   channel,
+		SenderID:  senderID,
+		ChatID:    chatID,
+		Content:   content,
+		RequestID: bus.RequestIDFromContext(ctx),
+	}
+	if strings.TrimSpace(msg.RequestID) == "" {
+		msg.RequestID = bus.NewRequestID()
 	}
 
 	resp, err := l.processMessage(ctx, msg)

@@ -97,6 +97,7 @@ func (c *Channel) handleMessage(msg *tgbotapi.Message) {
 		ChatID:    fmt.Sprintf("%d", msg.Chat.ID),
 		Content:   content,
 		Timestamp: time.Now(),
+		RequestID: bus.NewRequestID(),
 		Metadata: map[string]any{
 			"message_id": msg.MessageID,
 			"username":   msg.From.UserName,

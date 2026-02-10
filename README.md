@@ -139,6 +139,10 @@ The configuration file is located at `~/.golem/config.json`. Below is a comprehe
     "host": "0.0.0.0",
     "port": 18790,
     "token": "YOUR_GATEWAY_BEARER_TOKEN" // Optional
+  },
+  "log": {
+    "level": "info", // debug | info | warn | error
+    "file": "" // Optional log file path
   }
 }
 ```

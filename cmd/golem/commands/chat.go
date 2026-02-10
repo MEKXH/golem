@@ -3,8 +3,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
-	"log/slog"
 	"strings"
 
 	"github.com/MEKXH/golem/internal/agent"
@@ -548,8 +546,9 @@ func runChat(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Disable logging for TUI
-	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := configureLogger(cfg, logLevelOverride, true); err != nil {
+		return fmt.Errorf("failed to configure logger: %w", err)
+	}
 
 	modelProvider, err := provider.NewChatModel(ctx, cfg)
 	if err != nil {

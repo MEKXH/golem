@@ -18,6 +18,7 @@ type Config struct {
 	Channels  ChannelsConfig  `mapstructure:"channels"`
 	Providers ProvidersConfig `mapstructure:"providers"`
 	Gateway   GatewayConfig   `mapstructure:"gateway"`
+	Log       LogConfig       `mapstructure:"log"`
 	Tools     ToolsConfig     `mapstructure:"tools"`
 }
 
@@ -75,6 +76,12 @@ type GatewayConfig struct {
 	Token string `mapstructure:"token"`
 }
 
+// LogConfig application logging settings
+type LogConfig struct {
+	Level string `mapstructure:"level"`
+	File  string `mapstructure:"file"`
+}
+
 // ToolsConfig tool settings
 type ToolsConfig struct {
 	Web  WebToolsConfig `mapstructure:"web"`
@@ -127,6 +134,10 @@ func DefaultConfig() *Config {
 			Host:  "0.0.0.0",
 			Port:  18790,
 			Token: "",
+		},
+		Log: LogConfig{
+			Level: "info",
+			File:  "",
 		},
 		Tools: ToolsConfig{
 			Web: WebToolsConfig{
@@ -245,6 +256,22 @@ func (c *Config) Validate() error {
 
 	if c.Gateway.Port <= 0 || c.Gateway.Port > 65535 {
 		return fmt.Errorf("gateway.port must be between 1 and 65535, got %d", c.Gateway.Port)
+	}
+
+	level := strings.ToLower(strings.TrimSpace(c.Log.Level))
+	if level == "" {
+		c.Log.Level = "info"
+	} else {
+		validLevels := map[string]bool{
+			"debug": true,
+			"info":  true,
+			"warn":  true,
+			"error": true,
+		}
+		if !validLevels[level] {
+			return fmt.Errorf("log.level must be one of debug, info, warn, error; got %q", c.Log.Level)
+		}
+		c.Log.Level = level
 	}
 
 	return nil

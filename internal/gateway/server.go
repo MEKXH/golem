@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/version"
 	"github.com/google/uuid"
@@ -130,7 +131,8 @@ func NewHandler(token string, processor ChatProcessor) http.Handler {
 			return
 		}
 
-		resp, err := processor.ProcessForChannel(r.Context(), "gateway", sessionID, senderID, msg)
+		procCtx := bus.WithRequestID(r.Context(), requestID)
+		resp, err := processor.ProcessForChannel(procCtx, "gateway", sessionID, senderID, msg)
 		if err != nil {
 			slog.Error("gateway chat failed", "request_id", requestID, "session_id", sessionID, "error", err)
 			writeError(w, requestID, http.StatusInternalServerError, "internal_error", "failed to process chat request")

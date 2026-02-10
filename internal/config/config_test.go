@@ -138,3 +138,20 @@ func TestValidate_GatewayPortRange(t *testing.T) {
 		t.Fatal("expected validation error for gateway.port>65535")
 	}
 }
+
+func TestValidate_LogLevel(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Log.Level = "DEBUG"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected uppercase log level to be normalized, got error: %v", err)
+	}
+	if cfg.Log.Level != "debug" {
+		t.Fatalf("expected normalized log level debug, got %q", cfg.Log.Level)
+	}
+
+	cfg = DefaultConfig()
+	cfg.Log.Level = "invalid-level"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for invalid log level")
+	}
+}
