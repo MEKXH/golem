@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -297,5 +298,44 @@ func TestRun_ExitsWhenInboundClosed(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for Run to return after inbound close")
+	}
+}
+
+func TestRegisterDefaultTools_WithoutWebSearchKey(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Tools.Web.Search.APIKey = ""
+
+	loop, err := NewLoop(cfg, bus.NewMessageBus(1), nil)
+	if err != nil {
+		t.Fatalf("NewLoop error: %v", err)
+	}
+	if err := loop.RegisterDefaultTools(cfg); err != nil {
+		t.Fatalf("RegisterDefaultTools error: %v", err)
+	}
+
+	names := loop.tools.Names()
+	if !slices.Contains(names, "web_fetch") {
+		t.Fatalf("expected web_fetch to be registered, got: %v", names)
+	}
+	if slices.Contains(names, "web_search") {
+		t.Fatalf("did not expect web_search without API key, got: %v", names)
+	}
+}
+
+func TestRegisterDefaultTools_WithWebSearchKey(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Tools.Web.Search.APIKey = "brave-key"
+
+	loop, err := NewLoop(cfg, bus.NewMessageBus(1), nil)
+	if err != nil {
+		t.Fatalf("NewLoop error: %v", err)
+	}
+	if err := loop.RegisterDefaultTools(cfg); err != nil {
+		t.Fatalf("RegisterDefaultTools error: %v", err)
+	}
+
+	names := loop.tools.Names()
+	if !slices.Contains(names, "web_search") {
+		t.Fatalf("expected web_search to be registered, got: %v", names)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
@@ -47,30 +48,40 @@ func NewLoop(cfg *config.Config, msgBus *bus.MessageBus, chatModel model.ChatMod
 
 // RegisterDefaultTools registers all built-in tools
 func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
-	toolFns := []func() (interface{}, error){
-		func() (interface{}, error) { return tools.NewReadFileTool(l.workspacePath) },
-		func() (interface{}, error) { return tools.NewWriteFileTool(l.workspacePath) },
-		func() (interface{}, error) { return tools.NewListDirTool(l.workspacePath) },
-		func() (interface{}, error) {
+	toolFns := []func() (tool.InvokableTool, error){
+		func() (tool.InvokableTool, error) { return tools.NewReadFileTool(l.workspacePath) },
+		func() (tool.InvokableTool, error) { return tools.NewWriteFileTool(l.workspacePath) },
+		func() (tool.InvokableTool, error) { return tools.NewListDirTool(l.workspacePath) },
+		func() (tool.InvokableTool, error) {
 			return tools.NewExecTool(
 				cfg.Tools.Exec.Timeout,
 				cfg.Tools.Exec.RestrictToWorkspace,
 				l.workspacePath,
 			)
 		},
+		func() (tool.InvokableTool, error) { return tools.NewWebFetchTool() },
+	}
+	if strings.TrimSpace(cfg.Tools.Web.Search.APIKey) != "" {
+		toolFns = append(toolFns, func() (tool.InvokableTool, error) {
+			return tools.NewWebSearchTool(cfg.Tools.Web.Search.APIKey, cfg.Tools.Web.Search.MaxResults)
+		})
 	}
 
+	registered := make([]string, 0, len(toolFns))
 	for _, fn := range toolFns {
 		t, err := fn()
 		if err != nil {
 			return err
 		}
-		if invokable, ok := t.(tool.InvokableTool); ok {
-			if err := l.tools.Register(invokable); err != nil {
-				return err
-			}
+		if err := l.tools.Register(t); err != nil {
+			return err
+		}
+		info, err := t.Info(context.Background())
+		if err == nil && info != nil && info.Name != "" {
+			registered = append(registered, info.Name)
 		}
 	}
+	slog.Info("registered tools", "count", len(registered), "tools", registered)
 	return nil
 }
 

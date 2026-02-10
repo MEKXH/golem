@@ -24,7 +24,7 @@ _A modern, extensible AI assistant for your terminal and beyond._
 - **🛠️ Tool Use**:
   - **Shell Execution**: The agent can run system commands (safe mode available).
   - **File System**: Read and manipulate files within a designated workspace.
-  - **Web Search**: Integrated web search capabilities.
+  - **Web Search & Fetch**: Search with Brave API (when configured) and fetch web page content.
 - **🔌 Multi-Provider Support**: Seamlessly switch between OpenAI, Claude, DeepSeek, Ollama, Gemini, and more.
 
 - **Workspace Management**: Sandboxed execution environments for safety and context management.
