@@ -339,3 +339,20 @@ func TestRegisterDefaultTools_WithWebSearchKey(t *testing.T) {
 		t.Fatalf("expected web_search to be registered, got: %v", names)
 	}
 }
+
+func TestProcessForChannel_UsesCustomSessionKey(t *testing.T) {
+	loop := newTestLoop(t, nil, 1)
+	result, err := loop.ProcessForChannel(context.Background(), "gateway", "s42", "api", "hello")
+	if err != nil {
+		t.Fatalf("ProcessForChannel error: %v", err)
+	}
+	if result != "No model configured" {
+		t.Fatalf("expected no-model fallback, got %q", result)
+	}
+
+	sess := loop.sessions.GetOrCreate("gateway:s42")
+	history := sess.GetHistory(0)
+	if len(history) != 2 {
+		t.Fatalf("expected 2 messages in session, got %d", len(history))
+	}
+}

@@ -204,15 +204,25 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 	}, nil
 }
 
-// ProcessDirect processes a message directly (for CLI)
-func (l *Loop) ProcessDirect(ctx context.Context, content string) (string, error) {
+// ProcessForChannel processes a message directly for a given channel/session.
+func (l *Loop) ProcessForChannel(ctx context.Context, channel, chatID, senderID, content string) (string, error) {
 	if err := l.bindTools(ctx); err != nil {
 		return "", err
 	}
+	if strings.TrimSpace(channel) == "" {
+		channel = "cli"
+	}
+	if strings.TrimSpace(chatID) == "" {
+		chatID = "direct"
+	}
+	if strings.TrimSpace(senderID) == "" {
+		senderID = "user"
+	}
+
 	msg := &bus.InboundMessage{
-		Channel:  "cli",
-		SenderID: "user",
-		ChatID:   "direct",
+		Channel:  channel,
+		SenderID: senderID,
+		ChatID:   chatID,
 		Content:  content,
 	}
 
@@ -221,4 +231,9 @@ func (l *Loop) ProcessDirect(ctx context.Context, content string) (string, error
 		return "", err
 	}
 	return resp.Content, nil
+}
+
+// ProcessDirect processes a message directly (for CLI)
+func (l *Loop) ProcessDirect(ctx context.Context, content string) (string, error) {
+	return l.ProcessForChannel(ctx, "cli", "direct", "user", content)
 }

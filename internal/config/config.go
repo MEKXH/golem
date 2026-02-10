@@ -70,8 +70,9 @@ type ProviderConfig struct {
 
 // GatewayConfig server settings
 type GatewayConfig struct {
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
+	Host  string `mapstructure:"host"`
+	Port  int    `mapstructure:"port"`
+	Token string `mapstructure:"token"`
 }
 
 // ToolsConfig tool settings
@@ -123,8 +124,9 @@ func DefaultConfig() *Config {
 		},
 		Providers: ProvidersConfig{},
 		Gateway: GatewayConfig{
-			Host: "0.0.0.0",
-			Port: 18790,
+			Host:  "0.0.0.0",
+			Port:  18790,
+			Token: "",
 		},
 		Tools: ToolsConfig{
 			Web: WebToolsConfig{
@@ -239,6 +241,10 @@ func (c *Config) Validate() error {
 		if strings.EqualFold(mode, "path") && strings.TrimSpace(d.Workspace) == "" {
 			return fmt.Errorf("agents.defaults.workspace must be non-empty when workspace_mode is \"path\"")
 		}
+	}
+
+	if c.Gateway.Port <= 0 || c.Gateway.Port > 65535 {
+		return fmt.Errorf("gateway.port must be between 1 and 65535, got %d", c.Gateway.Port)
 	}
 
 	return nil

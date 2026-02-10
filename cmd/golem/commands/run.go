@@ -1,72 +1,100 @@
 package commands
 
 import (
-    "context"
-    "fmt"
-    "log/slog"
-    "os/signal"
-    "syscall"
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
 
-    "github.com/MEKXH/golem/internal/agent"
-    "github.com/MEKXH/golem/internal/bus"
-    "github.com/MEKXH/golem/internal/channel"
-    "github.com/MEKXH/golem/internal/channel/telegram"
-    "github.com/MEKXH/golem/internal/config"
-    "github.com/MEKXH/golem/internal/provider"
-    "github.com/spf13/cobra"
+	"github.com/MEKXH/golem/internal/agent"
+	"github.com/MEKXH/golem/internal/bus"
+	"github.com/MEKXH/golem/internal/channel"
+	"github.com/MEKXH/golem/internal/channel/telegram"
+	"github.com/MEKXH/golem/internal/config"
+	"github.com/MEKXH/golem/internal/gateway"
+	"github.com/MEKXH/golem/internal/provider"
+	"github.com/spf13/cobra"
 )
 
 func NewRunCmd() *cobra.Command {
-    cmd := &cobra.Command{
-        Use:   "run",
-        Short: "Start Golem server",
-        RunE:  runServer,
-    }
+	cmd := &cobra.Command{
+		Use:   "run",
+		Short: "Start Golem server",
+		RunE:  runServer,
+	}
 
-    return cmd
+	return cmd
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
-    ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-    defer cancel()
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
 
-    cfg, err := config.Load()
-    if err != nil {
-        return fmt.Errorf("failed to load config: %w", err)
-    }
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
 
-    msgBus := bus.NewMessageBus(100)
+	msgBus := bus.NewMessageBus(100)
 
-    model, err := provider.NewChatModel(ctx, cfg)
-    if err != nil {
-        slog.Warn("no model configured", "error", err)
-    }
+	model, err := provider.NewChatModel(ctx, cfg)
+	if err != nil {
+		slog.Warn("no model configured", "error", err)
+	}
 
-    loop, err := agent.NewLoop(cfg, msgBus, model)
-    if err != nil {
-        return fmt.Errorf("invalid workspace: %w", err)
-    }
-    if err := loop.RegisterDefaultTools(cfg); err != nil {
-        return err
-    }
-    go loop.Run(ctx)
+	loop, err := agent.NewLoop(cfg, msgBus, model)
+	if err != nil {
+		return fmt.Errorf("invalid workspace: %w", err)
+	}
+	if err := loop.RegisterDefaultTools(cfg); err != nil {
+		return err
+	}
+	errCh := make(chan error, 2)
+	go func() {
+		if err := loop.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			errCh <- fmt.Errorf("agent loop failed: %w", err)
+		}
+	}()
 
-    chanMgr := channel.NewManager(msgBus)
+	chanMgr := channel.NewManager(msgBus)
 
-    if cfg.Channels.Telegram.Enabled {
-        tg := telegram.New(&cfg.Channels.Telegram, msgBus)
-        chanMgr.Register(tg)
-    }
+	if cfg.Channels.Telegram.Enabled {
+		tg := telegram.New(&cfg.Channels.Telegram, msgBus)
+		chanMgr.Register(tg)
+	}
 
-    chanMgr.StartAll(ctx)
-    go chanMgr.RouteOutbound(ctx)
+	chanMgr.StartAll(ctx)
+	go chanMgr.RouteOutbound(ctx)
 
-    fmt.Printf("Golem server running. Press Ctrl+C to stop.\n")
+	gatewayServer := gateway.New(cfg.Gateway, loop)
+	go func() {
+		if err := gatewayServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- fmt.Errorf("gateway server failed: %w", err)
+		}
+	}()
 
-    <-ctx.Done()
+	fmt.Printf("Golem server running. Gateway: http://%s\nPress Ctrl+C to stop.\n", gatewayServer.Addr())
 
-    slog.Info("shutting down")
-    chanMgr.StopAll(context.Background())
+	var runErr error
+	select {
+	case <-ctx.Done():
+	case runErr = <-errCh:
+		slog.Error("server component failed", "error", runErr)
+		cancel()
+	}
 
-    return nil
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	slog.Info("shutting down")
+	chanMgr.StopAll(shutdownCtx)
+	if err := gatewayServer.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
+		slog.Warn("gateway shutdown failed", "error", err)
+	}
+
+	return runErr
 }

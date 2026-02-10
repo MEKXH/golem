@@ -124,3 +124,17 @@ func TestLoadConfig_SaveFailureReturnsError(t *testing.T) {
 		t.Fatal("expected Load to return error when default config cannot be saved")
 	}
 }
+
+func TestValidate_GatewayPortRange(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Gateway.Port = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for gateway.port=0")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Gateway.Port = 65536
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for gateway.port>65535")
+	}
+}

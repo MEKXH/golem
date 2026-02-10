@@ -136,10 +136,31 @@ The configuration file is located at `~/.golem/config.json`. Below is a comprehe
   },
   "gateway": {
     "host": "0.0.0.0",
-    "port": 18790
+    "port": 18790,
+    "token": "YOUR_GATEWAY_BEARER_TOKEN" // Optional
   }
 }
 ```
+
+## Gateway API
+
+When `golem run` is started, Gateway HTTP endpoints are available:
+
+- `GET /health`
+- `GET /version`
+- `POST /chat`
+
+`POST /chat` request example:
+
+```json
+{
+  "message": "Summarize the latest logs",
+  "session_id": "ops-room",
+  "sender_id": "api-client"
+}
+```
+
+If `gateway.token` is set, send `Authorization: Bearer <token>`.
 
 ## Development
 

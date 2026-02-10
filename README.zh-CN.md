@@ -136,10 +136,31 @@ golem run
   },
   "gateway": {
     "host": "0.0.0.0",
-    "port": 18790
+    "port": 18790,
+    "token": "YOUR_GATEWAY_BEARER_TOKEN" // 可选
   }
 }
 ```
+
+## Gateway API
+
+执行 `golem run` 后，可通过 HTTP 访问以下端点：
+
+- `GET /health`
+- `GET /version`
+- `POST /chat`
+
+`POST /chat` 请求示例：
+
+```json
+{
+  "message": "总结最新日志",
+  "session_id": "ops-room",
+  "sender_id": "api-client"
+}
+```
+
+如果配置了 `gateway.token`，请在请求头中携带 `Authorization: Bearer <token>`。
 
 ## 开发规范
 
