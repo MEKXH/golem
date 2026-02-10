@@ -4,7 +4,7 @@
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/MEKXH/golem?style=flat-square&logo=go)](https://go.dev/)
 [![Release](https://img.shields.io/github/v/release/MEKXH/golem?style=flat-square&logo=github)](https://github.com/MEKXH/golem/releases/latest)
-[![CI Status](https://img.shields.io/github/actions/workflow/status/MEKXH/golem/release.yml?style=flat-square&logo=github-actions)](https://github.com/MEKXH/golem/actions)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/MEKXH/golem/ci.yml?style=flat-square&logo=github-actions)](https://github.com/MEKXH/golem/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/MEKXH/golem?style=flat-square)](LICENSE)
 
 _一个现代化的、可扩展的终端 AI 助手。_
@@ -140,6 +140,26 @@ golem run
   }
 }
 ```
+
+## 开发规范
+
+### 本地质量检查
+
+在推送代码前，请先执行：
+
+```bash
+go test ./...
+go test -race ./...
+go vet ./...
+```
+
+如果任一命令失败，请修复后重新执行全部检查。
+
+### 分支与 PR 流程
+
+1. 创建聚焦的功能分支：`feature/<phase>-<topic>`
+2. 单个 PR 保持小范围，并与一个阶段/任务对齐
+3. 向 `main` 发起 PR，且仅在 CI 全绿后合并
 
 ## 许可证
 

@@ -4,7 +4,7 @@
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/MEKXH/golem?style=flat-square&logo=go)](https://go.dev/)
 [![Release](https://img.shields.io/github/v/release/MEKXH/golem?style=flat-square&logo=github)](https://github.com/MEKXH/golem/releases/latest)
-[![CI Status](https://img.shields.io/github/actions/workflow/status/MEKXH/golem/release.yml?style=flat-square&logo=github-actions)](https://github.com/MEKXH/golem/actions)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/MEKXH/golem/ci.yml?style=flat-square&logo=github-actions)](https://github.com/MEKXH/golem/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/MEKXH/golem?style=flat-square)](LICENSE)
 
 _A modern, extensible AI assistant for your terminal and beyond._
@@ -140,6 +140,26 @@ The configuration file is located at `~/.golem/config.json`. Below is a comprehe
   }
 }
 ```
+
+## Development
+
+### Local Quality Checks
+
+Run these commands before pushing:
+
+```bash
+go test ./...
+go test -race ./...
+go vet ./...
+```
+
+If any command fails, fix the issue and rerun all checks.
+
+### Branch and PR Workflow
+
+1. Create a focused feature branch: `feature/<phase>-<topic>`
+2. Keep the PR scope small and aligned with one phase/task
+3. Open a PR to `main` and merge only after CI is green
 
 ## License
 
