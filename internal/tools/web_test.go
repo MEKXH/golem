@@ -9,21 +9,40 @@ import (
 	"time"
 )
 
-func TestWebSearch_NoAPIKey(t *testing.T) {
+func TestWebSearch_NoAPIKeyFallbackToDuckDuckGo(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("q"); got != "golem" {
+			t.Fatalf("unexpected query: %s", got)
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`
+<html><body>
+  <a class="result__a" href="https://example.com/free">Free Result</a>
+</body></html>`))
+	}))
+	defer server.Close()
+
 	impl := &webSearchToolImpl{
-		apiKey:     "",
-		maxResults: 5,
-		endpoint:   "https://example.com/search",
-		client:     &http.Client{Timeout: 5 * time.Second},
+		apiKey:        "",
+		maxResults:    5,
+		braveEndpoint: "https://brave.invalid/search",
+		duckEndpoint:  server.URL,
+		client:        server.Client(),
 	}
 
-	_, err := impl.execute(context.Background(), &WebSearchInput{Query: "golem"})
-	if err == nil {
-		t.Fatal("expected error when API key is missing")
+	out, err := impl.execute(context.Background(), &WebSearchInput{Query: "golem"})
+	if err != nil {
+		t.Fatalf("web search fallback error: %v", err)
+	}
+	if len(out.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(out.Results))
+	}
+	if out.Results[0].URL != "https://example.com/free" {
+		t.Fatalf("unexpected url: %s", out.Results[0].URL)
 	}
 }
 
-func TestWebSearch_Success(t *testing.T) {
+func TestWebSearch_BraveSuccess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-Subscription-Token") != "test-key" {
 			t.Fatalf("missing/invalid brave API header")
@@ -46,10 +65,11 @@ func TestWebSearch_Success(t *testing.T) {
 	defer server.Close()
 
 	impl := &webSearchToolImpl{
-		apiKey:     "test-key",
-		maxResults: 5,
-		endpoint:   server.URL,
-		client:     server.Client(),
+		apiKey:        "test-key",
+		maxResults:    5,
+		braveEndpoint: server.URL,
+		duckEndpoint:  "https://duck.invalid/html/",
+		client:        server.Client(),
 	}
 
 	out, err := impl.execute(context.Background(), &WebSearchInput{
@@ -67,6 +87,41 @@ func TestWebSearch_Success(t *testing.T) {
 	}
 	if out.Results[0].URL != "https://example.com" {
 		t.Fatalf("unexpected url: %s", out.Results[0].URL)
+	}
+}
+
+func TestWebSearch_BraveFailureFallsBackToDuckDuckGo(t *testing.T) {
+	brave := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "upstream error", http.StatusBadGateway)
+	}))
+	defer brave.Close()
+
+	duck := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`
+<html><body>
+  <a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.com%2Ffallback">Fallback Result</a>
+</body></html>`))
+	}))
+	defer duck.Close()
+
+	impl := &webSearchToolImpl{
+		apiKey:        "test-key",
+		maxResults:    5,
+		braveEndpoint: brave.URL,
+		duckEndpoint:  duck.URL,
+		client:        &http.Client{Timeout: 5 * time.Second},
+	}
+
+	out, err := impl.execute(context.Background(), &WebSearchInput{Query: "golem"})
+	if err != nil {
+		t.Fatalf("web search fallback error: %v", err)
+	}
+	if len(out.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(out.Results))
+	}
+	if out.Results[0].URL != "https://example.com/fallback" {
+		t.Fatalf("unexpected fallback url: %s", out.Results[0].URL)
 	}
 }
 

@@ -69,11 +69,9 @@ func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 			)
 		},
 		func() (tool.InvokableTool, error) { return tools.NewWebFetchTool() },
-	}
-	if strings.TrimSpace(cfg.Tools.Web.Search.APIKey) != "" {
-		toolFns = append(toolFns, func() (tool.InvokableTool, error) {
+		func() (tool.InvokableTool, error) {
 			return tools.NewWebSearchTool(cfg.Tools.Web.Search.APIKey, cfg.Tools.Web.Search.MaxResults)
-		})
+		},
 	}
 
 	registered := make([]string, 0, len(toolFns))

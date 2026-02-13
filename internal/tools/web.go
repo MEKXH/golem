@@ -17,18 +17,20 @@ import (
 )
 
 const (
-	defaultWebSearchEndpoint = "https://api.search.brave.com/res/v1/web/search"
-	defaultWebTimeout        = 15 * time.Second
-	defaultWebFetchMaxBytes  = 256 * 1024
-	maxWebFetchBytes         = 1024 * 1024
-	maxWebSearchResults      = 20
+	defaultBraveSearchEndpoint = "https://api.search.brave.com/res/v1/web/search"
+	defaultDuckSearchEndpoint  = "https://duckduckgo.com/html/"
+	defaultWebTimeout          = 15 * time.Second
+	defaultWebFetchMaxBytes    = 256 * 1024
+	maxWebFetchBytes           = 1024 * 1024
+	maxWebSearchResults        = 20
 )
 
 var (
-	htmlScriptRe = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	htmlStyleRe  = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	htmlTagRe    = regexp.MustCompile(`(?s)<[^>]+>`)
-	htmlSpaceRe  = regexp.MustCompile(`\s+`)
+	htmlScriptRe    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
+	htmlStyleRe     = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
+	htmlTagRe       = regexp.MustCompile(`(?s)<[^>]+>`)
+	htmlSpaceRe     = regexp.MustCompile(`\s+`)
+	ddgResultLinkRe = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
 )
 
 type WebSearchInput struct {
@@ -48,10 +50,11 @@ type WebSearchOutput struct {
 }
 
 type webSearchToolImpl struct {
-	apiKey     string
-	maxResults int
-	endpoint   string
-	client     *http.Client
+	apiKey        string
+	maxResults    int
+	braveEndpoint string
+	duckEndpoint  string
+	client        *http.Client
 }
 
 func (w *webSearchToolImpl) execute(ctx context.Context, input *WebSearchInput) (*WebSearchOutput, error) {
@@ -59,13 +62,24 @@ func (w *webSearchToolImpl) execute(ctx context.Context, input *WebSearchInput) 
 	if query == "" {
 		return nil, fmt.Errorf("query is required")
 	}
-	if strings.TrimSpace(w.apiKey) == "" {
-		return nil, fmt.Errorf("web_search requires tools.web.search.api_key")
+
+	limit := resolveWebSearchLimit(input.MaxResults, w.maxResults)
+	apiKey := strings.TrimSpace(w.apiKey)
+
+	if apiKey != "" {
+		out, err := w.searchWithBrave(ctx, query, limit)
+		if err == nil {
+			return out, nil
+		}
 	}
 
-	limit := input.MaxResults
+	return w.searchWithDuckDuckGo(ctx, query, limit)
+}
+
+func resolveWebSearchLimit(requested, defaultLimit int) int {
+	limit := requested
 	if limit <= 0 {
-		limit = w.maxResults
+		limit = defaultLimit
 	}
 	if limit <= 0 {
 		limit = 5
@@ -73,8 +87,11 @@ func (w *webSearchToolImpl) execute(ctx context.Context, input *WebSearchInput) 
 	if limit > maxWebSearchResults {
 		limit = maxWebSearchResults
 	}
+	return limit
+}
 
-	u, err := url.Parse(w.endpoint)
+func (w *webSearchToolImpl) searchWithBrave(ctx context.Context, query string, limit int) (*WebSearchOutput, error) {
+	u, err := url.Parse(w.braveEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid search endpoint: %w", err)
 	}
@@ -88,7 +105,7 @@ func (w *webSearchToolImpl) execute(ctx context.Context, input *WebSearchInput) 
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Subscription-Token", w.apiKey)
+	req.Header.Set("X-Subscription-Token", strings.TrimSpace(w.apiKey))
 
 	resp, err := w.client.Do(req)
 	if err != nil {
@@ -128,14 +145,93 @@ func (w *webSearchToolImpl) execute(ctx context.Context, input *WebSearchInput) 
 	return out, nil
 }
 
+func (w *webSearchToolImpl) searchWithDuckDuckGo(ctx context.Context, query string, limit int) (*WebSearchOutput, error) {
+	u, err := url.Parse(w.duckEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid duck search endpoint: %w", err)
+	}
+	q := u.Query()
+	q.Set("q", query)
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("User-Agent", "golem-web-search/1.0")
+
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return nil, fmt.Errorf("duckduckgo search failed with status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxWebFetchBytes))
+	if err != nil {
+		return nil, err
+	}
+	htmlBody := string(body)
+
+	matches := ddgResultLinkRe.FindAllStringSubmatch(htmlBody, limit)
+	results := make([]WebSearchResult, 0, len(matches))
+	for _, m := range matches {
+		if len(m) < 3 {
+			continue
+		}
+		rawURL := strings.TrimSpace(html.UnescapeString(m[1]))
+		title := strings.TrimSpace(htmlToText(html.UnescapeString(m[2])))
+		if rawURL == "" || title == "" {
+			continue
+		}
+		finalURL := decodeDuckRedirect(rawURL, u)
+		results = append(results, WebSearchResult{
+			Title:       title,
+			URL:         finalURL,
+			Description: "",
+		})
+	}
+
+	return &WebSearchOutput{
+		Query:   query,
+		Results: results,
+	}, nil
+}
+
+func decodeDuckRedirect(rawURL string, base *url.URL) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	if parsed.IsAbs() {
+		return parsed.String()
+	}
+	if strings.HasPrefix(parsed.Path, "/l/") {
+		uddg := parsed.Query().Get("uddg")
+		if decoded, err := url.QueryUnescape(uddg); err == nil && strings.TrimSpace(decoded) != "" {
+			return decoded
+		}
+	}
+	if base != nil {
+		return base.ResolveReference(parsed).String()
+	}
+	return rawURL
+}
+
 func NewWebSearchTool(apiKey string, maxResults int) (tool.InvokableTool, error) {
 	if maxResults <= 0 {
 		maxResults = 5
 	}
 	impl := &webSearchToolImpl{
-		apiKey:     apiKey,
-		maxResults: maxResults,
-		endpoint:   defaultWebSearchEndpoint,
+		apiKey:        apiKey,
+		maxResults:    maxResults,
+		braveEndpoint: defaultBraveSearchEndpoint,
+		duckEndpoint:  defaultDuckSearchEndpoint,
 		client: &http.Client{
 			Timeout: defaultWebTimeout,
 		},

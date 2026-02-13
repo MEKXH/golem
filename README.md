@@ -86,7 +86,7 @@ Run `golem run` as a background service. Connects Telegram, the HTTP Gateway API
 | `list_dir` | Browse directory contents |
 | `read_memory` / `write_memory` | Persistent long-term memory |
 | `append_diary` | Daily diary notes |
-| `web_search` | Search the web via Brave API |
+| `web_search` | Search the web (Brave when API key exists, otherwise free DuckDuckGo fallback) |
 | `web_fetch` | Fetch and extract web page content |
 | `manage_cron` | Create and manage scheduled tasks |
 
@@ -271,7 +271,7 @@ Located at `~/.golem/config.json`:
     },
     "web": {
       "search": {
-        "api_key": "YOUR_BRAVE_SEARCH_API_KEY",
+        "api_key": "YOUR_BRAVE_SEARCH_API_KEY (optional)",
         "max_results": 5
       }
     }
