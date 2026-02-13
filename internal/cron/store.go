@@ -55,21 +55,20 @@ func (s *Store) Load() error {
 	return nil
 }
 
-// Save writes all jobs to disk atomically.
+// Save writes all jobs to disk. Serialization happens under the read lock
+// so that concurrent mutations via Put cannot race with encoding.
 func (s *Store) Save() error {
 	s.mu.RLock()
-	jobs := make([]*Job, 0, len(s.jobs))
-	for _, j := range s.jobs {
-		jobs = append(jobs, j)
-	}
-	s.mu.RUnlock()
-
 	sd := storeData{
 		Version: 1,
-		Jobs:    jobs,
+		Jobs:    make([]*Job, 0, len(s.jobs)),
 	}
-
+	for _, j := range s.jobs {
+		sd.Jobs = append(sd.Jobs, j)
+	}
 	data, err := json.MarshalIndent(sd, "", "  ")
+	s.mu.RUnlock()
+
 	if err != nil {
 		return fmt.Errorf("marshal cron store: %w", err)
 	}
@@ -81,19 +80,24 @@ func (s *Store) Save() error {
 	return os.WriteFile(s.path, data, 0644)
 }
 
-// Put adds or updates a job.
+// Put stores a deep copy of the job. The caller may continue to mutate the
+// original without racing with Save or other readers.
 func (s *Store) Put(job *Job) {
+	cp := copyJob(job)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.jobs[job.ID] = job
+	s.jobs[cp.ID] = cp
 }
 
-// Get retrieves a job by ID.
+// Get returns a deep copy of the job with the given ID.
 func (s *Store) Get(id string) (*Job, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	j, ok := s.jobs[id]
-	return j, ok
+	if !ok {
+		return nil, false
+	}
+	return copyJob(j), true
 }
 
 // Delete removes a job by ID.
@@ -107,13 +111,35 @@ func (s *Store) Delete(id string) bool {
 	return true
 }
 
-// All returns a copy of all jobs.
+// All returns deep copies of all jobs.
 func (s *Store) All() []*Job {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	result := make([]*Job, 0, len(s.jobs))
 	for _, j := range s.jobs {
-		result = append(result, j)
+		result = append(result, copyJob(j))
 	}
 	return result
+}
+
+// copyJob returns a deep copy of a Job, including all pointer fields.
+func copyJob(j *Job) *Job {
+	cp := *j
+	if j.Schedule.AtMS != nil {
+		v := *j.Schedule.AtMS
+		cp.Schedule.AtMS = &v
+	}
+	if j.Schedule.EveryMS != nil {
+		v := *j.Schedule.EveryMS
+		cp.Schedule.EveryMS = &v
+	}
+	if j.State.NextRunAtMS != nil {
+		v := *j.State.NextRunAtMS
+		cp.State.NextRunAtMS = &v
+	}
+	if j.State.LastRunAtMS != nil {
+		v := *j.State.LastRunAtMS
+		cp.State.LastRunAtMS = &v
+	}
+	return &cp
 }
