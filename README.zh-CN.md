@@ -49,7 +49,7 @@ _你的终端里，住着一个不知疲倦的 AI 智能体。_
 | `read_memory`  | 读取长期记忆                          |
 | `write_memory` | 写入长期记忆                          |
 | `append_diary` | 追加每日日记                          |
-| `web_search`   | 网络搜索（Brave Search API）          |
+| `web_search`   | 网络搜索（有 Brave Key 用 Brave，无 Key 自动回退 DuckDuckGo 免费搜索） |
 | `web_fetch`    | 抓取网页内容                          |
 | `manage_cron`  | 创建和管理定时任务                    |
 
@@ -261,7 +261,7 @@ golem skills install owner/repo
     },
     "web": {
       "search": {
-        "api_key": "YOUR_BRAVE_SEARCH_API_KEY",
+        "api_key": "YOUR_BRAVE_SEARCH_API_KEY（可选）",
         "max_results": 5
       }
     }
