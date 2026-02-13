@@ -1,13 +1,17 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/MEKXH/golem/internal/agent"
+	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/cron"
+	"github.com/MEKXH/golem/internal/provider"
 	"github.com/spf13/cobra"
 )
 
@@ -20,6 +24,7 @@ func NewCronCmd() *cobra.Command {
 	cmd.AddCommand(
 		newCronListCmd(),
 		newCronAddCmd(),
+		newCronRunCmd(),
 		newCronRemoveCmd(),
 		newCronEnableCmd(),
 		newCronDisableCmd(),
@@ -52,6 +57,15 @@ func newCronAddCmd() *cobra.Command {
 	cmd.MarkFlagRequired("message")
 
 	return cmd
+}
+
+func newCronRunCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "run <job_id>",
+		Short: "Run a scheduled job immediately",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runCronNow,
+	}
 }
 
 func newCronRemoveCmd() *cobra.Command {
@@ -218,10 +232,76 @@ func runCronSetEnabled(jobID string, enabled bool) error {
 	return nil
 }
 
+func runCronNow(cmd *cobra.Command, args []string) error {
+	jobID := strings.TrimSpace(args[0])
+	if jobID == "" {
+		return fmt.Errorf("job_id is required")
+	}
+
+	ctx := context.Background()
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+	workspacePath, err := cfg.WorkspacePathChecked()
+	if err != nil {
+		return fmt.Errorf("invalid workspace: %w", err)
+	}
+
+	msgBus := bus.NewMessageBus(10)
+	model, err := provider.NewChatModel(ctx, cfg)
+	if err != nil {
+		fmt.Printf("Warning: %v\nRunning without LLM (job may produce fallback response)\n", err)
+		model = nil
+	}
+
+	loop, err := agent.NewLoop(cfg, msgBus, model)
+	if err != nil {
+		return fmt.Errorf("invalid workspace: %w", err)
+	}
+	if err := loop.RegisterDefaultTools(cfg); err != nil {
+		return fmt.Errorf("failed to register tools: %w", err)
+	}
+
+	cronStorePath := filepath.Join(workspacePath, "cron", "jobs.json")
+	svc := cron.NewService(cronStorePath, func(job *cron.Job) error {
+		ch := strings.TrimSpace(job.Payload.Channel)
+		if ch == "" {
+			ch = "cron"
+		}
+		chatID := strings.TrimSpace(job.Payload.ChatID)
+		if chatID == "" {
+			chatID = "default"
+		}
+		_, err := loop.ProcessForChannel(ctx, ch, chatID, "cron", job.Payload.Message)
+		return err
+	})
+	if err := svc.Start(); err != nil {
+		return err
+	}
+	defer svc.Stop()
+
+	job, err := svc.RunJob(jobID)
+	if err != nil {
+		return err
+	}
+
+	if job == nil {
+		fmt.Printf("Job %s executed (one-shot job removed after run).\n", jobID)
+		return nil
+	}
+
+	status := job.State.LastStatus
+	if status == "" {
+		status = "unknown"
+	}
+	fmt.Printf("Job %s (%s) executed, status=%s.\n", job.ShortID(), job.Name, status)
+	return nil
+}
+
 func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
 	return s[:maxLen-3] + "..."
 }
-

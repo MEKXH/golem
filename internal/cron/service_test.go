@@ -221,6 +221,42 @@ func TestCronSchedule(t *testing.T) {
 	}
 }
 
+func TestRunJob_ManualExecutionUpdatesState(t *testing.T) {
+	var fired atomic.Int32
+
+	svc := NewService(tempStorePath(t), func(job *Job) error {
+		fired.Add(1)
+		return nil
+	})
+	if err := svc.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer svc.Stop()
+
+	every := int64(60000)
+	job, err := svc.AddJob("manual-run", "msg", Schedule{Kind: "every", EveryMS: &every}, "cli", "direct", false)
+	if err != nil {
+		t.Fatalf("AddJob: %v", err)
+	}
+
+	updated, err := svc.RunJob(job.ID)
+	if err != nil {
+		t.Fatalf("RunJob: %v", err)
+	}
+	if updated == nil {
+		t.Fatal("expected updated job")
+	}
+	if fired.Load() != 1 {
+		t.Fatalf("expected handler to fire once, got %d", fired.Load())
+	}
+	if updated.State.LastRunAtMS == nil {
+		t.Fatal("expected LastRunAtMS to be set")
+	}
+	if updated.State.LastStatus != "ok" {
+		t.Fatalf("expected LastStatus=ok, got %q", updated.State.LastStatus)
+	}
+}
+
 func TestStoreLoadNonexistent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nonexistent", "jobs.json")
 	store := NewStore(path)

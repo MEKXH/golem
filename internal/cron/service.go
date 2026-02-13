@@ -155,6 +155,24 @@ func (s *Service) executeJob(job *Job) {
 	}
 }
 
+// RunJob executes a single job immediately by ID, regardless of next-run timing.
+// It reuses the same execution semantics as scheduled runs.
+func (s *Service) RunJob(id string) (*Job, error) {
+	job, ok := s.store.Get(id)
+	if !ok {
+		return nil, fmt.Errorf("job not found: %s", id)
+	}
+
+	s.executeJob(job)
+
+	updated, ok := s.store.Get(id)
+	if ok {
+		return updated, nil
+	}
+	// For one-shot jobs with DeleteAfterRun=true, the job is expected to be deleted.
+	return nil, nil
+}
+
 func (s *Service) computeNextRun(job *Job) {
 	now := time.Now()
 

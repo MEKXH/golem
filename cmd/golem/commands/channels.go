@@ -17,6 +17,8 @@ func NewChannelsCmd() *cobra.Command {
 	cmd.AddCommand(
 		newChannelsListCmd(),
 		newChannelsStatusCmd(),
+		newChannelsStartCmd(),
+		newChannelsStopCmd(),
 	)
 
 	return cmd
@@ -35,6 +37,28 @@ func newChannelsStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show detailed channel status",
 		RunE:  runChannelsStatus,
+	}
+}
+
+func newChannelsStartCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "start <channel>",
+		Short: "Enable a channel in config",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runChannelsSetEnabled(args[0], true)
+		},
+	}
+}
+
+func newChannelsStopCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop <channel>",
+		Short: "Disable a channel in config",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runChannelsSetEnabled(args[0], false)
+		},
 	}
 }
 
@@ -93,5 +117,31 @@ func runChannelsStatus(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("  Readiness:  %s\n", readiness)
 
+	return nil
+}
+
+func runChannelsSetEnabled(channelName string, enabled bool) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	name := strings.ToLower(strings.TrimSpace(channelName))
+	switch name {
+	case "telegram":
+		cfg.Channels.Telegram.Enabled = enabled
+	default:
+		return fmt.Errorf("unknown channel: %s", channelName)
+	}
+
+	if err := config.Save(cfg); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	state := "disabled"
+	if enabled {
+		state = "enabled"
+	}
+	fmt.Printf("Channel %s %s.\n", name, state)
 	return nil
 }

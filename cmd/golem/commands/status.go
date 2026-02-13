@@ -72,6 +72,23 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  %s: %s\n", name, status)
 	}
 
+	// Tools
+	fmt.Println("\nTools:")
+	fmt.Println("  read_file: ready")
+	fmt.Println("  write_file: ready")
+	fmt.Println("  list_dir: ready")
+	fmt.Println("  read_memory: ready")
+	fmt.Println("  write_memory: ready")
+	fmt.Println("  append_diary: ready")
+	fmt.Printf("  exec: ready (timeout=%ds, restrict_to_workspace=%v)\n", cfg.Tools.Exec.Timeout, cfg.Tools.Exec.RestrictToWorkspace)
+	fmt.Println("  web_fetch: ready")
+	webSearchStatus := "enabled (DuckDuckGo fallback)"
+	if strings.TrimSpace(cfg.Tools.Web.Search.APIKey) != "" {
+		webSearchStatus = "enabled (Brave + DuckDuckGo fallback)"
+	}
+	fmt.Printf("  web_search: %s\n", webSearchStatus)
+	fmt.Println("  manage_cron: ready")
+
 	// Channels
 	fmt.Println("\nChannels:")
 	tgStatus := "disabled"
