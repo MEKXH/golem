@@ -40,12 +40,75 @@ type AgentDefaults struct {
 // ChannelsConfig channel settings
 type ChannelsConfig struct {
 	Telegram TelegramConfig `mapstructure:"telegram"`
+	WhatsApp WhatsAppConfig `mapstructure:"whatsapp"`
+	Feishu   FeishuConfig   `mapstructure:"feishu"`
+	Discord  DiscordConfig  `mapstructure:"discord"`
+	Slack    SlackConfig    `mapstructure:"slack"`
+	QQ       QQConfig       `mapstructure:"qq"`
+	DingTalk DingTalkConfig `mapstructure:"dingtalk"`
+	MaixCam  MaixCamConfig  `mapstructure:"maixcam"`
 }
 
 // TelegramConfig telegram bot settings
 type TelegramConfig struct {
 	Enabled   bool     `mapstructure:"enabled"`
 	Token     string   `mapstructure:"token"`
+	AllowFrom []string `mapstructure:"allow_from"`
+}
+
+// WhatsAppConfig WhatsApp bridge settings
+type WhatsAppConfig struct {
+	Enabled   bool     `mapstructure:"enabled"`
+	BridgeURL string   `mapstructure:"bridge_url"`
+	AllowFrom []string `mapstructure:"allow_from"`
+}
+
+// FeishuConfig Feishu bot settings
+type FeishuConfig struct {
+	Enabled           bool     `mapstructure:"enabled"`
+	AppID             string   `mapstructure:"app_id"`
+	AppSecret         string   `mapstructure:"app_secret"`
+	EncryptKey        string   `mapstructure:"encrypt_key"`
+	VerificationToken string   `mapstructure:"verification_token"`
+	AllowFrom         []string `mapstructure:"allow_from"`
+}
+
+// DiscordConfig Discord bot settings
+type DiscordConfig struct {
+	Enabled   bool     `mapstructure:"enabled"`
+	Token     string   `mapstructure:"token"`
+	AllowFrom []string `mapstructure:"allow_from"`
+}
+
+// SlackConfig Slack bot settings
+type SlackConfig struct {
+	Enabled   bool     `mapstructure:"enabled"`
+	BotToken  string   `mapstructure:"bot_token"`
+	AppToken  string   `mapstructure:"app_token"`
+	AllowFrom []string `mapstructure:"allow_from"`
+}
+
+// QQConfig QQ bot settings
+type QQConfig struct {
+	Enabled   bool     `mapstructure:"enabled"`
+	AppID     string   `mapstructure:"app_id"`
+	AppSecret string   `mapstructure:"app_secret"`
+	AllowFrom []string `mapstructure:"allow_from"`
+}
+
+// DingTalkConfig DingTalk stream mode settings
+type DingTalkConfig struct {
+	Enabled      bool     `mapstructure:"enabled"`
+	ClientID     string   `mapstructure:"client_id"`
+	ClientSecret string   `mapstructure:"client_secret"`
+	AllowFrom    []string `mapstructure:"allow_from"`
+}
+
+// MaixCamConfig MaixCam bridge settings
+type MaixCamConfig struct {
+	Enabled   bool     `mapstructure:"enabled"`
+	Host      string   `mapstructure:"host"`
+	Port      int      `mapstructure:"port"`
 	AllowFrom []string `mapstructure:"allow_from"`
 }
 
@@ -126,6 +189,36 @@ func DefaultConfig() *Config {
 		Channels: ChannelsConfig{
 			Telegram: TelegramConfig{
 				Enabled:   false,
+				AllowFrom: []string{},
+			},
+			WhatsApp: WhatsAppConfig{
+				Enabled:   false,
+				AllowFrom: []string{},
+			},
+			Feishu: FeishuConfig{
+				Enabled:   false,
+				AllowFrom: []string{},
+			},
+			Discord: DiscordConfig{
+				Enabled:   false,
+				AllowFrom: []string{},
+			},
+			Slack: SlackConfig{
+				Enabled:   false,
+				AllowFrom: []string{},
+			},
+			QQ: QQConfig{
+				Enabled:   false,
+				AllowFrom: []string{},
+			},
+			DingTalk: DingTalkConfig{
+				Enabled:   false,
+				AllowFrom: []string{},
+			},
+			MaixCam: MaixCamConfig{
+				Enabled:   false,
+				Host:      "0.0.0.0",
+				Port:      9000,
 				AllowFrom: []string{},
 			},
 		},
@@ -256,6 +349,9 @@ func (c *Config) Validate() error {
 
 	if c.Gateway.Port <= 0 || c.Gateway.Port > 65535 {
 		return fmt.Errorf("gateway.port must be between 1 and 65535, got %d", c.Gateway.Port)
+	}
+	if c.Channels.MaixCam.Port != 0 && (c.Channels.MaixCam.Port < 1 || c.Channels.MaixCam.Port > 65535) {
+		return fmt.Errorf("channels.maixcam.port must be between 1 and 65535, got %d", c.Channels.MaixCam.Port)
 	}
 
 	level := strings.ToLower(strings.TrimSpace(c.Log.Level))

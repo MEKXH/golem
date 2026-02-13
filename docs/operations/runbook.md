@@ -61,18 +61,18 @@ Actions:
 3. Check provider credentials and endpoint reachability.
 4. Verify model name/provider mapping in config.
 
-### 4. Telegram Messages Not Responding
+### 4. Channel Messages Not Responding
 
 Symptoms:
-- Bot online but no replies
+- Channel connected but no replies
 
 Actions:
-1. Confirm `channels.telegram.enabled=true`.
-2. Verify bot token and `allow_from` sender IDs.
+1. Confirm target channel is enabled (e.g. `channels.telegram.enabled=true`).
+2. Verify channel credentials and `allow_from` sender IDs.
 3. Check logs for:
-   - telegram init failure
+   - channel init failure
    - outbound send failure
-4. Send a test message from an allowed account.
+4. Send a test message from an allowed account on that channel.
 
 ### 5. Tool Execution Errors
 

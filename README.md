@@ -25,7 +25,7 @@ Golem is a personal AI assistant that lives in your terminal and works while you
 
 - **One binary, zero bloat.** No Python, no Node, no Docker. Just a single Go binary.
 - **Provider-agnostic.** Switch between 9 LLM providers with a config change — OpenRouter, Claude, OpenAI, DeepSeek, Gemini, Ark, Qianfan, Qwen, or Ollama.
-- **Always-on option.** Run as a background server with Telegram integration, HTTP gateway, and cron-scheduled tasks.
+- **Always-on option.** Run as a background server with multi-channel integration (Telegram, WhatsApp, Feishu, Discord, Slack, QQ, DingTalk, MaixCam), HTTP gateway, and cron-scheduled tasks.
 - **Tool-wielding agent.** Not just a chatbot — Golem reads files, runs commands, searches the web, and remembers context across sessions.
 - **Extensible by design.** Install skill packs from GitHub to teach it new tricks.
 
@@ -77,7 +77,7 @@ Golem is a personal AI assistant that lives in your terminal and works while you
 A rich chat experience powered by Bubble Tea — autocomplete, streaming responses, and full tool execution, all in your terminal.
 
 ### 🤖 Server Mode
-Run `golem run` as a background service. Connects Telegram, the HTTP Gateway API, and the cron scheduler simultaneously.
+Run `golem run` as a background service. Connects enabled channels, the HTTP Gateway API, and the cron scheduler simultaneously.
 
 ### 🛠️ 10 Built-in Tools
 
@@ -171,7 +171,7 @@ golem run
 |---------|-------------|
 | `golem init` | Initialize configuration and workspace |
 | `golem chat` | Start interactive TUI chat |
-| `golem run` | Start server mode (Telegram + Gateway + Cron) |
+| `golem run` | Start server mode (Channels + Gateway + Cron) |
 | `golem status` | Show system status (providers, channels, cron, skills) |
 | `golem channels list` | List all configured channels |
 | `golem channels status` | Show detailed channel status |
@@ -259,6 +259,48 @@ Located at `~/.golem/config.json`:
       "enabled": false,
       "token": "YOUR_TELEGRAM_BOT_TOKEN",
       "allow_from": ["YOUR_TELEGRAM_USER_ID"]
+    },
+    "whatsapp": {
+      "enabled": false,
+      "bridge_url": "ws://127.0.0.1:8080/ws",
+      "allow_from": []
+    },
+    "feishu": {
+      "enabled": false,
+      "app_id": "",
+      "app_secret": "",
+      "encrypt_key": "",
+      "verification_token": "",
+      "allow_from": []
+    },
+    "discord": {
+      "enabled": false,
+      "token": "",
+      "allow_from": []
+    },
+    "slack": {
+      "enabled": false,
+      "bot_token": "",
+      "app_token": "",
+      "allow_from": []
+    },
+    "qq": {
+      "enabled": false,
+      "app_id": "",
+      "app_secret": "",
+      "allow_from": []
+    },
+    "dingtalk": {
+      "enabled": false,
+      "client_id": "",
+      "client_secret": "",
+      "allow_from": []
+    },
+    "maixcam": {
+      "enabled": false,
+      "host": "0.0.0.0",
+      "port": 9000,
+      "allow_from": []
     }
   },
   "providers": {

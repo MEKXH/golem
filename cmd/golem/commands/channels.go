@@ -72,18 +72,9 @@ func runChannelsList(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  %-12s %-10s %s\n", "NAME", "STATUS", "NOTE")
 	fmt.Printf("  %-12s %-10s %s\n", strings.Repeat("-", 12), strings.Repeat("-", 10), strings.Repeat("-", 20))
 
-	// Telegram
-	tgStatus := "disabled"
-	tgNote := ""
-	if cfg.Channels.Telegram.Enabled {
-		tgStatus = "enabled"
-		if strings.TrimSpace(cfg.Channels.Telegram.Token) == "" {
-			tgNote = "token not set"
-		} else {
-			tgNote = "ready"
-		}
+	for _, state := range channelStates(cfg) {
+		fmt.Printf("  %-12s %-10s %s\n", state.Name, state.Status(), state.Note())
 	}
-	fmt.Printf("  %-12s %-10s %s\n", "telegram", tgStatus, tgNote)
 
 	return nil
 }
@@ -97,25 +88,17 @@ func runChannelsStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println("=== Channel Status ===")
 	fmt.Println()
 
-	// Telegram
-	fmt.Println("Telegram:")
-	fmt.Printf("  Enabled:    %v\n", cfg.Channels.Telegram.Enabled)
-	if strings.TrimSpace(cfg.Channels.Telegram.Token) != "" {
-		fmt.Println("  Token:      configured")
-	} else {
-		fmt.Println("  Token:      not set")
+	for _, state := range channelStates(cfg) {
+		fmt.Printf("%s:\n", titleCase(state.Name))
+		fmt.Printf("  Enabled:    %v\n", state.Enabled)
+		fmt.Printf("  Readiness:  %s\n", state.Note())
+		if len(state.AllowFrom) > 0 {
+			fmt.Printf("  Allow From: %s\n", strings.Join(state.AllowFrom, ", "))
+		} else {
+			fmt.Println("  Allow From: all (no restrictions)")
+		}
+		fmt.Println()
 	}
-	if len(cfg.Channels.Telegram.AllowFrom) > 0 {
-		fmt.Printf("  Allow From: %s\n", strings.Join(cfg.Channels.Telegram.AllowFrom, ", "))
-	} else {
-		fmt.Println("  Allow From: all (no restrictions)")
-	}
-
-	readiness := "not ready"
-	if cfg.Channels.Telegram.Enabled && strings.TrimSpace(cfg.Channels.Telegram.Token) != "" {
-		readiness = "ready"
-	}
-	fmt.Printf("  Readiness:  %s\n", readiness)
 
 	return nil
 }
@@ -130,6 +113,20 @@ func runChannelsSetEnabled(channelName string, enabled bool) error {
 	switch name {
 	case "telegram":
 		cfg.Channels.Telegram.Enabled = enabled
+	case "whatsapp":
+		cfg.Channels.WhatsApp.Enabled = enabled
+	case "feishu":
+		cfg.Channels.Feishu.Enabled = enabled
+	case "discord":
+		cfg.Channels.Discord.Enabled = enabled
+	case "slack":
+		cfg.Channels.Slack.Enabled = enabled
+	case "qq":
+		cfg.Channels.QQ.Enabled = enabled
+	case "dingtalk":
+		cfg.Channels.DingTalk.Enabled = enabled
+	case "maixcam":
+		cfg.Channels.MaixCam.Enabled = enabled
 	default:
 		return fmt.Errorf("unknown channel: %s", channelName)
 	}
@@ -144,4 +141,105 @@ func runChannelsSetEnabled(channelName string, enabled bool) error {
 	}
 	fmt.Printf("Channel %s %s.\n", name, state)
 	return nil
+}
+
+type channelState struct {
+	Name      string
+	Enabled   bool
+	Ready     bool
+	Reason    string
+	AllowFrom []string
+}
+
+func (s channelState) Status() string {
+	if s.Enabled {
+		return "enabled"
+	}
+	return "disabled"
+}
+
+func (s channelState) Note() string {
+	if !s.Enabled {
+		return ""
+	}
+	if s.Ready {
+		return "ready"
+	}
+	return s.Reason
+}
+
+func channelStates(cfg *config.Config) []channelState {
+	return []channelState{
+		{
+			Name:      "telegram",
+			Enabled:   cfg.Channels.Telegram.Enabled,
+			Ready:     strings.TrimSpace(cfg.Channels.Telegram.Token) != "",
+			Reason:    "token not set",
+			AllowFrom: cfg.Channels.Telegram.AllowFrom,
+		},
+		{
+			Name:      "whatsapp",
+			Enabled:   cfg.Channels.WhatsApp.Enabled,
+			Ready:     strings.TrimSpace(cfg.Channels.WhatsApp.BridgeURL) != "",
+			Reason:    "bridge_url not set",
+			AllowFrom: cfg.Channels.WhatsApp.AllowFrom,
+		},
+		{
+			Name:      "feishu",
+			Enabled:   cfg.Channels.Feishu.Enabled,
+			Ready:     strings.TrimSpace(cfg.Channels.Feishu.AppID) != "" && strings.TrimSpace(cfg.Channels.Feishu.AppSecret) != "",
+			Reason:    "app_id/app_secret not set",
+			AllowFrom: cfg.Channels.Feishu.AllowFrom,
+		},
+		{
+			Name:      "discord",
+			Enabled:   cfg.Channels.Discord.Enabled,
+			Ready:     strings.TrimSpace(cfg.Channels.Discord.Token) != "",
+			Reason:    "token not set",
+			AllowFrom: cfg.Channels.Discord.AllowFrom,
+		},
+		{
+			Name:      "slack",
+			Enabled:   cfg.Channels.Slack.Enabled,
+			Ready:     strings.TrimSpace(cfg.Channels.Slack.BotToken) != "" && strings.TrimSpace(cfg.Channels.Slack.AppToken) != "",
+			Reason:    "bot_token/app_token not set",
+			AllowFrom: cfg.Channels.Slack.AllowFrom,
+		},
+		{
+			Name:      "qq",
+			Enabled:   cfg.Channels.QQ.Enabled,
+			Ready:     strings.TrimSpace(cfg.Channels.QQ.AppID) != "" && strings.TrimSpace(cfg.Channels.QQ.AppSecret) != "",
+			Reason:    "app_id/app_secret not set",
+			AllowFrom: cfg.Channels.QQ.AllowFrom,
+		},
+		{
+			Name:      "dingtalk",
+			Enabled:   cfg.Channels.DingTalk.Enabled,
+			Ready:     strings.TrimSpace(cfg.Channels.DingTalk.ClientID) != "" && strings.TrimSpace(cfg.Channels.DingTalk.ClientSecret) != "",
+			Reason:    "client_id/client_secret not set",
+			AllowFrom: cfg.Channels.DingTalk.AllowFrom,
+		},
+		{
+			Name:      "maixcam",
+			Enabled:   cfg.Channels.MaixCam.Enabled,
+			Ready:     strings.TrimSpace(cfg.Channels.MaixCam.Host) != "" && cfg.Channels.MaixCam.Port > 0,
+			Reason:    "host/port not set",
+			AllowFrom: cfg.Channels.MaixCam.AllowFrom,
+		},
+	}
+}
+
+func titleCase(name string) string {
+	switch strings.ToLower(name) {
+	case "qq":
+		return "QQ"
+	case "maixcam":
+		return "MaixCam"
+	case "dingtalk":
+		return "DingTalk"
+	}
+	if name == "" {
+		return name
+	}
+	return strings.ToUpper(name[:1]) + name[1:]
 }

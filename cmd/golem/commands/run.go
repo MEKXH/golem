@@ -14,7 +14,14 @@ import (
 	"github.com/MEKXH/golem/internal/agent"
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/channel"
+	"github.com/MEKXH/golem/internal/channel/dingtalk"
+	"github.com/MEKXH/golem/internal/channel/discord"
+	"github.com/MEKXH/golem/internal/channel/feishu"
+	"github.com/MEKXH/golem/internal/channel/maixcam"
+	"github.com/MEKXH/golem/internal/channel/qq"
+	"github.com/MEKXH/golem/internal/channel/slack"
 	"github.com/MEKXH/golem/internal/channel/telegram"
+	"github.com/MEKXH/golem/internal/channel/whatsapp"
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/cron"
 	"github.com/MEKXH/golem/internal/gateway"
@@ -91,11 +98,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}()
 
 	chanMgr := channel.NewManager(msgBus)
-
-	if cfg.Channels.Telegram.Enabled {
-		tg := telegram.New(&cfg.Channels.Telegram, msgBus)
-		chanMgr.Register(tg)
-	}
+	registerEnabledChannels(cfg, msgBus, chanMgr)
 
 	chanMgr.StartAll(ctx)
 	go chanMgr.RouteOutbound(ctx)
@@ -128,4 +131,78 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 
 	return runErr
+}
+
+func registerEnabledChannels(cfg *config.Config, msgBus *bus.MessageBus, chanMgr *channel.Manager) {
+	register := func(ch channel.Channel) {
+		chanMgr.Register(ch)
+		slog.Info("channel registered", "name", ch.Name())
+	}
+	skip := func(name, reason string) {
+		slog.Warn("channel enabled but not ready; skipping registration", "name", name, "reason", reason)
+	}
+
+	if cfg.Channels.Telegram.Enabled {
+		if cfg.Channels.Telegram.Token == "" {
+			skip("telegram", "token not set")
+		} else {
+			register(telegram.New(&cfg.Channels.Telegram, msgBus))
+		}
+	}
+
+	if cfg.Channels.WhatsApp.Enabled {
+		if cfg.Channels.WhatsApp.BridgeURL == "" {
+			skip("whatsapp", "bridge_url not set")
+		} else {
+			register(whatsapp.New(&cfg.Channels.WhatsApp, msgBus))
+		}
+	}
+
+	if cfg.Channels.Feishu.Enabled {
+		if cfg.Channels.Feishu.AppID == "" || cfg.Channels.Feishu.AppSecret == "" {
+			skip("feishu", "app_id/app_secret not set")
+		} else {
+			register(feishu.New(&cfg.Channels.Feishu, msgBus))
+		}
+	}
+
+	if cfg.Channels.Discord.Enabled {
+		if cfg.Channels.Discord.Token == "" {
+			skip("discord", "token not set")
+		} else {
+			register(discord.New(&cfg.Channels.Discord, msgBus))
+		}
+	}
+
+	if cfg.Channels.Slack.Enabled {
+		if cfg.Channels.Slack.BotToken == "" || cfg.Channels.Slack.AppToken == "" {
+			skip("slack", "bot_token/app_token not set")
+		} else {
+			register(slack.New(&cfg.Channels.Slack, msgBus))
+		}
+	}
+
+	if cfg.Channels.QQ.Enabled {
+		if cfg.Channels.QQ.AppID == "" || cfg.Channels.QQ.AppSecret == "" {
+			skip("qq", "app_id/app_secret not set")
+		} else {
+			register(qq.New(&cfg.Channels.QQ, msgBus))
+		}
+	}
+
+	if cfg.Channels.DingTalk.Enabled {
+		if cfg.Channels.DingTalk.ClientID == "" || cfg.Channels.DingTalk.ClientSecret == "" {
+			skip("dingtalk", "client_id/client_secret not set")
+		} else {
+			register(dingtalk.New(&cfg.Channels.DingTalk, msgBus))
+		}
+	}
+
+	if cfg.Channels.MaixCam.Enabled {
+		if cfg.Channels.MaixCam.Host == "" || cfg.Channels.MaixCam.Port <= 0 {
+			skip("maixcam", "host/port not set")
+		} else {
+			register(maixcam.New(&cfg.Channels.MaixCam, msgBus))
+		}
+	}
 }

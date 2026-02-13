@@ -91,15 +91,18 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	// Channels
 	fmt.Println("\nChannels:")
-	tgStatus := "disabled"
-	if cfg.Channels.Telegram.Enabled {
-		if strings.TrimSpace(cfg.Channels.Telegram.Token) != "" {
-			tgStatus = "enabled (ready)"
-		} else {
-			tgStatus = "enabled (token missing)"
+	for _, state := range channelStates(cfg) {
+		line := "disabled"
+		if state.Enabled {
+			line = "enabled"
+			if state.Ready {
+				line += " (ready)"
+			} else {
+				line += " (" + state.Reason + ")"
+			}
 		}
+		fmt.Printf("  %s: %s\n", titleCase(state.Name), line)
 	}
-	fmt.Printf("  Telegram: %s\n", tgStatus)
 
 	// Gateway
 	fmt.Println("\nGateway:")
