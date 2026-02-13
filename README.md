@@ -26,8 +26,11 @@ _A modern, extensible AI assistant for your terminal and beyond._
   - **File System**: Read and manipulate files within a designated workspace.
   - **Memory Tools**: Read/write long-term memory and append daily diary notes.
   - **Web Search & Fetch**: Search with Brave API (when configured) and fetch web page content.
+  - **Cron Jobs**: Create, manage, and schedule recurring tasks that the agent executes automatically.
 - **🔌 Multi-Provider Support**: Seamlessly switch between OpenAI, Claude, DeepSeek, Ollama, Gemini, and more.
-
+- **⏰ Cron Scheduling System**: Built-in scheduler supports one-shot (`at`), interval (`every`), and cron expression schedules with persistent storage.
+- **🧩 Skills System**: Install, manage, and load skill packs from GitHub to extend the agent's capabilities.
+- **📡 Channel Management**: Inspect and manage communication channels from the CLI.
 - **Workspace Management**: Sandboxed execution environments for safety and context management.
 
 ## Installation
@@ -97,6 +100,75 @@ To use Golem via Telegram:
 golem run
 ```
 
+## CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `golem init` | Initialize configuration and workspace |
+| `golem chat` | Start interactive TUI chat |
+| `golem run` | Start server mode (Telegram + Gateway + Cron) |
+| `golem status` | Show system status (providers, channels, cron, skills) |
+| `golem channels list` | List all configured channels |
+| `golem channels status` | Show detailed channel status |
+| `golem cron list` | List all scheduled jobs |
+| `golem cron add -n <name> -m <msg> [--every <sec> \| --cron <expr> \| --at <ts>]` | Add a scheduled job |
+| `golem cron remove <id>` | Remove a scheduled job |
+| `golem cron enable <id>` | Enable a scheduled job |
+| `golem cron disable <id>` | Disable a scheduled job |
+| `golem skills list` | List installed skills |
+| `golem skills install <repo>` | Install a skill from GitHub |
+| `golem skills remove <name>` | Remove an installed skill |
+| `golem skills show <name>` | Show skill content |
+
+## Cron Scheduling
+
+Golem includes a built-in cron scheduling system. Jobs persist across restarts and can be managed via the CLI or by the agent itself using the `manage_cron` tool.
+
+### Schedule Types
+
+- **`--every <seconds>`**: Repeat at a fixed interval (e.g., `--every 3600` for every hour).
+- **`--cron <expr>`**: Standard 5-field cron expression (e.g., `--cron "0 9 * * *"` for daily at 9 AM).
+- **`--at <timestamp>`**: One-shot execution at an RFC3339 timestamp (auto-deleted after run).
+
+### Examples
+
+```bash
+# Remind every hour
+golem cron add -n "hourly-check" -m "Check system status and report" --every 3600
+
+# Daily morning briefing
+golem cron add -n "morning-brief" -m "Give me a morning briefing" --cron "0 9 * * *"
+
+# One-time reminder
+golem cron add -n "meeting" -m "Remind me about the team meeting" --at "2026-02-14T09:00:00Z"
+```
+
+## Skills System
+
+Skills are markdown-based instruction packs that extend the agent's capabilities. They are loaded into the system prompt automatically.
+
+### Skill File Format
+
+Each skill is a directory under `workspace/skills/<name>/` containing a `SKILL.md` file:
+
+```markdown
+---
+name: weather
+description: "Query weather information"
+---
+
+# Weather Skill
+(Skill instructions for the agent)
+```
+
+### Install from GitHub
+
+```bash
+golem skills install owner/repo
+```
+
+This downloads the `SKILL.md` from the repository's main branch.
+
 ## Configuration
 
 The configuration file is located at `~/.golem/config.json`. Below is a comprehensive example:
@@ -105,7 +177,7 @@ The configuration file is located at `~/.golem/config.json`. Below is a comprehe
 {
   "agents": {
     "defaults": {
-      "workspace_mode": "default", // Options: "default" (~/.golem/workspace), "cwd", "path"
+      "workspace_mode": "default",
       "model": "anthropic/claude-4-5-sonnet-20250929",
       "max_tokens": 8192,
       "temperature": 0.7
@@ -130,7 +202,7 @@ The configuration file is located at `~/.golem/config.json`. Below is a comprehe
     },
     "web": {
       "search": {
-        "api_key": "YOUR_BRAVE_SEARCH_API_KEY", // Optional
+        "api_key": "YOUR_BRAVE_SEARCH_API_KEY",
         "max_results": 5
       }
     }
@@ -138,11 +210,11 @@ The configuration file is located at `~/.golem/config.json`. Below is a comprehe
   "gateway": {
     "host": "0.0.0.0",
     "port": 18790,
-    "token": "YOUR_GATEWAY_BEARER_TOKEN" // Optional
+    "token": "YOUR_GATEWAY_BEARER_TOKEN"
   },
   "log": {
-    "level": "info", // debug | info | warn | error
-    "file": "" // Optional log file path
+    "level": "info",
+    "file": ""
   }
 }
 ```

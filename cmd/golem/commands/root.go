@@ -32,6 +32,9 @@ func NewRootCmd() *cobra.Command {
 		NewChatCmd(),
 		NewRunCmd(),
 		NewStatusCmd(),
+		NewChannelsCmd(),
+		NewCronCmd(),
+		NewSkillsCmd(),
 	)
 
 	return cmd

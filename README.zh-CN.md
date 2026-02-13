@@ -26,8 +26,11 @@ _一个现代化的、可扩展的终端 AI 助手。_
   - **文件系统**: 在指定工作区内读取和操作文件。
   - **记忆工具**: 支持读取/写入长期记忆并追加每日日记。
   - **网络搜索与抓取**: 可配置 Brave 搜索，并支持网页内容抓取。
+  - **定时任务**: 创建、管理和调度由智能体自动执行的周期性任务。
 - **🔌 多模型支持**: 无缝切换 OpenAI, Claude, DeepSeek, Ollama, Gemini 等多种模型提供商。
-
+- **⏰ Cron 调度系统**: 内置调度器，支持一次性（`at`）、固定间隔（`every`）和 cron 表达式三种调度模式，任务持久化存储。
+- **🧩 技能系统**: 从 GitHub 安装、管理和加载技能包，扩展智能体的能力。
+- **📡 渠道管理**: 通过 CLI 检查和管理通信渠道。
 - **工作区管理**: 提供沙箱化的执行环境，确保安全和上下文隔离。
 
 ## 安装指南
@@ -97,15 +100,84 @@ golem chat "分析当前目录结构"
 golem run
 ```
 
+## CLI 命令一览
+
+| 命令 | 说明 |
+|------|------|
+| `golem init` | 初始化配置和工作区 |
+| `golem chat` | 启动交互式 TUI 聊天 |
+| `golem run` | 启动服务端模式（Telegram + Gateway + Cron） |
+| `golem status` | 显示系统状态（提供商、渠道、定时任务、技能） |
+| `golem channels list` | 列出所有已配置渠道 |
+| `golem channels status` | 显示渠道详细状态 |
+| `golem cron list` | 列出所有定时任务 |
+| `golem cron add -n <名称> -m <消息> [--every <秒> \| --cron <表达式> \| --at <时间戳>]` | 添加定时任务 |
+| `golem cron remove <id>` | 删除定时任务 |
+| `golem cron enable <id>` | 启用定时任务 |
+| `golem cron disable <id>` | 禁用定时任务 |
+| `golem skills list` | 列出已安装技能 |
+| `golem skills install <repo>` | 从 GitHub 安装技能 |
+| `golem skills remove <名称>` | 移除已安装技能 |
+| `golem skills show <名称>` | 查看技能内容 |
+
+## Cron 定时调度
+
+Golem 内置了定时调度系统。任务跨重启持久化，可通过 CLI 或智能体自身的 `manage_cron` 工具进行管理。
+
+### 调度类型
+
+- **`--every <秒>`**: 固定间隔重复执行（如 `--every 3600` 表示每小时执行）。
+- **`--cron <表达式>`**: 标准 5 字段 cron 表达式（如 `--cron "0 9 * * *"` 表示每天早上 9 点）。
+- **`--at <时间戳>`**: 一次性执行，接受 RFC3339 格式时间戳（执行后自动删除）。
+
+### 示例
+
+```bash
+# 每小时检查一次
+golem cron add -n "hourly-check" -m "检查系统状态并汇报" --every 3600
+
+# 每日早间简报
+golem cron add -n "morning-brief" -m "给我一份早间简报" --cron "0 9 * * *"
+
+# 一次性提醒
+golem cron add -n "meeting" -m "提醒我参加团队会议" --at "2026-02-14T09:00:00Z"
+```
+
+## 技能系统
+
+技能是基于 Markdown 的指令包，用于扩展智能体的能力。它们会被自动加载到系统提示中。
+
+### 技能文件格式
+
+每个技能是 `workspace/skills/<名称>/` 目录下的一个 `SKILL.md` 文件：
+
+```markdown
+---
+name: weather
+description: "查询天气信息"
+---
+
+# Weather Skill
+（技能指令内容，智能体会据此执行相关任务）
+```
+
+### 从 GitHub 安装
+
+```bash
+golem skills install owner/repo
+```
+
+此命令会从仓库的 main 分支下载 `SKILL.md` 文件。
+
 ## 配置说明
 
-配置文件位于 `~/.golem/config.json`。以下是一个包含详细注释的配置示例：
+配置文件位于 `~/.golem/config.json`。以下是一个完整的配置示例：
 
 ```json
 {
   "agents": {
     "defaults": {
-      "workspace_mode": "default", // 选项: "default" (~/.golem/workspace), "cwd" (当前目录), "path" (指定路径)
+      "workspace_mode": "default",
       "model": "anthropic/claude-4-5-sonnet-20250929",
       "max_tokens": 8192,
       "temperature": 0.7
@@ -130,7 +202,7 @@ golem run
     },
     "web": {
       "search": {
-        "api_key": "YOUR_BRAVE_SEARCH_API_KEY", // 可选
+        "api_key": "YOUR_BRAVE_SEARCH_API_KEY",
         "max_results": 5
       }
     }
@@ -138,14 +210,22 @@ golem run
   "gateway": {
     "host": "0.0.0.0",
     "port": 18790,
-    "token": "YOUR_GATEWAY_BEARER_TOKEN" // 可选
+    "token": "YOUR_GATEWAY_BEARER_TOKEN"
   },
   "log": {
-    "level": "info", // debug | info | warn | error
-    "file": "" // 可选日志文件路径
+    "level": "info",
+    "file": ""
   }
 }
 ```
+
+### workspace_mode 说明
+
+| 模式 | 说明 |
+|------|------|
+| `default` | 使用 `~/.golem/workspace`（默认） |
+| `cwd` | 使用当前工作目录 |
+| `path` | 使用 `agents.defaults.workspace` 指定的自定义路径 |
 
 ## Gateway API
 

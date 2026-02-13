@@ -1,4 +1,5 @@
 .worktrees/
-golem.exe
-golem
+/golem.exe
+/golem
 docs/plans
+docs/analysis

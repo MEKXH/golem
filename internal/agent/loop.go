@@ -47,6 +47,11 @@ func NewLoop(cfg *config.Config, msgBus *bus.MessageBus, chatModel model.ChatMod
 	}, nil
 }
 
+// Tools returns the tool registry.
+func (l *Loop) Tools() *tools.Registry {
+	return l.tools
+}
+
 // RegisterDefaultTools registers all built-in tools
 func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 	toolFns := []func() (tool.InvokableTool, error){

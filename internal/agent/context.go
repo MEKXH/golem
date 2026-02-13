@@ -8,6 +8,7 @@ import (
 
 	"github.com/MEKXH/golem/internal/memory"
 	"github.com/MEKXH/golem/internal/session"
+	"github.com/MEKXH/golem/internal/skills"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -32,6 +33,10 @@ func (c *ContextBuilder) BuildSystemPrompt() string {
 		if content := c.readWorkspaceFile(name); content != "" {
 			parts = append(parts, "## "+strings.TrimSuffix(name, ".md")+"\n"+content)
 		}
+	}
+
+	if skillsSummary := skills.NewLoader(c.workspacePath).BuildSkillsSummary(); skillsSummary != "" {
+		parts = append(parts, skillsSummary)
 	}
 
 	if mem := c.readWorkspaceFile(filepath.Join("memory", "MEMORY.md")); mem != "" {

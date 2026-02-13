@@ -36,6 +36,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		workspacePath,
 		filepath.Join(workspacePath, "memory"),
 		filepath.Join(workspacePath, "skills"),
+		filepath.Join(workspacePath, "cron"),
 		filepath.Join(config.ConfigDir(), "sessions"),
 	}
 
