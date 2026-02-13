@@ -11,17 +11,24 @@ import (
 
 type mockManagerChannel struct {
 	BaseChannel
-	name    string
-	sent    int
-	started bool
-	stopped bool
+	name       string
+	sent       atomic.Int32
+	sentNotify chan struct{}
+	started    bool
+	stopped    bool
 }
 
 func (m *mockManagerChannel) Name() string                    { return m.name }
 func (m *mockManagerChannel) Start(ctx context.Context) error { m.started = true; return nil }
 func (m *mockManagerChannel) Stop(ctx context.Context) error  { m.stopped = true; return nil }
 func (m *mockManagerChannel) Send(ctx context.Context, msg *bus.OutboundMessage) error {
-	m.sent++
+	m.sent.Add(1)
+	if m.sentNotify != nil {
+		select {
+		case m.sentNotify <- struct{}{}:
+		default:
+		}
+	}
 	return nil
 }
 
@@ -29,7 +36,11 @@ func TestManager_RouteOutbound(t *testing.T) {
 	msgBus := bus.NewMessageBus(1)
 	mgr := NewManager(msgBus)
 
-	ch := &mockManagerChannel{name: "test", BaseChannel: BaseChannel{Bus: msgBus}}
+	ch := &mockManagerChannel{
+		name:        "test",
+		BaseChannel: BaseChannel{Bus: msgBus},
+		sentNotify:  make(chan struct{}, 1),
+	}
 	mgr.Register(ch)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -39,9 +50,13 @@ func TestManager_RouteOutbound(t *testing.T) {
 
 	msgBus.PublishOutbound(&bus.OutboundMessage{Channel: "test", ChatID: "1", Content: "hi"})
 
-	<-time.After(10 * time.Millisecond)
+	select {
+	case <-ch.sentNotify:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("timed out waiting for outbound message to be sent")
+	}
 
-	if ch.sent == 0 {
+	if ch.sent.Load() == 0 {
 		t.Fatalf("expected message sent")
 	}
 }
