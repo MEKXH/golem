@@ -85,3 +85,29 @@ Copy this block for each phase:
 - Wired heartbeat activity tracking to persist latest `channel/chat_id/seen_at` on each message
 - Updated run command wiring to provide state manager to heartbeat service
 - Added heartbeat tests for persisted-session restore and activity persistence behavior
+
+### Phase 3 Verification - 2026-02-15
+- `go test ./...` -> 0, all packages passed
+- `go run ./cmd/golem status` -> 0, status output rendered normally
+- `go run ./cmd/golem chat "ping"` -> 0, returned `Pong` response
+- Regression decision: PASS
+
+### Phase 3 Batch Scope Delivered
+- Added `edit_file` and `append_file` tools: `internal/tools/edit.go`
+- Added tool tests (replace, append, path boundary, empty-content defense): `internal/tools/edit_test.go`
+- Registered new tools into default agent toolchain: `internal/agent/loop.go`
+- Added registration coverage in agent tests and status visibility
+
+### Phase 4 Verification - 2026-02-15
+- `go test ./...` -> 0, all packages passed
+- `go run ./cmd/golem status` -> 0, status output rendered normally
+- `go run ./cmd/golem chat "ping"` -> 0, returned `Pong` response
+- Regression decision: PASS
+
+### Phase 4 Batch Scope Delivered
+- Added voice transcription abstraction and OpenAI-compatible implementation: `internal/voice/transcriber.go`
+- Added voice transcription tests (multipart request, success path, HTTP error path): `internal/voice/transcriber_test.go`
+- Extended Telegram inbound handling for `voice` / `audio` messages with optional transcription: `internal/channel/telegram/telegram.go`
+- Guaranteed transcription-failure fallback for normal text messages (no regression): `internal/channel/telegram/telegram_test.go`
+- Added configurable voice settings (`tools.voice.enabled/provider/model/timeout_seconds`): `internal/config/config.go`
+- Wired transcriber construction in run path with OpenAI API key/auth-store fallback: `cmd/golem/commands/run.go`

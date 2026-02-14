@@ -89,6 +89,16 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		webSearchStatus = "enabled (Brave + DuckDuckGo fallback)"
 	}
 	fmt.Printf("  web_search: %s\n", webSearchStatus)
+	voiceStatus := "disabled"
+	if cfg.Tools.Voice.Enabled {
+		voiceStatus = fmt.Sprintf(
+			"enabled (provider=%s, model=%s, timeout=%ds)",
+			cfg.Tools.Voice.Provider,
+			cfg.Tools.Voice.Model,
+			cfg.Tools.Voice.TimeoutSeconds,
+		)
+	}
+	fmt.Printf("  voice_transcription: %s\n", voiceStatus)
 	fmt.Println("  manage_cron: ready")
 
 	// Channels

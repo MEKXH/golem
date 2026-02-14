@@ -21,6 +21,15 @@ func TestDefaultConfig(t *testing.T) {
 	if !cfg.Tools.Exec.RestrictToWorkspace {
 		t.Errorf("expected RestrictToWorkspace=true by default")
 	}
+	if cfg.Tools.Voice.Enabled {
+		t.Errorf("expected voice transcription disabled by default")
+	}
+	if cfg.Tools.Voice.Provider != "openai" {
+		t.Errorf("expected voice provider=openai, got %q", cfg.Tools.Voice.Provider)
+	}
+	if cfg.Tools.Voice.TimeoutSeconds != 30 {
+		t.Errorf("expected voice timeout_seconds=30, got %d", cfg.Tools.Voice.TimeoutSeconds)
+	}
 	if !cfg.Heartbeat.Enabled {
 		t.Errorf("expected heartbeat enabled by default")
 	}
@@ -200,5 +209,35 @@ func TestValidate_HeartbeatNegativeValues(t *testing.T) {
 	cfg.Heartbeat.MaxIdleMinutes = -10
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected validation error for heartbeat.max_idle_minutes < 0")
+	}
+}
+
+func TestValidate_VoiceDefaultsAndProvider(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Tools.Voice.Provider = ""
+	cfg.Tools.Voice.TimeoutSeconds = 0
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Tools.Voice.Provider != "openai" {
+		t.Fatalf("expected provider default openai, got %q", cfg.Tools.Voice.Provider)
+	}
+	if cfg.Tools.Voice.TimeoutSeconds != 30 {
+		t.Fatalf("expected timeout default 30, got %d", cfg.Tools.Voice.TimeoutSeconds)
+	}
+
+	cfg = DefaultConfig()
+	cfg.Tools.Voice.Enabled = true
+	cfg.Tools.Voice.Provider = "unknown"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for unsupported voice provider")
+	}
+}
+
+func TestValidate_VoiceNegativeTimeout(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Tools.Voice.TimeoutSeconds = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for voice timeout < 0")
 	}
 }

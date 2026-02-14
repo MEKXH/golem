@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/MEKXH/golem/internal/agent"
+	"github.com/MEKXH/golem/internal/auth"
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/channel"
 	"github.com/MEKXH/golem/internal/config"
@@ -31,7 +32,7 @@ func TestRunCommand_WiresComponents(t *testing.T) {
 	_ = loop.RegisterDefaultTools(cfg)
 
 	mgr := channel.NewManager(msgBus)
-	registerEnabledChannels(cfg, msgBus, mgr)
+	registerEnabledChannels(cfg, msgBus, mgr, nil)
 
 	if len(mgr.Names()) != 0 {
 		t.Fatalf("expected no channels registered")
@@ -64,7 +65,7 @@ func TestRegisterEnabledChannels_RegistersAllReadyChannels(t *testing.T) {
 
 	msgBus := bus.NewMessageBus(10)
 	mgr := channel.NewManager(msgBus)
-	registerEnabledChannels(cfg, msgBus, mgr)
+	registerEnabledChannels(cfg, msgBus, mgr, nil)
 
 	if got := len(mgr.Names()); got != 8 {
 		t.Fatalf("expected 8 registered channels, got %d", got)
@@ -86,7 +87,7 @@ func TestRegisterEnabledChannels_SkipsNotReadyChannels(t *testing.T) {
 
 	msgBus := bus.NewMessageBus(10)
 	mgr := channel.NewManager(msgBus)
-	registerEnabledChannels(cfg, msgBus, mgr)
+	registerEnabledChannels(cfg, msgBus, mgr, nil)
 
 	if got := len(mgr.Names()); got != 0 {
 		t.Fatalf("expected no channels registered, got %d", got)
@@ -124,5 +125,48 @@ func TestBuildHeartbeatService_RunOncePublishesOutbound(t *testing.T) {
 		}
 	default:
 		t.Fatal("expected heartbeat outbound message")
+	}
+}
+
+func TestBuildVoiceTranscriber_DisabledReturnsNil(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Tools.Voice.Enabled = false
+
+	if got := buildVoiceTranscriber(cfg); got != nil {
+		t.Fatal("expected nil transcriber when disabled")
+	}
+}
+
+func TestBuildVoiceTranscriber_OpenAIEnabledWithAPIKey(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Tools.Voice.Enabled = true
+	cfg.Tools.Voice.Provider = "openai"
+	cfg.Providers.OpenAI.APIKey = "test-key"
+
+	if got := buildVoiceTranscriber(cfg); got == nil {
+		t.Fatal("expected non-nil transcriber")
+	}
+}
+
+func TestBuildVoiceTranscriber_UsesAuthStoreWhenAPIKeyMissing(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	if err := auth.SetCredential("openai", &auth.Credential{
+		AccessToken: "auth-token",
+		Provider:    "openai",
+		AuthMethod:  "token",
+	}); err != nil {
+		t.Fatalf("SetCredential: %v", err)
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.Tools.Voice.Enabled = true
+	cfg.Tools.Voice.Provider = "openai"
+	cfg.Providers.OpenAI.APIKey = ""
+
+	if got := buildVoiceTranscriber(cfg); got == nil {
+		t.Fatal("expected non-nil transcriber from auth store token")
 	}
 }

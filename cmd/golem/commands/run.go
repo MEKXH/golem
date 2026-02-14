@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/MEKXH/golem/internal/agent"
+	"github.com/MEKXH/golem/internal/auth"
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/channel"
 	"github.com/MEKXH/golem/internal/channel/dingtalk"
@@ -29,6 +31,7 @@ import (
 	"github.com/MEKXH/golem/internal/provider"
 	"github.com/MEKXH/golem/internal/state"
 	"github.com/MEKXH/golem/internal/tools"
+	"github.com/MEKXH/golem/internal/voice"
 	"github.com/spf13/cobra"
 )
 
@@ -106,8 +109,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
+	voiceTranscriber := buildVoiceTranscriber(cfg)
 	chanMgr := channel.NewManager(msgBus)
-	registerEnabledChannels(cfg, msgBus, chanMgr)
+	registerEnabledChannels(cfg, msgBus, chanMgr, voiceTranscriber)
 
 	chanMgr.StartAll(ctx)
 	go chanMgr.RouteOutbound(ctx)
@@ -174,7 +178,41 @@ func buildHeartbeatService(cfg *config.Config, msgBus *bus.MessageBus, cronServi
 	)
 }
 
-func registerEnabledChannels(cfg *config.Config, msgBus *bus.MessageBus, chanMgr *channel.Manager) {
+func buildVoiceTranscriber(cfg *config.Config) voice.Transcriber {
+	if cfg == nil || !cfg.Tools.Voice.Enabled {
+		return nil
+	}
+
+	provider := strings.ToLower(strings.TrimSpace(cfg.Tools.Voice.Provider))
+	if provider == "" {
+		provider = "openai"
+	}
+	if provider != "openai" {
+		slog.Warn("voice transcription provider is not supported", "provider", provider)
+		return nil
+	}
+
+	apiKey := strings.TrimSpace(cfg.Providers.OpenAI.APIKey)
+	if apiKey == "" {
+		if cred, err := auth.GetCredential("openai"); err == nil && cred != nil {
+			apiKey = strings.TrimSpace(cred.AccessToken)
+		}
+	}
+	if apiKey == "" {
+		slog.Warn("voice transcription enabled but openai credentials are missing")
+		return nil
+	}
+
+	timeout := time.Duration(cfg.Tools.Voice.TimeoutSeconds) * time.Second
+	tr, err := voice.NewOpenAITranscriber(apiKey, cfg.Providers.OpenAI.BaseURL, cfg.Tools.Voice.Model, timeout)
+	if err != nil {
+		slog.Warn("failed to initialize voice transcriber", "error", err)
+		return nil
+	}
+	return tr
+}
+
+func registerEnabledChannels(cfg *config.Config, msgBus *bus.MessageBus, chanMgr *channel.Manager, transcriber voice.Transcriber) {
 	register := func(ch channel.Channel) {
 		chanMgr.Register(ch)
 		slog.Info("channel registered", "name", ch.Name())
@@ -187,7 +225,7 @@ func registerEnabledChannels(cfg *config.Config, msgBus *bus.MessageBus, chanMgr
 		if cfg.Channels.Telegram.Token == "" {
 			skip("telegram", "token not set")
 		} else {
-			register(telegram.New(&cfg.Channels.Telegram, msgBus))
+			register(telegram.New(&cfg.Channels.Telegram, msgBus, transcriber))
 		}
 	}
 

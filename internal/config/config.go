@@ -148,8 +148,9 @@ type LogConfig struct {
 
 // ToolsConfig tool settings
 type ToolsConfig struct {
-	Web  WebToolsConfig `mapstructure:"web"`
-	Exec ExecToolConfig `mapstructure:"exec"`
+	Web   WebToolsConfig  `mapstructure:"web"`
+	Exec  ExecToolConfig  `mapstructure:"exec"`
+	Voice VoiceToolConfig `mapstructure:"voice"`
 }
 
 // WebToolsConfig web tool settings
@@ -167,6 +168,14 @@ type WebSearchConfig struct {
 type ExecToolConfig struct {
 	Timeout             int  `mapstructure:"timeout"`
 	RestrictToWorkspace bool `mapstructure:"restrict_to_workspace"`
+}
+
+// VoiceToolConfig speech-to-text settings for inbound audio.
+type VoiceToolConfig struct {
+	Enabled        bool   `mapstructure:"enabled"`
+	Provider       string `mapstructure:"provider"`
+	Model          string `mapstructure:"model"`
+	TimeoutSeconds int    `mapstructure:"timeout_seconds"`
 }
 
 // HeartbeatConfig heartbeat service settings.
@@ -249,6 +258,12 @@ func DefaultConfig() *Config {
 			Exec: ExecToolConfig{
 				Timeout:             60,
 				RestrictToWorkspace: true,
+			},
+			Voice: VoiceToolConfig{
+				Enabled:        false,
+				Provider:       "openai",
+				Model:          "gpt-4o-mini-transcribe",
+				TimeoutSeconds: 30,
 			},
 		},
 		Heartbeat: HeartbeatConfig{
@@ -398,6 +413,22 @@ func (c *Config) Validate() error {
 	}
 	if c.Heartbeat.MaxIdleMinutes == 0 {
 		c.Heartbeat.MaxIdleMinutes = 720
+	}
+
+	voiceProvider := strings.ToLower(strings.TrimSpace(c.Tools.Voice.Provider))
+	if voiceProvider == "" {
+		voiceProvider = "openai"
+	}
+	if c.Tools.Voice.Enabled && voiceProvider != "openai" {
+		return fmt.Errorf("tools.voice.provider must be \"openai\" when enabled; got %q", c.Tools.Voice.Provider)
+	}
+	c.Tools.Voice.Provider = voiceProvider
+
+	if c.Tools.Voice.TimeoutSeconds < 0 {
+		return fmt.Errorf("tools.voice.timeout_seconds must not be negative, got %d", c.Tools.Voice.TimeoutSeconds)
+	}
+	if c.Tools.Voice.TimeoutSeconds == 0 {
+		c.Tools.Voice.TimeoutSeconds = 30
 	}
 
 	return nil

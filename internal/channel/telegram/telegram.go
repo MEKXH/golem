@@ -3,7 +3,9 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,6 +15,7 @@ import (
 	"github.com/MEKXH/golem/internal/channel"
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/render"
+	"github.com/MEKXH/golem/internal/voice"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -25,23 +28,30 @@ var (
 // Channel implements Telegram bot
 type Channel struct {
 	channel.BaseChannel
-	cfg *config.TelegramConfig
-	bot *tgbotapi.BotAPI
+	cfg           *config.TelegramConfig
+	bot           *tgbotapi.BotAPI
+	transcriber   voice.Transcriber
+	downloadVoice func(ctx context.Context, fileID, fileName, mimeType string) (voice.Input, error)
+	httpClient    *http.Client
 }
 
 // New creates a Telegram channel
-func New(cfg *config.TelegramConfig, msgBus *bus.MessageBus) *Channel {
+func New(cfg *config.TelegramConfig, msgBus *bus.MessageBus, transcriber voice.Transcriber) *Channel {
 	allowList := make(map[string]bool)
 	for _, id := range cfg.AllowFrom {
 		allowList[id] = true
 	}
-	return &Channel{
+	ch := &Channel{
 		BaseChannel: channel.BaseChannel{
 			Bus:       msgBus,
 			AllowList: allowList,
 		},
-		cfg: cfg,
+		cfg:         cfg,
+		transcriber: transcriber,
+		httpClient:  &http.Client{Timeout: 45 * time.Second},
 	}
+	ch.downloadVoice = ch.downloadTelegramVoice
+	return ch
 }
 
 func (c *Channel) Name() string { return "telegram" }
@@ -76,6 +86,9 @@ func (c *Channel) Start(ctx context.Context) error {
 }
 
 func (c *Channel) handleMessage(msg *tgbotapi.Message) {
+	if msg == nil || msg.From == nil || msg.Chat == nil {
+		return
+	}
 	senderID := fmt.Sprintf("%d", msg.From.ID)
 
 	if !c.IsAllowed(senderID) {
@@ -86,6 +99,24 @@ func (c *Channel) handleMessage(msg *tgbotapi.Message) {
 	content := msg.Text
 	if content == "" {
 		content = msg.Caption
+	}
+
+	metadata := map[string]any{
+		"message_id": msg.MessageID,
+		"username":   msg.From.UserName,
+	}
+
+	transcribed, err := c.tryTranscribeAudio(context.Background(), msg)
+	if err != nil {
+		slog.Warn("telegram transcription failed", "error", err, "chat_id", msg.Chat.ID, "message_id", msg.MessageID)
+	}
+	if transcribed != "" {
+		if content == "" {
+			content = transcribed
+		} else {
+			content = content + "\n\n[voice] " + transcribed
+		}
+		metadata["transcribed_audio"] = true
 	}
 	if content == "" {
 		return
@@ -98,10 +129,7 @@ func (c *Channel) handleMessage(msg *tgbotapi.Message) {
 		Content:   content,
 		Timestamp: time.Now(),
 		RequestID: bus.NewRequestID(),
-		Metadata: map[string]any{
-			"message_id": msg.MessageID,
-			"username":   msg.From.UserName,
-		},
+		Metadata:  metadata,
 	})
 }
 
@@ -160,4 +188,75 @@ func markdownToHTML(text string) string {
 	text = boldUnderRe.ReplaceAllString(text, "<b>$1</b>")
 	text = codeInlineRe.ReplaceAllString(text, "<code>$1</code>")
 	return text
+}
+
+func (c *Channel) tryTranscribeAudio(ctx context.Context, msg *tgbotapi.Message) (string, error) {
+	if c.transcriber == nil || c.downloadVoice == nil {
+		return "", nil
+	}
+
+	fileID, fileName, mimeType := telegramAudioDescriptor(msg)
+	if fileID == "" {
+		return "", nil
+	}
+
+	input, err := c.downloadVoice(ctx, fileID, fileName, mimeType)
+	if err != nil {
+		return "", err
+	}
+	return c.transcriber.Transcribe(ctx, input)
+}
+
+func telegramAudioDescriptor(msg *tgbotapi.Message) (fileID, fileName, mimeType string) {
+	if msg == nil {
+		return "", "", ""
+	}
+	if msg.Voice != nil && strings.TrimSpace(msg.Voice.FileID) != "" {
+		return strings.TrimSpace(msg.Voice.FileID), "voice.ogg", strings.TrimSpace(msg.Voice.MimeType)
+	}
+	if msg.Audio != nil && strings.TrimSpace(msg.Audio.FileID) != "" {
+		name := strings.TrimSpace(msg.Audio.FileName)
+		if name == "" {
+			name = "audio.mp3"
+		}
+		return strings.TrimSpace(msg.Audio.FileID), name, strings.TrimSpace(msg.Audio.MimeType)
+	}
+	return "", "", ""
+}
+
+func (c *Channel) downloadTelegramVoice(ctx context.Context, fileID, fileName, mimeType string) (voice.Input, error) {
+	if c.bot == nil {
+		return voice.Input{}, fmt.Errorf("telegram bot not initialized")
+	}
+	url, err := c.bot.GetFileDirectURL(fileID)
+	if err != nil {
+		return voice.Input{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return voice.Input{}, err
+	}
+	client := c.httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return voice.Input{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return voice.Input{}, fmt.Errorf("download telegram media failed: status %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return voice.Input{}, err
+	}
+	return voice.Input{
+		FileName: fileName,
+		MIMEType: mimeType,
+		Data:     data,
+	}, nil
 }
