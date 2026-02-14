@@ -14,7 +14,7 @@
 </div>
 
 Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.dev/) 和 [Eino](https://github.com/cloudwego/eino) 构建。
-它支持对话、工具调用、Shell 命令执行、文件读写、网页搜索与抓取、长期记忆、Cron 定时任务，以及多渠道后台服务。
+它支持对话、工具调用、Shell 命令执行、文件读写、网页搜索与抓取、长期记忆、Cron 定时任务、多渠道后台服务，以及 Provider 认证登录与渠道语音转写。
 
 > **Golem (גולם)**：在犹太传说中，Golem 是由无生命物质塑造并被赋予行动能力的"仆从"。
 
@@ -31,6 +31,7 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 - 真正的 Agent 循环，支持工具调用，不是纯聊天壳子。
 - 既可本地交互（`golem chat`），也可后台常驻（`golem run`）。
 - 内置多渠道接入、Gateway API、Cron 调度、Heartbeat 探活和技能系统。
+- 内置认证命令、语音转写链路和可跨重启恢复的心跳路由。
 
 ## 架构概览
 
@@ -93,12 +94,19 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 - 多渠道机器人服务（`golem run`）：Telegram、WhatsApp、Feishu、Discord、Slack、QQ、DingTalk、MaixCam
 - Gateway HTTP API（`/health`、`/version`、`/chat`）
 
+### 最新能力
+
+- 认证命令：`golem auth login`、`golem auth logout`、`golem auth status`
+- Heartbeat 目标会话持久化：重启后自动恢复最近活跃的渠道/会话路由
+- Telegram / Discord / Slack 音频消息自动转写，失败时回退占位文本，不阻断主流程
+- 文件增量编辑工具：`edit_file` 与 `append_file`
+
 ### 内置工具
 
 | 工具 | 说明 |
 | --- | --- |
 | `exec` | 执行 Shell 命令（支持限制在工作区内） |
-| `read_file` / `write_file` | 读取/写入工作区文件 |
+| `read_file` / `write_file` / `edit_file` / `append_file` | 在工作区中读取/写入/编辑/追加文件 |
 | `list_dir` | 列出目录内容 |
 | `read_memory` / `write_memory` | 读写长期记忆 |
 | `append_diary` | 追加每日日志 |
@@ -130,7 +138,7 @@ Golem 支持将任务委托给子 Agent 并行处理：
 
 ### Heartbeat 探活
 
-在服务模式启用后，系统可以定期执行健康探测，并向最近活跃会话回传心跳结果。
+在服务模式启用后，系统可以定期执行健康探测，并向最近活跃会话回传心跳结果。最近活跃目标会持久化到工作区状态文件中，服务重启后仍可恢复投递路由。
 
 ## 安装
 
@@ -152,29 +160,45 @@ go install github.com/MEKXH/golem/cmd/golem@latest
 golem init
 ```
 
-该命令会生成 `~/.golem/config.json`。
+该命令会生成 `~/.golem/config.json` 和工作区目录。
 
-### 2. 配置模型提供商凭据
+### 2. 使用示例配置模板
 
-示例：
+使用仓库内模板作为起点：
 
-```json
-{
-  "agents": {
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5",
-      "max_tool_iterations": 20
-    }
-  },
-  "providers": {
-    "claude": {
-      "api_key": "your-api-key-here"
-    }
-  }
-}
+```bash
+cp config/config.example.json ~/.golem/config.json
 ```
 
-### 3. 开始对话
+PowerShell:
+
+```powershell
+Copy-Item config/config.example.json "$HOME/.golem/config.json"
+```
+
+然后编辑 `~/.golem/config.json`，至少填入一个 provider 的 key（例如 `providers.openai.api_key`）。
+
+可选（使用 token/OAuth 认证存储）：
+
+```bash
+golem auth login --provider openai --token "$OPENAI_API_KEY"
+```
+
+### 3. 运行 smoke 检查
+
+```bash
+make smoke
+```
+
+如果本机没有 `make`：
+
+```bash
+go test ./...
+go run ./cmd/golem status
+go run ./cmd/golem chat "ping"
+```
+
+### 4. 开始对话
 
 ```bash
 golem chat
@@ -186,7 +210,7 @@ golem chat
 golem chat "分析当前目录结构"
 ```
 
-### 4. 启动服务模式
+### 5. 启动服务模式
 
 ```bash
 golem run
@@ -200,6 +224,9 @@ golem run
 | `golem chat [message]` | 启动 TUI 对话或单次发送消息 |
 | `golem run` | 启动服务模式 |
 | `golem status` | 查看系统状态摘要 |
+| `golem auth login --provider <name> [--token <token> \| --device-code \| --browser]` | 通过 token 或 OAuth 保存 provider 凭据 |
+| `golem auth logout [--provider <name>]` | 删除指定 provider 凭据，或删除全部凭据 |
+| `golem auth status` | 查看当前认证凭据状态 |
 | `golem channels list` | 列出已配置渠道 |
 | `golem channels status` | 查看渠道详细状态 |
 | `golem channels start <channel>` | 在配置中启用渠道 |
@@ -215,6 +242,18 @@ golem run
 | `golem skills remove <name>` | 删除技能 |
 | `golem skills show <name>` | 查看技能内容 |
 | `golem skills search [keyword]` | 搜索远程技能索引 |
+
+## 认证说明
+
+认证信息存储在 `~/.golem/auth.json`。当配置文件中的 provider key 为空时，Provider 会优先使用认证存储中的 token 作为调用凭据。
+
+示例：
+
+```bash
+golem auth login --provider openai --device-code
+golem auth status
+golem auth logout --provider openai
+```
 
 ## Cron 调度
 
@@ -258,6 +297,8 @@ golem skills search weather
 ## 配置说明
 
 主配置文件：`~/.golem/config.json`
+  
+仓库模板文件：`config/config.example.json`
 
 ```json
 {
@@ -299,6 +340,12 @@ golem skills search weather
         "api_key": "",
         "max_results": 5
       }
+    },
+    "voice": {
+      "enabled": false,
+      "provider": "openai",
+      "model": "gpt-4o-mini-transcribe",
+      "timeout_seconds": 30
     }
   },
   "gateway": {

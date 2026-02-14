@@ -14,7 +14,7 @@
 </div>
 
 Golem is a terminal-first personal AI assistant built with [Go](https://go.dev/) and [Eino](https://github.com/cloudwego/eino).
-It can chat, run tools, call shell commands, manage files, search/fetch web content, keep memory, schedule cron jobs, and run as a background service across multiple channels.
+It can chat, run tools, call shell commands, manage files, search/fetch web content, keep memory, schedule cron jobs, run as a background service across multiple channels, and support provider auth login plus channel audio transcription.
 
 > **Golem (גולם)**: In Jewish folklore, a golem is an animated being made from inanimate matter, created to serve.
 
@@ -31,6 +31,7 @@ It can chat, run tools, call shell commands, manage files, search/fetch web cont
 - Real agent loop with tool calling, not just plain text chat.
 - Works both interactively (`golem chat`) and as long-running service (`golem run`).
 - Built-in channels, gateway API, cron scheduler, heartbeat service, and skill system.
+- Built-in auth commands, voice transcription pipeline, and restart-safe heartbeat routing.
 
 ## Architecture Overview
 
@@ -93,6 +94,13 @@ It can chat, run tools, call shell commands, manage files, search/fetch web cont
 - Multi-channel bot mode (`golem run`): Telegram, WhatsApp, Feishu, Discord, Slack, QQ, DingTalk, MaixCam
 - Gateway HTTP API (`/health`, `/version`, `/chat`)
 
+### Latest Additions
+
+- Auth workflow commands: `golem auth login`, `golem auth logout`, `golem auth status`
+- Heartbeat target persistence across restarts (last active channel/chat is restored automatically)
+- Audio transcription in Telegram/Discord/Slack with fallback placeholders when transcription fails
+- File mutation tools `edit_file` and `append_file` for safer incremental edits
+
 ### Built-in Tools
 
 | Tool | Description |
@@ -130,7 +138,7 @@ Two-tier memory architecture:
 
 ### Heartbeat Service
 
-When enabled, server mode can periodically run a health probe and send heartbeat output to the latest active channel/session.
+When enabled, server mode can periodically run a health probe and send heartbeat output to the latest active channel/session. The latest target is persisted in workspace state, so routing survives process restarts.
 
 ## Installation
 
@@ -169,6 +177,12 @@ Copy-Item config/config.example.json "$HOME/.golem/config.json"
 ```
 
 Then edit `~/.golem/config.json` and set at least one provider key (for example `providers.openai.api_key`).
+
+Optional (token/OAuth auth store):
+
+```bash
+golem auth login --provider openai --token "$OPENAI_API_KEY"
+```
 
 ### 3. Run smoke checks
 
@@ -210,6 +224,9 @@ golem run
 | `golem chat [message]` | Start TUI chat or send one-shot message |
 | `golem run` | Start server mode |
 | `golem status` | Show system status summary |
+| `golem auth login --provider <name> [--token <token> \| --device-code \| --browser]` | Save provider credentials via token or OAuth |
+| `golem auth logout [--provider <name>]` | Remove one provider credential or all credentials |
+| `golem auth status` | Show current auth credential status |
 | `golem channels list` | List configured channels |
 | `golem channels status` | Show detailed channel status |
 | `golem channels start <channel>` | Enable one channel in config |
@@ -225,6 +242,18 @@ golem run
 | `golem skills remove <name>` | Remove installed skill |
 | `golem skills show <name>` | Show skill content |
 | `golem skills search [keyword]` | Search remote skill index |
+
+## Authentication
+
+Credentials are stored in `~/.golem/auth.json`. Provider clients can use auth-store tokens as API credentials when config keys are empty.
+
+Examples:
+
+```bash
+golem auth login --provider openai --device-code
+golem auth status
+golem auth logout --provider openai
+```
 
 ## Cron Scheduling
 
