@@ -21,6 +21,7 @@ type Loop struct {
 	bus           *bus.MessageBus
 	model         model.ChatModel
 	tools         *tools.Registry
+	subagents     *SubagentManager
 	sessions      *session.Manager
 	context       *ContextBuilder
 	maxIterations int
@@ -88,6 +89,41 @@ func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 			registered = append(registered, info.Name)
 		}
 	}
+
+	msgTool, err := tools.NewMessageTool(l.bus)
+	if err != nil {
+		return err
+	}
+	if err := l.tools.Register(msgTool); err != nil {
+		return err
+	}
+	if info, err := msgTool.Info(context.Background()); err == nil && info != nil && info.Name != "" {
+		registered = append(registered, info.Name)
+	}
+
+	l.subagents = NewSubagentManager(l.bus, l, 5*time.Minute)
+	spawnTool, err := tools.NewSpawnTool(l.subagents)
+	if err != nil {
+		return err
+	}
+	if err := l.tools.Register(spawnTool); err != nil {
+		return err
+	}
+	if info, err := spawnTool.Info(context.Background()); err == nil && info != nil && info.Name != "" {
+		registered = append(registered, info.Name)
+	}
+
+	subagentTool, err := tools.NewSubagentTool(l.subagents)
+	if err != nil {
+		return err
+	}
+	if err := l.tools.Register(subagentTool); err != nil {
+		return err
+	}
+	if info, err := subagentTool.Info(context.Background()); err == nil && info != nil && info.Name != "" {
+		registered = append(registered, info.Name)
+	}
+
 	slog.Info("registered tools", "count", len(registered), "tools", registered)
 	return nil
 }
@@ -131,6 +167,10 @@ func (l *Loop) Run(ctx context.Context) error {
 			if strings.TrimSpace(msg.RequestID) == "" {
 				msg.RequestID = bus.NewRequestID()
 			}
+			if msg.Channel == bus.SystemChannel {
+				l.processSystemMessage(msg)
+				continue
+			}
 			resp, err := l.processMessage(ctx, msg)
 			if err != nil {
 				slog.Error("process message failed", "request_id", msg.RequestID, "channel", msg.Channel, "chat_id", msg.ChatID, "session_key", msg.SessionKey(), "error", err)
@@ -147,6 +187,48 @@ func (l *Loop) Run(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func (l *Loop) processSystemMessage(msg *bus.InboundMessage) {
+	if msg == nil {
+		return
+	}
+
+	msgType := strings.TrimSpace(fmt.Sprint(msg.Metadata[bus.SystemMetaType]))
+	if msgType != bus.SystemTypeSubagentResult {
+		slog.Info("ignored system message", "request_id", msg.RequestID, "type", msgType)
+		return
+	}
+
+	originChannel := strings.TrimSpace(fmt.Sprint(msg.Metadata[bus.SystemMetaOriginChannel]))
+	if originChannel == "" {
+		originChannel = "cli"
+	}
+	originChatID := strings.TrimSpace(fmt.Sprint(msg.Metadata[bus.SystemMetaOriginChatID]))
+	if originChatID == "" {
+		originChatID = "direct"
+	}
+
+	label := strings.TrimSpace(fmt.Sprint(msg.Metadata[bus.SystemMetaTaskLabel]))
+	content := strings.TrimSpace(msg.Content)
+	if label != "" {
+		content = fmt.Sprintf("Subagent '%s' completed.\n\n%s", label, content)
+	}
+	if content == "" {
+		content = "Subagent completed."
+	}
+
+	l.bus.PublishOutbound(&bus.OutboundMessage{
+		Channel:   originChannel,
+		ChatID:    originChatID,
+		Content:   content,
+		RequestID: msg.RequestID,
+		Metadata: map[string]any{
+			bus.SystemMetaType:   bus.SystemTypeSubagentResult,
+			bus.SystemMetaTaskID: msg.Metadata[bus.SystemMetaTaskID],
+			bus.SystemMetaStatus: msg.Metadata[bus.SystemMetaStatus],
+		},
+	})
 }
 
 func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bus.OutboundMessage, error) {
@@ -184,7 +266,15 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 				l.OnToolStart(tc.Function.Name, tc.Function.Arguments)
 			}
 
-			result, err := l.tools.Execute(ctx, tc.Function.Name, tc.Function.Arguments)
+			toolCtx := tools.WithInvocationContext(ctx, tools.InvocationContext{
+				Channel:   msg.Channel,
+				ChatID:    msg.ChatID,
+				SenderID:  msg.SenderID,
+				RequestID: msg.RequestID,
+				SessionID: msg.SessionKey(),
+			})
+
+			result, err := l.tools.Execute(toolCtx, tc.Function.Name, tc.Function.Arguments)
 			if err != nil {
 				result = "Error: " + err.Error()
 			}
@@ -225,6 +315,11 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 
 // ProcessForChannel processes a message directly for a given channel/session.
 func (l *Loop) ProcessForChannel(ctx context.Context, channel, chatID, senderID, content string) (string, error) {
+	return l.ProcessForChannelWithSession(ctx, channel, chatID, senderID, "", content)
+}
+
+// ProcessForChannelWithSession processes a message for a channel/chat using an optional explicit session id.
+func (l *Loop) ProcessForChannelWithSession(ctx context.Context, channel, chatID, senderID, sessionID, content string) (string, error) {
 	if err := l.bindTools(ctx); err != nil {
 		return "", err
 	}
@@ -242,6 +337,7 @@ func (l *Loop) ProcessForChannel(ctx context.Context, channel, chatID, senderID,
 		Channel:   channel,
 		SenderID:  senderID,
 		ChatID:    chatID,
+		SessionID: strings.TrimSpace(sessionID),
 		Content:   content,
 		RequestID: bus.RequestIDFromContext(ctx),
 	}

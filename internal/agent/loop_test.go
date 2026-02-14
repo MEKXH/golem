@@ -359,3 +359,47 @@ func TestProcessForChannel_UsesCustomSessionKey(t *testing.T) {
 		t.Fatalf("expected 2 messages in session, got %d", len(history))
 	}
 }
+
+func TestRun_HandlesSubagentSystemMessage(t *testing.T) {
+	loop := newTestLoop(t, nil, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- loop.Run(ctx)
+	}()
+
+	loop.bus.PublishInbound(bus.NewSubagentResultInbound(
+		"subagent-1",
+		"diag",
+		"telegram",
+		"chat-1",
+		"alice",
+		"subagent done",
+		"req-1",
+		nil,
+	))
+
+	select {
+	case out := <-loop.bus.Outbound():
+		if out.Channel != "telegram" || out.ChatID != "chat-1" {
+			t.Fatalf("unexpected outbound route: %+v", out)
+		}
+		if !strings.Contains(out.Content, "subagent done") {
+			t.Fatalf("expected subagent content in outbound message, got: %s", out.Content)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for outbound system relay")
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "context canceled") {
+			t.Fatalf("expected context canceled from Run, got: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Run shutdown")
+	}
+}
