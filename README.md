@@ -184,6 +184,7 @@ golem run
 | `golem skills install <repo>` | Install a skill from GitHub |
 | `golem skills remove <name>` | Remove an installed skill |
 | `golem skills show <name>` | Show skill content |
+| `golem skills search [keyword]` | Search available remote skills |
 
 ---
 
@@ -215,6 +216,12 @@ golem cron add -n "meeting" -m "Remind me about the team meeting" --at "2026-02-
 ## Skills System
 
 Skills are markdown instruction packs loaded into the agent's system prompt automatically.
+Golem discovers skills from three sources with deterministic precedence:
+- `workspace/skills` (highest)
+- `~/.golem/skills`
+- builtin skills directory (default `~/.golem/builtin-skills`, overridable via `GOLEM_BUILTIN_SKILLS_DIR`)
+
+`golem init` automatically seeds a default builtin skill set into `~/.golem/builtin-skills`.
 
 ### Skill File Format
 
@@ -237,6 +244,15 @@ golem skills install owner/repo
 ```
 
 Downloads the `SKILL.md` from the repository's main branch.
+
+### Search Remote Skills
+
+```bash
+golem skills search
+golem skills search weather
+```
+
+By default, the command reads a remote `skills.json` index. You can override the index URL with `GOLEM_SKILLS_INDEX_URL`.
 
 ---
 

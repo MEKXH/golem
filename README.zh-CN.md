@@ -173,6 +173,7 @@ golem run
 | `golem skills install <repo>`                                                           | 从 GitHub 安装技能                           |
 | `golem skills remove <名称>`                                                            | 移除已安装技能                               |
 | `golem skills show <名称>`                                                              | 查看技能内容                                 |
+| `golem skills search [关键词]`                                                          | 搜索可安装的远程技能                         |
 
 ---
 
@@ -204,6 +205,12 @@ golem cron add -n "meeting" -m "提醒我参加团队会议" --at "2026-02-14T09
 ## 技能系统
 
 技能是基于 Markdown 的指令包，用于扩展智能体的能力。安装后会自动加载到系统提示中。
+Golem 会从三个来源加载技能，优先级固定：
+- `workspace/skills`（最高）
+- `~/.golem/skills`
+- 内置技能目录（默认 `~/.golem/builtin-skills`，可通过 `GOLEM_BUILTIN_SKILLS_DIR` 覆盖）
+
+执行 `golem init` 时，会自动在 `~/.golem/builtin-skills` 写入一套默认内置技能。
 
 ### 技能文件格式
 
@@ -227,6 +234,15 @@ golem skills install owner/repo
 ```
 
 此命令会从仓库的 main 分支下载 `SKILL.md` 文件。
+
+### 搜索远程技能
+
+```bash
+golem skills search
+golem skills search weather
+```
+
+默认会读取远程 `skills.json` 索引。可通过 `GOLEM_SKILLS_INDEX_URL` 覆盖索引地址。
 
 ---
 

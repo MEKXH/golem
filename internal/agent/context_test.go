@@ -56,3 +56,30 @@ func TestBuildMessages_IncludesMediaList(t *testing.T) {
 		t.Fatalf("expected media names included, got: %s", last.Content)
 	}
 }
+
+func TestBuildSystemPrompt_IncludesBuiltinSkillsSummary(t *testing.T) {
+	workspace := t.TempDir()
+	builtin := filepath.Join(t.TempDir(), "builtin-skills")
+	t.Setenv("GOLEM_BUILTIN_SKILLS_DIR", builtin)
+
+	if err := os.MkdirAll(filepath.Join(builtin, "weather"), 0755); err != nil {
+		t.Fatalf("MkdirAll builtin skill: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(builtin, "weather", "SKILL.md"),
+		[]byte("---\nname: weather\ndescription: \"builtin weather\"\n---\n\n# Weather\n"),
+		0644,
+	); err != nil {
+		t.Fatalf("WriteFile builtin SKILL.md: %v", err)
+	}
+
+	cb := NewContextBuilder(workspace)
+	prompt := cb.BuildSystemPrompt()
+
+	if !strings.Contains(prompt, "Installed Skills") {
+		t.Fatalf("expected skills section in prompt, got: %s", prompt)
+	}
+	if !strings.Contains(prompt, "weather") || !strings.Contains(prompt, "builtin weather") {
+		t.Fatalf("expected builtin skill summary in prompt, got: %s", prompt)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -19,6 +20,7 @@ type SkillInfo struct {
 type Loader struct {
 	workspaceSkills string // workspace/skills/
 	globalSkills    string // ~/.golem/skills/
+	builtinSkills   string // builtin skills shipped with golem
 }
 
 // NewLoader creates a skill loader for the given workspace.
@@ -27,10 +29,11 @@ func NewLoader(workspacePath string) *Loader {
 	return &Loader{
 		workspaceSkills: filepath.Join(workspacePath, "skills"),
 		globalSkills:    filepath.Join(homeDir, ".golem", "skills"),
+		builtinSkills:   resolveBuiltinSkillsDir(homeDir),
 	}
 }
 
-// ListSkills returns all discovered skills (workspace takes priority over global).
+// ListSkills returns all discovered skills (workspace > global > builtin).
 func (l *Loader) ListSkills() []SkillInfo {
 	seen := make(map[string]bool)
 	var skills []SkillInfo
@@ -44,6 +47,14 @@ func (l *Loader) ListSkills() []SkillInfo {
 	// Global skills
 	for _, s := range l.scanDir(l.globalSkills, "global") {
 		if !seen[s.Name] {
+			seen[s.Name] = true
+			skills = append(skills, s)
+		}
+	}
+
+	// Builtin skills
+	for _, s := range l.scanDir(l.builtinSkills, "builtin") {
+		if !seen[s.Name] {
 			skills = append(skills, s)
 		}
 	}
@@ -53,8 +64,8 @@ func (l *Loader) ListSkills() []SkillInfo {
 
 // LoadSkill reads the content of a skill by name.
 func (l *Loader) LoadSkill(name string) (string, error) {
-	// Search workspace first, then global.
-	for _, dir := range []string{l.workspaceSkills, l.globalSkills} {
+	// Search workspace first, then global, then builtin.
+	for _, dir := range []string{l.workspaceSkills, l.globalSkills, l.builtinSkills} {
 		path := filepath.Join(dir, name, "SKILL.md")
 		data, err := os.ReadFile(path)
 		if err == nil {
@@ -141,4 +152,33 @@ func parseSkillFrontmatter(dirName, content string) (name, description string) {
 		}
 	}
 	return
+}
+
+func resolveBuiltinSkillsDir(homeDir string) string {
+	if fromEnv := strings.TrimSpace(os.Getenv("GOLEM_BUILTIN_SKILLS_DIR")); fromEnv != "" {
+		return fromEnv
+	}
+
+	defaultDir := filepath.Join(homeDir, ".golem", "builtin-skills")
+	candidates := []string{
+		defaultDir,
+		filepath.Join(homeDir, ".golem", "golem", "skills"),
+	}
+
+	if exePath, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exePath), "skills"))
+	}
+
+	// Source checkout fallback for local development.
+	if _, thisFile, _, ok := runtime.Caller(0); ok {
+		candidates = append(candidates, filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", "..", "skills")))
+	}
+
+	for _, dir := range candidates {
+		if stat, err := os.Stat(dir); err == nil && stat.IsDir() {
+			return dir
+		}
+	}
+
+	return defaultDir
 }

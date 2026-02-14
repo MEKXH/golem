@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/MEKXH/golem/internal/config"
+	"github.com/MEKXH/golem/internal/skills"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,10 @@ func NewInitCmd() *cobra.Command {
 
 func runInit(cmd *cobra.Command, args []string) error {
 	configPath := config.ConfigPath()
+
+	if err := skills.EnsureBuiltinSkills(config.ConfigDir()); err != nil {
+		return fmt.Errorf("failed to initialize builtin skills: %w", err)
+	}
 
 	if _, err := os.Stat(configPath); err == nil {
 		fmt.Printf("Config already exists: %s\n", configPath)

@@ -2,6 +2,7 @@ package skills
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,15 +12,35 @@ import (
 	"time"
 )
 
+const defaultSkillsIndexURL = "https://raw.githubusercontent.com/sipeed/picoclaw-skills/main/skills.json"
+const defaultGitHubRawBaseURL = "https://raw.githubusercontent.com"
+
+// AvailableSkill is an entry from the remote skills index.
+type AvailableSkill struct {
+	Name        string   `json:"name"`
+	Repository  string   `json:"repository"`
+	Description string   `json:"description"`
+	Author      string   `json:"author"`
+	Tags        []string `json:"tags"`
+}
+
 // Installer manages skill installation and removal.
 type Installer struct {
-	skillsDir string // workspace/skills/
+	skillsDir      string // workspace/skills/
+	httpClient     *http.Client
+	skillsIndexURL string
+	githubRawBase  string
 }
 
 // NewInstaller creates an installer targeting the given workspace.
 func NewInstaller(workspacePath string) *Installer {
 	return &Installer{
 		skillsDir: filepath.Join(workspacePath, "skills"),
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+		skillsIndexURL: resolveSkillsIndexURL(),
+		githubRawBase:  resolveGitHubRawBaseURL(),
 	}
 }
 
@@ -58,15 +79,14 @@ func (i *Installer) Install(ctx context.Context, repo string) error {
 		}
 	}
 
-	rawURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/main/%s", owner, repoName, filePath)
+	rawURL := fmt.Sprintf("%s/%s/%s/main/%s", strings.TrimRight(i.githubRawBase, "/"), owner, repoName, filePath)
 
-	client := &http.Client{Timeout: 30 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := i.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("fetch skill: %w", err)
 	}
@@ -107,4 +127,51 @@ func (i *Installer) Uninstall(name string) error {
 	}
 
 	return os.RemoveAll(skillDir)
+}
+
+// Search returns available skills from the configured index URL.
+func (i *Installer) Search(ctx context.Context) ([]AvailableSkill, error) {
+	if strings.TrimSpace(i.skillsIndexURL) == "" {
+		return nil, fmt.Errorf("skills index URL is empty")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, i.skillsIndexURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	resp, err := i.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch skills index: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetch skills index failed: HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
+	if err != nil {
+		return nil, fmt.Errorf("read skills index: %w", err)
+	}
+
+	var list []AvailableSkill
+	if err := json.Unmarshal(body, &list); err != nil {
+		return nil, fmt.Errorf("parse skills index: %w", err)
+	}
+	return list, nil
+}
+
+func resolveSkillsIndexURL() string {
+	if fromEnv := strings.TrimSpace(os.Getenv("GOLEM_SKILLS_INDEX_URL")); fromEnv != "" {
+		return fromEnv
+	}
+	return defaultSkillsIndexURL
+}
+
+func resolveGitHubRawBaseURL() string {
+	if fromEnv := strings.TrimSpace(os.Getenv("GOLEM_GITHUB_RAW_BASE_URL")); fromEnv != "" {
+		return fromEnv
+	}
+	return defaultGitHubRawBaseURL
 }
