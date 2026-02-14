@@ -25,14 +25,20 @@ var (
 	codeInlineRe = regexp.MustCompile("`([^`]+)`")
 )
 
+const (
+	defaultTranscriptionTimeout = 30 * time.Second
+	maxAudioBytes               = 25 * 1024 * 1024
+)
+
 // Channel implements Telegram bot
 type Channel struct {
 	channel.BaseChannel
-	cfg           *config.TelegramConfig
-	bot           *tgbotapi.BotAPI
-	transcriber   voice.Transcriber
-	downloadVoice func(ctx context.Context, fileID, fileName, mimeType string) (voice.Input, error)
-	httpClient    *http.Client
+	cfg                  *config.TelegramConfig
+	bot                  *tgbotapi.BotAPI
+	transcriber          voice.Transcriber
+	downloadVoice        func(ctx context.Context, fileID, fileName, mimeType string) (voice.Input, error)
+	httpClient           *http.Client
+	transcriptionTimeout time.Duration
 }
 
 // New creates a Telegram channel
@@ -46,9 +52,10 @@ func New(cfg *config.TelegramConfig, msgBus *bus.MessageBus, transcriber voice.T
 			Bus:       msgBus,
 			AllowList: allowList,
 		},
-		cfg:         cfg,
-		transcriber: transcriber,
-		httpClient:  &http.Client{Timeout: 45 * time.Second},
+		cfg:                  cfg,
+		transcriber:          transcriber,
+		httpClient:           &http.Client{Timeout: 45 * time.Second},
+		transcriptionTimeout: defaultTranscriptionTimeout,
 	}
 	ch.downloadVoice = ch.downloadTelegramVoice
 	return ch
@@ -80,12 +87,12 @@ func (c *Channel) Start(ctx context.Context) error {
 			if update.Message == nil {
 				continue
 			}
-			c.handleMessage(update.Message)
+			c.handleMessage(ctx, update.Message)
 		}
 	}
 }
 
-func (c *Channel) handleMessage(msg *tgbotapi.Message) {
+func (c *Channel) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 	if msg == nil || msg.From == nil || msg.Chat == nil {
 		return
 	}
@@ -106,7 +113,7 @@ func (c *Channel) handleMessage(msg *tgbotapi.Message) {
 		"username":   msg.From.UserName,
 	}
 
-	transcribed, err := c.tryTranscribeAudio(context.Background(), msg)
+	transcribed, hasAudio, err := c.tryTranscribeAudio(ctx, msg)
 	if err != nil {
 		slog.Warn("telegram transcription failed", "error", err, "chat_id", msg.Chat.ID, "message_id", msg.MessageID)
 	}
@@ -117,6 +124,8 @@ func (c *Channel) handleMessage(msg *tgbotapi.Message) {
 			content = content + "\n\n[voice] " + transcribed
 		}
 		metadata["transcribed_audio"] = true
+	} else if hasAudio && strings.TrimSpace(content) == "" {
+		content = telegramAudioPlaceholder(msg)
 	}
 	if content == "" {
 		return
@@ -190,21 +199,31 @@ func markdownToHTML(text string) string {
 	return text
 }
 
-func (c *Channel) tryTranscribeAudio(ctx context.Context, msg *tgbotapi.Message) (string, error) {
-	if c.transcriber == nil || c.downloadVoice == nil {
-		return "", nil
-	}
-
+func (c *Channel) tryTranscribeAudio(ctx context.Context, msg *tgbotapi.Message) (string, bool, error) {
 	fileID, fileName, mimeType := telegramAudioDescriptor(msg)
 	if fileID == "" {
-		return "", nil
+		return "", false, nil
 	}
 
-	input, err := c.downloadVoice(ctx, fileID, fileName, mimeType)
-	if err != nil {
-		return "", err
+	if c.transcriber == nil || c.downloadVoice == nil {
+		return "", true, nil
 	}
-	return c.transcriber.Transcribe(ctx, input)
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	tctx, cancel := context.WithTimeout(ctx, c.transcriptionTimeout)
+	defer cancel()
+
+	input, err := c.downloadVoice(tctx, fileID, fileName, mimeType)
+	if err != nil {
+		return "", true, err
+	}
+	text, err := c.transcriber.Transcribe(tctx, input)
+	if err != nil {
+		return "", true, err
+	}
+	return text, true, nil
 }
 
 func telegramAudioDescriptor(msg *tgbotapi.Message) (fileID, fileName, mimeType string) {
@@ -250,7 +269,7 @@ func (c *Channel) downloadTelegramVoice(ctx context.Context, fileID, fileName, m
 		return voice.Input{}, fmt.Errorf("download telegram media failed: status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := readLimited(resp.Body, maxAudioBytes)
 	if err != nil {
 		return voice.Input{}, err
 	}
@@ -259,4 +278,23 @@ func (c *Channel) downloadTelegramVoice(ctx context.Context, fileID, fileName, m
 		MIMEType: mimeType,
 		Data:     data,
 	}, nil
+}
+
+func telegramAudioPlaceholder(msg *tgbotapi.Message) string {
+	if msg != nil && msg.Audio != nil {
+		return "[audio]"
+	}
+	return "[voice]"
+}
+
+func readLimited(r io.Reader, maxBytes int64) ([]byte, error) {
+	limited := io.LimitReader(r, maxBytes+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("audio file is too large: %d bytes (max %d)", len(data), maxBytes)
+	}
+	return data, nil
 }

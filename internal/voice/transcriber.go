@@ -17,6 +17,7 @@ const (
 	defaultModel   = "gpt-4o-mini-transcribe"
 	defaultBaseURL = "https://api.openai.com/v1"
 	defaultTimeout = 30 * time.Second
+	maxInputBytes  = 25 * 1024 * 1024
 )
 
 // Input is one audio payload to transcribe.
@@ -67,6 +68,9 @@ func NewOpenAITranscriber(apiKey, baseURL, model string, timeout time.Duration) 
 func (t *openAITranscriber) Transcribe(ctx context.Context, input Input) (string, error) {
 	if len(input.Data) == 0 {
 		return "", fmt.Errorf("audio data must not be empty")
+	}
+	if len(input.Data) > maxInputBytes {
+		return "", fmt.Errorf("audio data too large: %d bytes (max %d)", len(input.Data), maxInputBytes)
 	}
 
 	body, contentType, err := createMultipartForm(input, t.model)

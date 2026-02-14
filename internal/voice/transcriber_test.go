@@ -119,6 +119,26 @@ func TestOpenAITranscriber_RejectsEmptyAudio(t *testing.T) {
 	}
 }
 
+func TestOpenAITranscriber_RejectsTooLargeAudio(t *testing.T) {
+	tr, err := NewOpenAITranscriber("k", "https://api.openai.com/v1", "gpt-4o-mini-transcribe", 5*time.Second)
+	if err != nil {
+		t.Fatalf("NewOpenAITranscriber error: %v", err)
+	}
+
+	tooLarge := make([]byte, maxInputBytes+1)
+	_, err = tr.Transcribe(context.Background(), Input{
+		FileName: "voice.ogg",
+		MIMEType: "audio/ogg",
+		Data:     tooLarge,
+	})
+	if err == nil {
+		t.Fatal("expected too-large audio error")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "too large") {
+		t.Fatalf("expected too-large error, got: %v", err)
+	}
+}
+
 func TestCreateMultipartForm_IncludesAudioFile(t *testing.T) {
 	body, contentType, err := createMultipartForm(Input{
 		FileName: "audio.mp3",

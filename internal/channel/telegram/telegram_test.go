@@ -54,13 +54,15 @@ func TestParseInt64_Invalid(t *testing.T) {
 }
 
 type fakeTranscriber struct {
-	text string
-	err  error
-	got  voice.Input
+	text        string
+	err         error
+	got         voice.Input
+	hasDeadline bool
 }
 
 func (f *fakeTranscriber) Transcribe(ctx context.Context, input voice.Input) (string, error) {
 	f.got = input
+	_, f.hasDeadline = ctx.Deadline()
 	return f.text, f.err
 }
 
@@ -78,7 +80,7 @@ func TestHandleMessage_VoiceMessageUsesTranscriber(t *testing.T) {
 		}, nil
 	}
 
-	ch.handleMessage(&tgbotapi.Message{
+	ch.handleMessage(context.Background(), &tgbotapi.Message{
 		MessageID: 7,
 		From:      &tgbotapi.User{ID: 123, UserName: "alice"},
 		Chat:      &tgbotapi.Chat{ID: 42},
@@ -92,6 +94,9 @@ func TestHandleMessage_VoiceMessageUsesTranscriber(t *testing.T) {
 		}
 		if in.Metadata["transcribed_audio"] != true {
 			t.Fatalf("expected transcribed_audio metadata true, got %+v", in.Metadata)
+		}
+		if !ft.hasDeadline {
+			t.Fatal("expected transcription context with deadline")
 		}
 	default:
 		t.Fatal("expected inbound message")
@@ -112,7 +117,7 @@ func TestHandleMessage_TranscriptionFailureDoesNotDropText(t *testing.T) {
 		}, nil
 	}
 
-	ch.handleMessage(&tgbotapi.Message{
+	ch.handleMessage(context.Background(), &tgbotapi.Message{
 		MessageID: 9,
 		From:      &tgbotapi.User{ID: 555, UserName: "bob"},
 		Chat:      &tgbotapi.Chat{ID: 77},
@@ -127,5 +132,57 @@ func TestHandleMessage_TranscriptionFailureDoesNotDropText(t *testing.T) {
 		}
 	default:
 		t.Fatal("expected inbound text message")
+	}
+}
+
+func TestHandleMessage_VoiceOnlyWithoutTranscriberKeepsPlaceholder(t *testing.T) {
+	msgBus := bus.NewMessageBus(1)
+	ch := New(&config.TelegramConfig{}, msgBus, nil)
+
+	ch.handleMessage(context.Background(), &tgbotapi.Message{
+		MessageID: 10,
+		From:      &tgbotapi.User{ID: 999, UserName: "eve"},
+		Chat:      &tgbotapi.Chat{ID: 99},
+		Voice:     &tgbotapi.Voice{FileID: "voice-3", MimeType: "audio/ogg"},
+	})
+
+	select {
+	case in := <-msgBus.Inbound():
+		if in.Content != "[voice]" {
+			t.Fatalf("expected voice placeholder, got %q", in.Content)
+		}
+	default:
+		t.Fatal("expected inbound message for voice-only input")
+	}
+}
+
+func TestHandleMessage_VoiceOnlyTranscriptionFailureKeepsPlaceholder(t *testing.T) {
+	msgBus := bus.NewMessageBus(1)
+	ch := New(&config.TelegramConfig{}, msgBus, nil)
+
+	ft := &fakeTranscriber{err: context.DeadlineExceeded}
+	ch.transcriber = ft
+	ch.downloadVoice = func(ctx context.Context, fileID, fileName, mimeType string) (voice.Input, error) {
+		return voice.Input{
+			FileName: fileName,
+			MIMEType: mimeType,
+			Data:     []byte("audio"),
+		}, nil
+	}
+
+	ch.handleMessage(context.Background(), &tgbotapi.Message{
+		MessageID: 11,
+		From:      &tgbotapi.User{ID: 222, UserName: "neo"},
+		Chat:      &tgbotapi.Chat{ID: 66},
+		Voice:     &tgbotapi.Voice{FileID: "voice-4", MimeType: "audio/ogg"},
+	})
+
+	select {
+	case in := <-msgBus.Inbound():
+		if in.Content != "[voice]" {
+			t.Fatalf("expected voice placeholder on transcription failure, got %q", in.Content)
+		}
+	default:
+		t.Fatal("expected inbound message for voice transcription failure")
 	}
 }

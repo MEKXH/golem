@@ -20,16 +20,22 @@ import (
 	"github.com/slack-go/slack/socketmode"
 )
 
+const (
+	defaultTranscriptionTimeout = 30 * time.Second
+	maxAudioBytes               = 25 * 1024 * 1024
+)
+
 // Channel implements Slack Socket Mode channel.
 type Channel struct {
 	channel.BaseChannel
-	cfg           *config.SlackConfig
-	api           *slack.Client
-	socketClient  *socketmode.Client
-	botUserID     string
-	transcriber   voice.Transcriber
-	downloadAudio func(ctx context.Context, url, fileName, mimeType string) (voice.Input, error)
-	httpClient    *http.Client
+	cfg                  *config.SlackConfig
+	api                  *slack.Client
+	socketClient         *socketmode.Client
+	botUserID            string
+	transcriber          voice.Transcriber
+	downloadAudio        func(ctx context.Context, url, fileName, mimeType string) (voice.Input, error)
+	httpClient           *http.Client
+	transcriptionTimeout time.Duration
 
 	mu      sync.RWMutex
 	running bool
@@ -44,10 +50,11 @@ func New(cfg *config.SlackConfig, msgBus *bus.MessageBus, transcriber voice.Tran
 		allowList[id] = true
 	}
 	ch := &Channel{
-		BaseChannel: channel.BaseChannel{Bus: msgBus, AllowList: allowList},
-		cfg:         cfg,
-		transcriber: transcriber,
-		httpClient:  &http.Client{Timeout: 45 * time.Second},
+		BaseChannel:          channel.BaseChannel{Bus: msgBus, AllowList: allowList},
+		cfg:                  cfg,
+		transcriber:          transcriber,
+		httpClient:           &http.Client{Timeout: 45 * time.Second},
+		transcriptionTimeout: defaultTranscriptionTimeout,
 	}
 	ch.downloadAudio = ch.downloadSlackAudio
 	return ch
@@ -195,7 +202,7 @@ func (c *Channel) handleMessageEvent(ev *slackevents.MessageEvent) {
 
 	content := strings.TrimSpace(c.stripMention(ev.Text))
 	media := make([]string, 0)
-	var transcribed string
+	transcribedCount := 0
 	for _, file := range c.extractFiles(ev) {
 		url := strings.TrimSpace(file.URLPrivateDownload)
 		if url == "" {
@@ -203,25 +210,28 @@ func (c *Channel) handleMessageEvent(ev *slackevents.MessageEvent) {
 		}
 		if url != "" {
 			media = append(media, url)
-			if content != "" {
-				content += "\n"
-			}
-			content += fmt.Sprintf("[attachment: %s]", url)
 		}
 
-		if transcribed == "" {
-			if text, err := c.tryTranscribeFile(context.Background(), file); err != nil {
+		if isAudioSlackFile(file.Mimetype, file.Name) {
+			text, err := c.tryTranscribeFile(context.Background(), file)
+			if err != nil {
 				slog.Warn("slack transcription failed", "error", err, "channel_id", ev.Channel, "message_ts", ev.TimeStamp)
-			} else if strings.TrimSpace(text) != "" {
-				transcribed = strings.TrimSpace(text)
 			}
+			if strings.TrimSpace(text) != "" {
+				content = appendLine(content, "[voice] "+strings.TrimSpace(text))
+				transcribedCount++
+				continue
+			}
+			name := strings.TrimSpace(file.Name)
+			if name == "" {
+				name = "audio"
+			}
+			content = appendLine(content, fmt.Sprintf("[audio: %s]", name))
+			continue
 		}
-	}
-	if transcribed != "" {
-		if content == "" {
-			content = transcribed
-		} else {
-			content += "\n\n[voice] " + transcribed
+
+		if url != "" {
+			content = appendLine(content, fmt.Sprintf("[attachment: %s]", url))
 		}
 	}
 	if content == "" {
@@ -238,8 +248,9 @@ func (c *Channel) handleMessageEvent(ev *slackevents.MessageEvent) {
 		"channel_id": ev.Channel,
 		"thread_ts":  ev.ThreadTimeStamp,
 	}
-	if transcribed != "" {
+	if transcribedCount > 0 {
 		metadata["transcribed_audio"] = true
+		metadata["transcribed_audio_count"] = transcribedCount
 	}
 
 	c.PublishInbound(&bus.InboundMessage{
@@ -371,11 +382,17 @@ func (c *Channel) tryTranscribeFile(ctx context.Context, file slack.File) (strin
 		return "", nil
 	}
 
-	input, err := c.downloadAudio(ctx, url, file.Name, file.Mimetype)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	tctx, cancel := context.WithTimeout(ctx, c.transcriptionTimeout)
+	defer cancel()
+
+	input, err := c.downloadAudio(tctx, url, file.Name, file.Mimetype)
 	if err != nil {
 		return "", err
 	}
-	return c.transcriber.Transcribe(ctx, input)
+	return c.transcriber.Transcribe(tctx, input)
 }
 
 func (c *Channel) downloadSlackAudio(ctx context.Context, url, fileName, mimeType string) (voice.Input, error) {
@@ -401,7 +418,7 @@ func (c *Channel) downloadSlackAudio(ctx context.Context, url, fileName, mimeTyp
 		return voice.Input{}, fmt.Errorf("download slack media failed: status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := readLimited(resp.Body, maxAudioBytes)
 	if err != nil {
 		return voice.Input{}, err
 	}
@@ -425,4 +442,26 @@ func isAudioSlackFile(mimeType, fileName string) bool {
 	default:
 		return false
 	}
+}
+
+func appendLine(base, suffix string) string {
+	if strings.TrimSpace(suffix) == "" {
+		return base
+	}
+	if strings.TrimSpace(base) == "" {
+		return suffix
+	}
+	return base + "\n" + suffix
+}
+
+func readLimited(r io.Reader, maxBytes int64) ([]byte, error) {
+	limited := io.LimitReader(r, maxBytes+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("audio file is too large: %d bytes (max %d)", len(data), maxBytes)
+	}
+	return data, nil
 }

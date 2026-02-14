@@ -27,13 +27,17 @@ func TestParseChatID_ChannelOnly(t *testing.T) {
 }
 
 type fakeTranscriber struct {
-	text string
-	err  error
-	got  voice.Input
+	text        string
+	err         error
+	got         voice.Input
+	hasDeadline bool
+	callCount   int
 }
 
 func (f *fakeTranscriber) Transcribe(ctx context.Context, input voice.Input) (string, error) {
 	f.got = input
+	_, f.hasDeadline = ctx.Deadline()
+	f.callCount++
 	return f.text, f.err
 }
 
@@ -69,6 +73,9 @@ func TestHandleMessageEvent_AudioFileUsesTranscriber(t *testing.T) {
 		if in.Metadata["transcribed_audio"] != true {
 			t.Fatalf("expected transcribed_audio metadata true, got %+v", in.Metadata)
 		}
+		if !ft.hasDeadline {
+			t.Fatal("expected transcription context with deadline")
+		}
 	default:
 		t.Fatal("expected inbound message")
 	}
@@ -102,6 +109,78 @@ func TestHandleMessageEvent_TranscriptionFailureDoesNotDropText(t *testing.T) {
 	case in := <-msgBus.Inbound():
 		if !strings.Contains(in.Content, "typed text") {
 			t.Fatalf("expected text content retained, got %q", in.Content)
+		}
+	default:
+		t.Fatal("expected inbound message")
+	}
+}
+
+func TestHandleMessageEvent_MultipleAudioFilesTranscribed(t *testing.T) {
+	msgBus := bus.NewMessageBus(1)
+	ft := &fakeTranscriber{text: "voice text"}
+	ch := New(&config.SlackConfig{}, msgBus, ft)
+	ch.downloadAudio = func(ctx context.Context, url, fileName, mimeType string) (voice.Input, error) {
+		return voice.Input{
+			FileName: fileName,
+			MIMEType: mimeType,
+			Data:     []byte("audio"),
+		}, nil
+	}
+
+	ch.handleMessageEvent(&slackevents.MessageEvent{
+		User:      "U3",
+		Text:      "",
+		TimeStamp: "1700000000.3",
+		Channel:   "C3",
+		Message: &slack.Msg{
+			Files: []slack.File{
+				{Name: "voice1.ogg", Mimetype: "audio/ogg", URLPrivateDownload: "https://files.slack.test/voice1.ogg"},
+				{Name: "voice2.ogg", Mimetype: "audio/ogg", URLPrivateDownload: "https://files.slack.test/voice2.ogg"},
+			},
+		},
+	})
+
+	select {
+	case in := <-msgBus.Inbound():
+		if ft.callCount != 2 {
+			t.Fatalf("expected 2 transcription calls, got %d", ft.callCount)
+		}
+		if in.Metadata["transcribed_audio_count"] != 2 {
+			t.Fatalf("expected transcribed_audio_count=2, got %+v", in.Metadata)
+		}
+	default:
+		t.Fatal("expected inbound message")
+	}
+}
+
+func TestHandleMessageEvent_AudioOnlyFailureKeepsAudioPlaceholder(t *testing.T) {
+	msgBus := bus.NewMessageBus(1)
+	ft := &fakeTranscriber{err: context.DeadlineExceeded}
+	ch := New(&config.SlackConfig{}, msgBus, ft)
+	ch.downloadAudio = func(ctx context.Context, url, fileName, mimeType string) (voice.Input, error) {
+		return voice.Input{
+			FileName: fileName,
+			MIMEType: mimeType,
+			Data:     []byte("audio"),
+		}, nil
+	}
+
+	ch.handleMessageEvent(&slackevents.MessageEvent{
+		User:      "U4",
+		Text:      "",
+		TimeStamp: "1700000000.4",
+		Channel:   "C4",
+		Message: &slack.Msg{
+			Files: []slack.File{
+				{Name: "voice4.ogg", Mimetype: "audio/ogg", URLPrivateDownload: "https://files.slack.test/voice4.ogg"},
+			},
+		},
+	})
+
+	select {
+	case in := <-msgBus.Inbound():
+		if !strings.Contains(in.Content, "[audio: voice4.ogg]") {
+			t.Fatalf("expected audio placeholder, got %q", in.Content)
 		}
 	default:
 		t.Fatal("expected inbound message")
