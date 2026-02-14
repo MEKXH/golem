@@ -341,6 +341,9 @@ func TestRegisterDefaultTools_WithWebSearchKey(t *testing.T) {
 	if !slices.Contains(names, "web_search") {
 		t.Fatalf("expected web_search to be registered, got: %v", names)
 	}
+	if !slices.Contains(names, "edit_file") || !slices.Contains(names, "append_file") {
+		t.Fatalf("expected edit_file and append_file to be registered, got: %v", names)
+	}
 }
 
 func TestProcessForChannel_UsesCustomSessionKey(t *testing.T) {

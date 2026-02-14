@@ -76,6 +76,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println("\nTools:")
 	fmt.Println("  read_file: ready")
 	fmt.Println("  write_file: ready")
+	fmt.Println("  edit_file: ready")
+	fmt.Println("  append_file: ready")
 	fmt.Println("  list_dir: ready")
 	fmt.Println("  read_memory: ready")
 	fmt.Println("  write_memory: ready")

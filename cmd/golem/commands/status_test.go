@@ -35,6 +35,9 @@ func TestStatusCommand_PrintsConfig(t *testing.T) {
 	if !strings.Contains(output, "web_search: enabled") {
 		t.Fatalf("expected web_search readiness line, got: %s", output)
 	}
+	if !strings.Contains(output, "edit_file: ready") || !strings.Contains(output, "append_file: ready") {
+		t.Fatalf("expected edit/append tool readiness lines, got: %s", output)
+	}
 }
 
 func TestStatusCommand_InvalidWorkspaceModeReturnsError(t *testing.T) {
