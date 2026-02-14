@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const defaultSkillsIndexURL = "https://raw.githubusercontent.com/sipeed/picoclaw-skills/main/skills.json"
+const defaultSkillsIndexURL = "https://raw.githubusercontent.com/MEKXH/golem-skills/main/skills.json"
 const defaultGitHubRawBaseURL = "https://raw.githubusercontent.com"
 
 // AvailableSkill is an entry from the remote skills index.
