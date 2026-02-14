@@ -3,7 +3,10 @@ package slack
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +14,7 @@ import (
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/channel"
 	"github.com/MEKXH/golem/internal/config"
+	"github.com/MEKXH/golem/internal/voice"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/slack-go/slack/socketmode"
@@ -19,10 +23,13 @@ import (
 // Channel implements Slack Socket Mode channel.
 type Channel struct {
 	channel.BaseChannel
-	cfg          *config.SlackConfig
-	api          *slack.Client
-	socketClient *socketmode.Client
-	botUserID    string
+	cfg           *config.SlackConfig
+	api           *slack.Client
+	socketClient  *socketmode.Client
+	botUserID     string
+	transcriber   voice.Transcriber
+	downloadAudio func(ctx context.Context, url, fileName, mimeType string) (voice.Input, error)
+	httpClient    *http.Client
 
 	mu      sync.RWMutex
 	running bool
@@ -31,15 +38,19 @@ type Channel struct {
 }
 
 // New creates a Slack channel.
-func New(cfg *config.SlackConfig, msgBus *bus.MessageBus) *Channel {
+func New(cfg *config.SlackConfig, msgBus *bus.MessageBus, transcriber voice.Transcriber) *Channel {
 	allowList := make(map[string]bool)
 	for _, id := range cfg.AllowFrom {
 		allowList[id] = true
 	}
-	return &Channel{
+	ch := &Channel{
 		BaseChannel: channel.BaseChannel{Bus: msgBus, AllowList: allowList},
 		cfg:         cfg,
+		transcriber: transcriber,
+		httpClient:  &http.Client{Timeout: 45 * time.Second},
 	}
+	ch.downloadAudio = ch.downloadSlackAudio
+	return ch
 }
 
 func (c *Channel) Name() string { return "slack" }
@@ -183,6 +194,36 @@ func (c *Channel) handleMessageEvent(ev *slackevents.MessageEvent) {
 	}
 
 	content := strings.TrimSpace(c.stripMention(ev.Text))
+	media := make([]string, 0)
+	var transcribed string
+	for _, file := range c.extractFiles(ev) {
+		url := strings.TrimSpace(file.URLPrivateDownload)
+		if url == "" {
+			url = strings.TrimSpace(file.URLPrivate)
+		}
+		if url != "" {
+			media = append(media, url)
+			if content != "" {
+				content += "\n"
+			}
+			content += fmt.Sprintf("[attachment: %s]", url)
+		}
+
+		if transcribed == "" {
+			if text, err := c.tryTranscribeFile(context.Background(), file); err != nil {
+				slog.Warn("slack transcription failed", "error", err, "channel_id", ev.Channel, "message_ts", ev.TimeStamp)
+			} else if strings.TrimSpace(text) != "" {
+				transcribed = strings.TrimSpace(text)
+			}
+		}
+	}
+	if transcribed != "" {
+		if content == "" {
+			content = transcribed
+		} else {
+			content += "\n\n[voice] " + transcribed
+		}
+	}
 	if content == "" {
 		return
 	}
@@ -192,17 +233,23 @@ func (c *Channel) handleMessageEvent(ev *slackevents.MessageEvent) {
 		chatID = ev.Channel + "/" + ev.ThreadTimeStamp
 	}
 
+	metadata := map[string]any{
+		"message_ts": ev.TimeStamp,
+		"channel_id": ev.Channel,
+		"thread_ts":  ev.ThreadTimeStamp,
+	}
+	if transcribed != "" {
+		metadata["transcribed_audio"] = true
+	}
+
 	c.PublishInbound(&bus.InboundMessage{
 		Channel:   c.Name(),
 		SenderID:  senderID,
 		ChatID:    chatID,
 		Content:   content,
 		Timestamp: time.Now(),
-		Metadata: map[string]any{
-			"message_ts": ev.TimeStamp,
-			"channel_id": ev.Channel,
-			"thread_ts":  ev.ThreadTimeStamp,
-		},
+		Media:     media,
+		Metadata:  metadata,
 		RequestID: bus.NewRequestID(),
 	})
 }
@@ -299,4 +346,83 @@ func parseChatID(chatID string) (channelID, threadTS string) {
 		threadTS = parts[1]
 	}
 	return
+}
+
+func (c *Channel) extractFiles(ev *slackevents.MessageEvent) []slack.File {
+	if ev == nil || ev.Message == nil {
+		return nil
+	}
+	return ev.Message.Files
+}
+
+func (c *Channel) tryTranscribeFile(ctx context.Context, file slack.File) (string, error) {
+	if c.transcriber == nil || c.downloadAudio == nil {
+		return "", nil
+	}
+	if !isAudioSlackFile(file.Mimetype, file.Name) {
+		return "", nil
+	}
+
+	url := strings.TrimSpace(file.URLPrivateDownload)
+	if url == "" {
+		url = strings.TrimSpace(file.URLPrivate)
+	}
+	if url == "" {
+		return "", nil
+	}
+
+	input, err := c.downloadAudio(ctx, url, file.Name, file.Mimetype)
+	if err != nil {
+		return "", err
+	}
+	return c.transcriber.Transcribe(ctx, input)
+}
+
+func (c *Channel) downloadSlackAudio(ctx context.Context, url, fileName, mimeType string) (voice.Input, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return voice.Input{}, err
+	}
+	token := strings.TrimSpace(c.cfg.BotToken)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	client := c.httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return voice.Input{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return voice.Input{}, fmt.Errorf("download slack media failed: status %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return voice.Input{}, err
+	}
+	return voice.Input{
+		FileName: fileName,
+		MIMEType: mimeType,
+		Data:     data,
+	}, nil
+}
+
+func isAudioSlackFile(mimeType, fileName string) bool {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	if strings.HasPrefix(mimeType, "audio/") {
+		return true
+	}
+
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(fileName)))
+	switch ext {
+	case ".ogg", ".oga", ".mp3", ".m4a", ".wav", ".flac", ".aac", ".opus", ".webm":
+		return true
+	default:
+		return false
+	}
 }

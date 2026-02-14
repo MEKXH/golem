@@ -108,7 +108,10 @@ Copy this block for each phase:
 - Added voice transcription abstraction and OpenAI-compatible implementation: `internal/voice/transcriber.go`
 - Added voice transcription tests (multipart request, success path, HTTP error path): `internal/voice/transcriber_test.go`
 - Extended Telegram inbound handling for `voice` / `audio` messages with optional transcription: `internal/channel/telegram/telegram.go`
+- Extended Discord inbound handling for audio attachments with optional transcription: `internal/channel/discord/discord.go`
+- Extended Slack inbound handling for audio files with optional transcription: `internal/channel/slack/slack.go`
 - Guaranteed transcription-failure fallback for normal text messages (no regression): `internal/channel/telegram/telegram_test.go`
+- Added regression tests for Discord/Slack transcription fallback behavior
 - Added configurable voice settings (`tools.voice.enabled/provider/model/timeout_seconds`): `internal/config/config.go`
 - Wired transcriber construction in run path with OpenAI API key/auth-store fallback: `cmd/golem/commands/run.go`
 

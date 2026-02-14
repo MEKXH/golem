@@ -1,4 +1,4 @@
-package slack
+package discord
 
 import (
 	"context"
@@ -8,23 +8,8 @@ import (
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/voice"
-	"github.com/slack-go/slack"
-	"github.com/slack-go/slack/slackevents"
+	"github.com/bwmarrin/discordgo"
 )
-
-func TestParseChatID(t *testing.T) {
-	channelID, threadTS := parseChatID("C123/1700000000.1")
-	if channelID != "C123" || threadTS != "1700000000.1" {
-		t.Fatalf("unexpected parse result: channel=%q thread=%q", channelID, threadTS)
-	}
-}
-
-func TestParseChatID_ChannelOnly(t *testing.T) {
-	channelID, threadTS := parseChatID("C123")
-	if channelID != "C123" || threadTS != "" {
-		t.Fatalf("unexpected parse result: channel=%q thread=%q", channelID, threadTS)
-	}
-}
 
 type fakeTranscriber struct {
 	text string
@@ -37,10 +22,10 @@ func (f *fakeTranscriber) Transcribe(ctx context.Context, input voice.Input) (st
 	return f.text, f.err
 }
 
-func TestHandleMessageEvent_AudioFileUsesTranscriber(t *testing.T) {
+func TestHandleMessage_AudioAttachmentUsesTranscriber(t *testing.T) {
 	msgBus := bus.NewMessageBus(1)
 	ft := &fakeTranscriber{text: "voice text"}
-	ch := New(&config.SlackConfig{}, msgBus, ft)
+	ch := New(&config.DiscordConfig{}, msgBus, ft)
 	ch.downloadAudio = func(ctx context.Context, url, fileName, mimeType string) (voice.Input, error) {
 		return voice.Input{
 			FileName: fileName,
@@ -49,14 +34,14 @@ func TestHandleMessageEvent_AudioFileUsesTranscriber(t *testing.T) {
 		}, nil
 	}
 
-	ch.handleMessageEvent(&slackevents.MessageEvent{
-		User:      "U1",
-		Text:      "hello",
-		TimeStamp: "1700000000.1",
-		Channel:   "C1",
-		Message: &slack.Msg{
-			Files: []slack.File{
-				{Name: "voice.ogg", Mimetype: "audio/ogg", URLPrivateDownload: "https://files.slack.test/voice.ogg"},
+	ch.handleMessage(nil, &discordgo.MessageCreate{
+		Message: &discordgo.Message{
+			ID:        "m1",
+			GuildID:   "g1",
+			ChannelID: "c1",
+			Author:    &discordgo.User{ID: "u1", Username: "alice"},
+			Attachments: []*discordgo.MessageAttachment{
+				{URL: "https://cdn.discord.test/v.ogg", Filename: "v.ogg", ContentType: "audio/ogg"},
 			},
 		},
 	})
@@ -74,10 +59,10 @@ func TestHandleMessageEvent_AudioFileUsesTranscriber(t *testing.T) {
 	}
 }
 
-func TestHandleMessageEvent_TranscriptionFailureDoesNotDropText(t *testing.T) {
+func TestHandleMessage_TranscriptionFailureDoesNotDropText(t *testing.T) {
 	msgBus := bus.NewMessageBus(1)
 	ft := &fakeTranscriber{err: context.DeadlineExceeded}
-	ch := New(&config.SlackConfig{}, msgBus, ft)
+	ch := New(&config.DiscordConfig{}, msgBus, ft)
 	ch.downloadAudio = func(ctx context.Context, url, fileName, mimeType string) (voice.Input, error) {
 		return voice.Input{
 			FileName: fileName,
@@ -86,14 +71,15 @@ func TestHandleMessageEvent_TranscriptionFailureDoesNotDropText(t *testing.T) {
 		}, nil
 	}
 
-	ch.handleMessageEvent(&slackevents.MessageEvent{
-		User:      "U2",
-		Text:      "typed text",
-		TimeStamp: "1700000000.2",
-		Channel:   "C2",
-		Message: &slack.Msg{
-			Files: []slack.File{
-				{Name: "voice.ogg", Mimetype: "audio/ogg", URLPrivateDownload: "https://files.slack.test/voice.ogg"},
+	ch.handleMessage(nil, &discordgo.MessageCreate{
+		Message: &discordgo.Message{
+			ID:        "m2",
+			GuildID:   "g1",
+			ChannelID: "c2",
+			Content:   "typed text",
+			Author:    &discordgo.User{ID: "u2", Username: "bob"},
+			Attachments: []*discordgo.MessageAttachment{
+				{URL: "https://cdn.discord.test/v.ogg", Filename: "v.ogg", ContentType: "audio/ogg"},
 			},
 		},
 	})

@@ -249,7 +249,7 @@ func registerEnabledChannels(cfg *config.Config, msgBus *bus.MessageBus, chanMgr
 		if cfg.Channels.Discord.Token == "" {
 			skip("discord", "token not set")
 		} else {
-			register(discord.New(&cfg.Channels.Discord, msgBus))
+			register(discord.New(&cfg.Channels.Discord, msgBus, transcriber))
 		}
 	}
 
@@ -257,7 +257,7 @@ func registerEnabledChannels(cfg *config.Config, msgBus *bus.MessageBus, chanMgr
 		if cfg.Channels.Slack.BotToken == "" || cfg.Channels.Slack.AppToken == "" {
 			skip("slack", "bot_token/app_token not set")
 		} else {
-			register(slack.New(&cfg.Channels.Slack, msgBus))
+			register(slack.New(&cfg.Channels.Slack, msgBus, transcriber))
 		}
 	}
 
