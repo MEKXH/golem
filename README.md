@@ -13,128 +13,157 @@
 
 </div>
 
-Golem is a personal AI assistant that lives in your terminal and works while you sleep. Built with [Go](https://go.dev/) and [Eino](https://github.com/cloudwego/eino), it connects to any major LLM provider, executes shell commands, manages files, searches the web, and runs scheduled tasks — all from a single binary with zero external dependencies.
+Golem is a terminal-first personal AI assistant built with [Go](https://go.dev/) and [Eino](https://github.com/cloudwego/eino).
+It can chat, run tools, call shell commands, manage files, search/fetch web content, keep memory, schedule cron jobs, and run as a background service across multiple channels.
 
-> **Golem (גּוֹלֶם)**: In Jewish folklore, a Golem is an animated being created from inanimate matter — an obedient servant that tirelessly performs tasks for its creator.
+> **Golem (גולם)**: In Jewish folklore, a golem is an animated being made from inanimate matter, created to serve.
 
-[中文文档](README.zh-CN.md)
+## Documentation
 
----
+- [README (简体中文)](README.zh-CN.md)
+- [Operations Runbook (English)](docs/operations/runbook.md)
+- [运行手册（简体中文）](docs/operations/runbook.zh-CN.md)
 
-## Why Golem?
+## Why Golem
 
-- **One binary, zero bloat.** No Python, no Node, no Docker. Just a single Go binary.
-- **Provider-agnostic.** Switch between 9 LLM providers with a config change — OpenRouter, Claude, OpenAI, DeepSeek, Gemini, Ark, Qianfan, Qwen, or Ollama.
-- **Always-on option.** Run as a background server with multi-channel integration (Telegram, WhatsApp, Feishu, Discord, Slack, QQ, DingTalk, MaixCam), HTTP gateway, and cron-scheduled tasks.
-- **Tool-wielding agent.** Not just a chatbot — Golem reads files, runs commands, searches the web, and remembers context across sessions.
-- **Extensible by design.** Install skill packs from GitHub to teach it new tricks.
+- One binary, zero runtime dependency bloat (no Python/Node/Docker required).
+- Provider-agnostic model access through a unified OpenAI-compatible layer.
+- Real agent loop with tool calling, not just plain text chat.
+- Works both interactively (`golem chat`) and as long-running service (`golem run`).
+- Built-in channels, gateway API, cron scheduler, heartbeat service, and skill system.
 
----
-
-## Architecture
+## Architecture Overview
 
 ```
-┌──────────────────────────────────────────────────┐
-│              Channels (Input/Output)             │
-│         CLI TUI  ·  Telegram  ·  Gateway API     │
-└────────────────────────┬─────────────────────────┘
-                         │
-              ┌──────────▼──────────┐
-              │     Message Bus     │
-              │  (event-driven, Go  │
-              │      channels)      │
-              └──────────┬──────────┘
-                         │
-              ┌──────────▼──────────┐
-              │     Agent Loop      │
-              │ (iterative LLM +    │
-              │   tool calling)     │
-              └──────────┬──────────┘
-                         │
-        ┌────────────────┼────────────────┐
-        │                │                │
-   ┌────▼────┐    ┌──────▼──────┐   ┌────▼────┐
-   │   LLM   │    │    Tools    │   │ Storage │
-   │Providers│    │             │   │         │
-   └─────────┘    └─────────────┘   └─────────┘
-   OpenRouter      exec              Sessions
-   Claude          read_file         (JSONL)
-   OpenAI          write_file        Memory
-   DeepSeek        list_dir          Skills
-   Gemini          read_memory       Cron Jobs
-   Ark             write_memory
-   Qianfan         append_diary
-   Qwen            web_search
-   Ollama          web_fetch
-                   manage_cron
+┌─────────────────────────────────────────────────────────────────────┐
+│                           Golem Architecture                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────────┐    │
+│  │   Channels   │     │    Agent     │     │     Providers    │    │
+│  │  (Telegram,  │────▶│    Loop      │────▶│  (Claude, OpenAI,│    │
+│  │  Discord,    │     │              │     │   DeepSeek...)   │    │
+│  │  Slack...)   │     └──────┬───────┘     └──────────────────┘    │
+│  └──────────────┘            │                                       │
+│         │                    │                                       │
+│         ▼                    ▼                                       │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │                         Message Bus                          │    │
+│  │           (Inbound/Outbound async message queue)             │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                              │                                       │
+│         ┌────────────────────┼────────────────────┐                 │
+│         ▼                    ▼                    ▼                 │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────────┐       │
+│  │   Session   │     │   Skills    │     │     Tools       │       │
+│  │  (History)  │     │ (Prompts)   │     │(exec, file, web)│       │
+│  └─────────────┘     └─────────────┘     └─────────────────┘       │
+│         │                    │                    │                 │
+│         └────────────────────┼────────────────────┘                 │
+│                              ▼                                       │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │                     Supporting Services                      │    │
+│  │    (Memory | Cron | Heartbeat | Gateway | Skills)           │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
----
+### Core Components
 
-## ✨ Features
+| Component | Path | Description |
+|-----------|------|-------------|
+| **Agent Loop** | `internal/agent/` | Main processing loop with tool calling, max 20 iterations |
+| **Message Bus** | `internal/bus/` | Event-driven message routing via Go channels |
+| **Channel System** | `internal/channel/` | Multi-platform integrations (Telegram, Discord, Slack, etc.) |
+| **Provider** | `internal/provider/` | Unified LLM interface via Eino's OpenAI wrapper |
+| **Session** | `internal/session/` | Persistent JSONL-based conversation history |
+| **Tools** | `internal/tools/` | Built-in tools: file, shell, memory, web, cron, message, subagent |
+| **Memory** | `internal/memory/` | Long-term memory and daily diary system |
+| **Skills** | `internal/skills/` | Extensible Markdown-based prompt packs |
+| **Cron** | `internal/cron/` | Scheduled job management |
+| **Heartbeat** | `internal/heartbeat/` | Periodic health probe and status reporting |
+| **Gateway** | `internal/gateway/` | HTTP API server (`/health`, `/version`, `/chat`) |
 
-### 🖥️ Interactive Terminal UI
-A rich chat experience powered by Bubble Tea — autocomplete, streaming responses, and full tool execution, all in your terminal.
+## Core Features
 
-### 🤖 Server Mode
-Run `golem run` as a background service. Connects enabled channels, the HTTP Gateway API, and the cron scheduler simultaneously.
+### Interaction Modes
 
-### 🛠️ 10 Built-in Tools
+- Terminal TUI chat (`golem chat`)
+- Multi-channel bot mode (`golem run`): Telegram, WhatsApp, Feishu, Discord, Slack, QQ, DingTalk, MaixCam
+- Gateway HTTP API (`/health`, `/version`, `/chat`)
 
-| Tool | What it does |
-|------|-------------|
-| `exec` | Run shell commands (sandboxing available) |
-| `read_file` / `write_file` | Read and write files in the workspace |
-| `list_dir` | Browse directory contents |
-| `read_memory` / `write_memory` | Persistent long-term memory |
-| `append_diary` | Daily diary notes |
-| `web_search` | Search the web (Brave when API key exists, otherwise free DuckDuckGo fallback) |
+### Built-in Tools
+
+| Tool | Description |
+| --- | --- |
+| `exec` | Run shell commands (workspace restriction supported) |
+| `read_file` / `write_file` | Read/write files in workspace |
+| `list_dir` | List directory contents |
+| `read_memory` / `write_memory` | Persistent memory access |
+| `append_diary` | Append daily notes |
+| `web_search` | Web search (Brave when API key exists; fallback available) |
 | `web_fetch` | Fetch and extract web page content |
-| `manage_cron` | Create and manage scheduled tasks |
+| `manage_cron` | Manage scheduled jobs |
+| `message` | Send messages to channels |
+| `spawn` / `subagent` | Delegate tasks to subagents |
 
-### 🔌 9 LLM Providers
-OpenRouter · Claude (Anthropic) · OpenAI · DeepSeek · Gemini · Ark · Qianfan · Qwen · Ollama — all via a unified OpenAI-compatible interface.
+### LLM Providers
 
-### ⏰ Cron Scheduler
-Persistent, auto-resuming scheduled tasks. Supports one-shot (`at`), interval (`every`), and cron expressions. The agent can even schedule its own tasks.
+OpenRouter, Claude, OpenAI, DeepSeek, Gemini, Ark, Qianfan, Qwen, Ollama.
 
-### 🧩 Skills System
-Install markdown-based skill packs from GitHub to extend the agent's system prompt with domain-specific instructions.
+### Subagent System
 
-### 📡 Gateway API
-HTTP endpoints (`/health`, `/version`, `/chat`) available during `golem run` for programmatic access from external services.
+Golem supports delegating tasks to subagents for parallel processing:
 
----
+- **`spawn`**: Asynchronous subagent, returns task ID immediately, notifies via message bus
+- **`subagent`**: Synchronous subagent, blocks until completion, returns result directly
+
+Both modes use isolated sessions and propagate origin channel/chat for result delivery.
+
+### Memory System
+
+Two-tier memory architecture:
+
+1. **Long-term Memory**: Single `MEMORY.md` file for persistent knowledge
+2. **Daily Diary**: `YYYY-MM-DD.md` files for timestamped journal entries
+
+### Heartbeat Service
+
+When enabled, server mode can periodically run a health probe and send heartbeat output to the latest active channel/session.
 
 ## Installation
 
-### Download Binary (Recommended)
+### Option A: Download Binary
 
-Grab the pre-compiled binary for Windows or Linux from the [Releases](https://github.com/MEKXH/golem/releases) page.
+Download Windows/Linux binaries from [Releases](https://github.com/MEKXH/golem/releases).
 
-### Install from Source
+### Option B: Install from Source
 
 ```bash
 go install github.com/MEKXH/golem/cmd/golem@latest
 ```
 
----
-
 ## Quick Start
 
-**1. Initialize** — generates `~/.golem/config.json`:
+### 1. Initialize config
 
 ```bash
 golem init
 ```
 
-**2. Add your API key** — edit `~/.golem/config.json`:
+This creates `~/.golem/config.json`.
+
+### 2. Configure provider credentials
+
+Example:
 
 ```json
 {
   "agents": {
     "defaults": {
-      "model": "anthropic/claude-4-5-sonnet-20250929"
+      "model": "anthropic/claude-sonnet-4-5",
+      "max_tool_iterations": 20
     }
   },
   "providers": {
@@ -145,184 +174,120 @@ golem init
 }
 ```
 
-**3. Chat:**
+### 3. Start chatting
 
 ```bash
 golem chat
 ```
 
-Or one-shot:
+One-shot:
 
 ```bash
 golem chat "Analyze the current directory structure"
 ```
 
-**4. Go server mode** (Telegram + Gateway + Cron):
+### 4. Start server mode
 
 ```bash
 golem run
 ```
 
----
-
 ## CLI Commands
 
 | Command | Description |
-|---------|-------------|
-| `golem init` | Initialize configuration and workspace |
-| `golem chat` | Start interactive TUI chat |
-| `golem run` | Start server mode (Channels + Gateway + Cron) |
-| `golem status` | Show system status (providers, channels, cron, skills) |
-| `golem channels list` | List all configured channels |
+| --- | --- |
+| `golem init` | Initialize config and workspace |
+| `golem chat [message]` | Start TUI chat or send one-shot message |
+| `golem run` | Start server mode |
+| `golem status` | Show system status summary |
+| `golem channels list` | List configured channels |
 | `golem channels status` | Show detailed channel status |
-| `golem cron list` | List all scheduled jobs |
-| `golem cron add -n <name> -m <msg> [--every <sec> \| --cron <expr> \| --at <ts>]` | Add a scheduled job |
-| `golem cron remove <id>` | Remove a scheduled job |
-| `golem cron enable <id>` | Enable a scheduled job |
-| `golem cron disable <id>` | Disable a scheduled job |
+| `golem channels start <channel>` | Enable one channel in config |
+| `golem channels stop <channel>` | Disable one channel in config |
+| `golem cron list` | List scheduled jobs |
+| `golem cron add -n <name> -m <msg> [--every <sec> \| --cron <expr> \| --at <ts>]` | Add a job |
+| `golem cron run <job_id>` | Run a job immediately |
+| `golem cron remove <job_id>` | Remove a job |
+| `golem cron enable <job_id>` | Enable a job |
+| `golem cron disable <job_id>` | Disable a job |
 | `golem skills list` | List installed skills |
-| `golem skills install <repo>` | Install a skill from GitHub |
-| `golem skills remove <name>` | Remove an installed skill |
+| `golem skills install <owner/repo>` | Install skill from GitHub |
+| `golem skills remove <name>` | Remove installed skill |
 | `golem skills show <name>` | Show skill content |
-| `golem skills search [keyword]` | Search available remote skills |
-
----
+| `golem skills search [keyword]` | Search remote skill index |
 
 ## Cron Scheduling
 
-Jobs persist across restarts and can be managed via the CLI or by the agent itself using the `manage_cron` tool.
+Schedule types:
 
-### Schedule Types
+- `--every <seconds>`: fixed interval
+- `--cron "<expr>"`: standard 5-field cron expression
+- `--at "<RFC3339>"`: one-shot execution
 
-- **`--every <seconds>`** — Repeat at a fixed interval (e.g., `--every 3600` for hourly).
-- **`--cron <expr>`** — Standard 5-field cron expression (e.g., `--cron "0 9 * * *"` for daily at 9 AM).
-- **`--at <timestamp>`** — One-shot at an RFC3339 timestamp (auto-deleted after run).
-
-### Examples
+Examples:
 
 ```bash
-# Hourly system check
 golem cron add -n "hourly-check" -m "Check system status and report" --every 3600
-
-# Daily morning briefing
 golem cron add -n "morning-brief" -m "Give me a morning briefing" --cron "0 9 * * *"
-
-# One-time reminder
-golem cron add -n "meeting" -m "Remind me about the team meeting" --at "2026-02-14T09:00:00Z"
+golem cron add -n "meeting-reminder" -m "Remind me about the team meeting" --at "2026-02-14T09:00:00Z"
 ```
-
----
 
 ## Skills System
 
-Skills are markdown instruction packs loaded into the agent's system prompt automatically.
-Golem discovers skills from three sources with deterministic precedence:
-- `workspace/skills` (highest)
-- `~/.golem/skills`
-- builtin skills directory (default `~/.golem/builtin-skills`, overridable via `GOLEM_BUILTIN_SKILLS_DIR`)
+Skills are Markdown instruction packs loaded into the agent prompt.
 
-`golem init` automatically seeds a default builtin skill set into `~/.golem/builtin-skills`.
+Skill discovery precedence:
 
-### Skill File Format
+1. `workspace/skills`
+2. `~/.golem/skills`
+3. builtin skills directory (default: `~/.golem/builtin-skills`, override via `GOLEM_BUILTIN_SKILLS_DIR`)
 
-Each skill lives in `workspace/skills/<name>/` with a `SKILL.md` file:
-
-```markdown
----
-name: weather
-description: "Query weather information"
----
-
-# Weather Skill
-(Skill instructions for the agent)
-```
-
-### Install from GitHub
+Install from GitHub:
 
 ```bash
 golem skills install owner/repo
 ```
 
-Downloads the `SKILL.md` from the repository's main branch.
-
-### Search Remote Skills
+Search remote skills:
 
 ```bash
 golem skills search
 golem skills search weather
 ```
 
-By default, the command reads a remote `skills.json` index. You can override the index URL with `GOLEM_SKILLS_INDEX_URL`.
-
----
-
 ## Configuration
 
-Located at `~/.golem/config.json`:
+Main file: `~/.golem/config.json`
 
 ```json
 {
   "agents": {
     "defaults": {
       "workspace_mode": "default",
-      "model": "anthropic/claude-4-5-sonnet-20250929",
+      "workspace": "",
+      "model": "anthropic/claude-sonnet-4-5",
       "max_tokens": 8192,
-      "temperature": 0.7
+      "temperature": 0.7,
+      "max_tool_iterations": 20
     }
   },
   "channels": {
     "telegram": {
       "enabled": false,
-      "token": "YOUR_TELEGRAM_BOT_TOKEN",
-      "allow_from": ["YOUR_TELEGRAM_USER_ID"]
-    },
-    "whatsapp": {
-      "enabled": false,
-      "bridge_url": "ws://127.0.0.1:8080/ws",
-      "allow_from": []
-    },
-    "feishu": {
-      "enabled": false,
-      "app_id": "",
-      "app_secret": "",
-      "encrypt_key": "",
-      "verification_token": "",
-      "allow_from": []
-    },
-    "discord": {
-      "enabled": false,
       "token": "",
-      "allow_from": []
-    },
-    "slack": {
-      "enabled": false,
-      "bot_token": "",
-      "app_token": "",
-      "allow_from": []
-    },
-    "qq": {
-      "enabled": false,
-      "app_id": "",
-      "app_secret": "",
-      "allow_from": []
-    },
-    "dingtalk": {
-      "enabled": false,
-      "client_id": "",
-      "client_secret": "",
-      "allow_from": []
-    },
-    "maixcam": {
-      "enabled": false,
-      "host": "0.0.0.0",
-      "port": 9000,
       "allow_from": []
     }
   },
   "providers": {
-    "openai": { "api_key": "sk-..." },
-    "claude": { "api_key": "sk-ant-..." },
-    "ollama": { "base_url": "http://localhost:11434" }
+    "claude": {
+      "api_key": ""
+    },
+    "openai": {
+      "api_key": ""
+    },
+    "ollama": {
+      "base_url": "http://localhost:11434"
+    }
   },
   "tools": {
     "exec": {
@@ -331,7 +296,7 @@ Located at `~/.golem/config.json`:
     },
     "web": {
       "search": {
-        "api_key": "YOUR_BRAVE_SEARCH_API_KEY (optional)",
+        "api_key": "",
         "max_results": 5
       }
     }
@@ -339,7 +304,12 @@ Located at `~/.golem/config.json`:
   "gateway": {
     "host": "0.0.0.0",
     "port": 18790,
-    "token": "YOUR_GATEWAY_BEARER_TOKEN"
+    "token": ""
+  },
+  "heartbeat": {
+    "enabled": true,
+    "interval": 30,
+    "max_idle_minutes": 720
   },
   "log": {
     "level": "info",
@@ -348,19 +318,31 @@ Located at `~/.golem/config.json`:
 }
 ```
 
----
+`workspace_mode` values:
+
+- `default`: use `~/.golem/workspace`
+- `cwd`: use current working directory
+- `path`: use `agents.defaults.workspace`
+
+### Environment Variables
+
+All config keys support `GOLEM_` prefix:
+
+```bash
+export GOLEM_PROVIDERS_OPENROUTER_APIKEY="your-key"
+export GOLEM_PROVIDERS_CLAUDE_APIKEY="your-key"
+export GOLEM_LOG_LEVEL=debug
+```
 
 ## Gateway API
 
-Available when `golem run` is active.
+Available in server mode (`golem run`):
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/version` | GET | Version info |
-| `/chat` | POST | Send a message to the agent |
+- `GET /health`
+- `GET /version`
+- `POST /chat`
 
-**`POST /chat` example:**
+`POST /chat` example:
 
 ```json
 {
@@ -370,13 +352,64 @@ Available when `golem run` is active.
 }
 ```
 
-If `gateway.token` is set, include `Authorization: Bearer <token>`.
+If `gateway.token` is configured, include:
 
----
+```text
+Authorization: Bearer <token>
+```
+
+## Data Flow
+
+```
+User Input (CLI/Telegram/Discord/Slack...)
+         │
+         ▼
+    Channel (receives & validates message)
+         │
+         ▼
+    Bus.PublishInbound() ──▶ MessageBus.inbound
+         │
+         ▼
+    Agent Loop (processes message)
+         │
+    ┌────┴────┐
+    ▼         ▼         ▼
+Session  Context  LLM Generate
+(History) Builder  (with tools bound)
+              │           │
+              │           ▼
+              │      Tools.Execute()
+              │      (tool calls)
+              │           │
+              └─────┬─────┘
+                    ▼
+         Bus.PublishOutbound()
+                    │
+                    ▼
+         Channel Manager (routes)
+                    │
+                    ▼
+         Channel.Send() ──▶ User
+```
+
+## Bootstrap Files
+
+The agent's system prompt is built from these files (searched in workspace):
+
+1. `IDENTITY.md` - Agent identity and persona
+2. `SOUL.md` - Core beliefs and values
+3. `USER.md` - User-specific context
+4. `TOOLS.md` - Custom tool descriptions
+5. `AGENTS.md` - Subagent definitions
+
+## Operations
+
+For incident handling, restart/rollback flow, and production guidance:
+
+- [Operations Runbook (English)](docs/operations/runbook.md)
+- [运行手册（简体中文）](docs/operations/runbook.zh-CN.md)
 
 ## Development
-
-### Local Quality Checks
 
 Run before pushing:
 
@@ -386,13 +419,11 @@ go test -race ./...
 go vet ./...
 ```
 
-### Branch and PR Workflow
+Build:
 
-1. Create a focused feature branch: `feature/<phase>-<topic>`
-2. Keep PRs small and aligned with one phase/task
-3. Merge to `main` only after CI is green
-
----
+```bash
+go build -o golem ./cmd/golem
+```
 
 ## License
 

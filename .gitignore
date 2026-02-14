@@ -3,3 +3,6 @@
 /golem
 docs/plans
 docs/analysis
+.vscode
+.claude
+./CLAUDE.md
