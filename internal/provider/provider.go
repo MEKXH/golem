@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/MEKXH/golem/internal/auth"
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
@@ -23,6 +24,15 @@ const (
 	providerQwen       providerName = "qwen"
 	providerOllama     providerName = "ollama"
 )
+
+var refreshProviderCredential = func(name providerName, cred *auth.Credential) (*auth.Credential, error) {
+	switch name {
+	case providerOpenAI:
+		return auth.RefreshAccessToken(cred, auth.OpenAIOAuthConfig())
+	default:
+		return nil, fmt.Errorf("refresh is not supported for provider %s", name)
+	}
+}
 
 // NewChatModel creates a ChatModel based on configuration
 func NewChatModel(ctx context.Context, cfg *config.Config) (model.ChatModel, error) {
@@ -61,6 +71,7 @@ func resolveProvider(cfg *config.Config) (providerName, config.ProviderConfig, e
 
 	if byModel := providerFromModel(cfg.Agents.Defaults.Model); byModel != "" {
 		if pcfg, ok := providerConfigByName(p, byModel); ok && providerIsConfigured(byModel, pcfg) {
+			pcfg = withResolvedProviderToken(byModel, pcfg)
 			return byModel, pcfg, nil
 		}
 	}
@@ -83,6 +94,7 @@ func resolveProvider(cfg *config.Config) (providerName, config.ProviderConfig, e
 			continue
 		}
 		if providerIsConfigured(name, pcfg) {
+			pcfg = withResolvedProviderToken(name, pcfg)
 			return name, pcfg, nil
 		}
 	}
@@ -154,8 +166,50 @@ func providerIsConfigured(name providerName, p config.ProviderConfig) bool {
 	case providerOllama:
 		return strings.TrimSpace(p.BaseURL) != ""
 	default:
-		return strings.TrimSpace(p.APIKey) != ""
+		if strings.TrimSpace(p.APIKey) != "" {
+			return true
+		}
+		cred := lookupCredential(name)
+		return cred != nil && strings.TrimSpace(cred.AccessToken) != ""
 	}
+}
+
+func withResolvedProviderToken(name providerName, p config.ProviderConfig) config.ProviderConfig {
+	if name == providerOllama {
+		return p
+	}
+	if strings.TrimSpace(p.APIKey) != "" {
+		return p
+	}
+	cred := lookupCredential(name)
+	if cred != nil && strings.TrimSpace(cred.AccessToken) != "" {
+		p.APIKey = strings.TrimSpace(cred.AccessToken)
+	}
+	return p
+}
+
+func lookupCredential(name providerName) *auth.Credential {
+	keys := []string{string(name)}
+	if name == providerClaude {
+		keys = append(keys, "anthropic")
+	}
+	for _, key := range keys {
+		cred, err := auth.GetCredential(key)
+		if err == nil && cred != nil && strings.TrimSpace(cred.AccessToken) != "" {
+			if cred.AuthMethod == "oauth" && cred.NeedsRefresh() && strings.TrimSpace(cred.RefreshToken) != "" {
+				if refreshed, err := refreshProviderCredential(name, cred); err == nil && refreshed != nil && strings.TrimSpace(refreshed.AccessToken) != "" {
+					refreshed.Provider = key
+					if strings.TrimSpace(refreshed.AuthMethod) == "" {
+						refreshed.AuthMethod = "oauth"
+					}
+					_ = auth.SetCredential(key, refreshed)
+					cred = refreshed
+				}
+			}
+			return cred
+		}
+	}
+	return nil
 }
 
 func newOpenRouterModel(ctx context.Context, p config.ProviderConfig, d config.AgentDefaults) (model.ChatModel, error) {

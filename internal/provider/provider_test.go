@@ -2,7 +2,9 @@ package provider
 
 import (
 	"testing"
+	"time"
 
+	"github.com/MEKXH/golem/internal/auth"
 	"github.com/MEKXH/golem/internal/config"
 )
 
@@ -101,5 +103,77 @@ func TestResolveProvider_OllamaRequiresBaseURL(t *testing.T) {
 
 	if _, _, err := resolveProvider(cfg); err == nil {
 		t.Fatal("expected resolveProvider to fail when ollama base_url is empty")
+	}
+}
+
+func TestResolveProvider_UsesStoredAuthTokenWhenAPIKeyMissing(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	if err := auth.SetCredential("openai", &auth.Credential{
+		AccessToken: "auth-openai-token",
+		Provider:    "openai",
+		AuthMethod:  "token",
+	}); err != nil {
+		t.Fatalf("auth.SetCredential: %v", err)
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.Agents.Defaults.Model = "openai/gpt-4o"
+	cfg.Providers.OpenAI.APIKey = ""
+
+	got, pcfg, err := resolveProvider(cfg)
+	if err != nil {
+		t.Fatalf("resolveProvider returned error: %v", err)
+	}
+	if got != providerOpenAI {
+		t.Fatalf("expected provider %q, got %q", providerOpenAI, got)
+	}
+	if pcfg.APIKey != "auth-openai-token" {
+		t.Fatalf("expected auth token injected as api key, got %q", pcfg.APIKey)
+	}
+}
+
+func TestResolveProvider_RefreshesOAuthCredentialWhenNeeded(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	if err := auth.SetCredential("openai", &auth.Credential{
+		AccessToken:  "stale-token",
+		RefreshToken: "refresh-token",
+		Provider:     "openai",
+		AuthMethod:   "oauth",
+		ExpiresAt:    time.Now().Add(30 * time.Second),
+	}); err != nil {
+		t.Fatalf("auth.SetCredential: %v", err)
+	}
+
+	orig := refreshProviderCredential
+	refreshProviderCredential = func(name providerName, cred *auth.Credential) (*auth.Credential, error) {
+		return &auth.Credential{
+			AccessToken:  "fresh-token",
+			RefreshToken: cred.RefreshToken,
+			Provider:     cred.Provider,
+			AuthMethod:   "oauth",
+			ExpiresAt:    time.Now().Add(2 * time.Hour),
+		}, nil
+	}
+	defer func() { refreshProviderCredential = orig }()
+
+	cfg := config.DefaultConfig()
+	cfg.Agents.Defaults.Model = "openai/gpt-4o"
+	cfg.Providers.OpenAI.APIKey = ""
+
+	got, pcfg, err := resolveProvider(cfg)
+	if err != nil {
+		t.Fatalf("resolveProvider returned error: %v", err)
+	}
+	if got != providerOpenAI {
+		t.Fatalf("expected provider %q, got %q", providerOpenAI, got)
+	}
+	if pcfg.APIKey != "fresh-token" {
+		t.Fatalf("expected refreshed token injected, got %q", pcfg.APIKey)
 	}
 }

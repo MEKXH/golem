@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"strings"
+
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/spf13/cobra"
 )
@@ -14,7 +16,7 @@ func NewRootCmd() *cobra.Command {
 		Short: "Golem - Lightweight AI Assistant",
 		Long:  `Golem is a lightweight personal AI assistant built with Go and Eino.`,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if cmd.Name() == "init" {
+			if shouldUseDefaultLogger(cmd) {
 				return configureLogger(config.DefaultConfig(), logLevelOverride, false)
 			}
 			cfg, err := config.Load()
@@ -35,7 +37,18 @@ func NewRootCmd() *cobra.Command {
 		NewChannelsCmd(),
 		NewCronCmd(),
 		NewSkillsCmd(),
+		NewAuthCmd(),
 	)
 
 	return cmd
+}
+
+func shouldUseDefaultLogger(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	if cmd.Name() == "init" {
+		return true
+	}
+	return strings.HasPrefix(cmd.CommandPath(), "golem auth")
 }

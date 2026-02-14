@@ -59,3 +59,15 @@ Copy this block for each phase:
 - Regression decision: PASS / FAIL
 ```
 
+### Phase 1 Verification - 2026-02-15
+- `go test ./...` -> 0, all packages passed
+- `go run ./cmd/golem status` -> 0, status output rendered normally
+- `go run ./cmd/golem chat "ping"` -> 0, returned `Pong` response
+- Regression decision: PASS
+
+### Phase 1 Batch Scope Delivered
+- Added auth credential store: `internal/auth/store.go`
+- Added OAuth/device-code login support: `internal/auth/oauth.go`, `internal/auth/pkce.go`
+- Added auth CLI commands: `golem auth login/logout/status`
+- Added provider fallback to stored auth token when config API key is empty
+- Added OAuth refresh attempt on provider resolve for OAuth credentials nearing expiry (OpenAI path)
