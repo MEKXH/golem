@@ -71,3 +71,17 @@ Copy this block for each phase:
 - Added auth CLI commands: `golem auth login/logout/status`
 - Added provider fallback to stored auth token when config API key is empty
 - Added OAuth refresh attempt on provider resolve for OAuth credentials nearing expiry (OpenAI path)
+
+### Phase 2 Verification - 2026-02-15
+- `go test ./...` -> 0, all packages passed
+- `go run ./cmd/golem status` -> 0, status output rendered normally
+- `go run ./cmd/golem chat "ping"` -> 0, returned `Pong` response
+- Regression decision: PASS
+
+### Phase 2 Batch Scope Delivered
+- Added persisted heartbeat state manager: `internal/state/manager.go`
+- Added state manager tests for round-trip, missing file, and corrupt file fallback
+- Wired heartbeat service to hydrate last active session from disk on startup
+- Wired heartbeat activity tracking to persist latest `channel/chat_id/seen_at` on each message
+- Updated run command wiring to provide state manager to heartbeat service
+- Added heartbeat tests for persisted-session restore and activity persistence behavior

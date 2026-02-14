@@ -101,7 +101,7 @@ func TestBuildHeartbeatService_RunOncePublishesOutbound(t *testing.T) {
 
 	msgBus := bus.NewMessageBus(10)
 	cronSvc := cron.NewService(filepath.Join(t.TempDir(), "jobs.json"), nil)
-	svc := buildHeartbeatService(cfg, msgBus, cronSvc)
+	svc := buildHeartbeatService(cfg, msgBus, cronSvc, nil)
 	if svc == nil {
 		t.Fatal("expected heartbeat service")
 	}

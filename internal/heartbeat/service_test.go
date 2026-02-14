@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/MEKXH/golem/internal/state"
 )
 
 func TestRunOnce_DispatchesToLatestActiveSession(t *testing.T) {
@@ -30,6 +32,7 @@ func TestRunOnce_DispatchesToLatestActiveSession(t *testing.T) {
 			gotRequestID = requestID
 			return nil
 		},
+		nil,
 	)
 
 	svc.TrackActivity("telegram", "123456")
@@ -70,6 +73,7 @@ func TestRunOnce_SkipsWhenNoActiveSession(t *testing.T) {
 			dispatched.Store(true)
 			return nil
 		},
+		nil,
 	)
 
 	if err := svc.RunOnce(context.Background()); err != nil {
@@ -96,6 +100,7 @@ func TestRunOnce_ProbeFailureStillDispatches(t *testing.T) {
 			gotContent = content
 			return nil
 		},
+		nil,
 	)
 
 	svc.TrackActivity("telegram", "123456")
@@ -123,6 +128,7 @@ func TestStartStop_RunsPeriodically(t *testing.T) {
 			callCount.Add(1)
 			return nil
 		},
+		nil,
 	)
 	svc.TrackActivity("telegram", "123456")
 
@@ -138,5 +144,77 @@ func TestStartStop_RunsPeriodically(t *testing.T) {
 
 	if callCount.Load() == 0 {
 		t.Fatal("expected periodic heartbeat dispatches")
+	}
+}
+
+func TestRunOnce_UsesPersistedActiveSession(t *testing.T) {
+	baseDir := t.TempDir()
+	stateMgr := state.NewManager(baseDir)
+	if err := stateMgr.SaveHeartbeatState(state.HeartbeatState{
+		LastChannel: "telegram",
+		LastChatID:  "persisted-chat",
+		SeenAt:      time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveHeartbeatState error: %v", err)
+	}
+
+	var dispatched atomic.Bool
+	var gotChannel, gotChatID string
+
+	svc := NewService(
+		Config{
+			Enabled:  true,
+			Interval: time.Minute,
+			MaxIdle:  time.Hour,
+		},
+		func(ctx context.Context) (string, error) {
+			return "ok", nil
+		},
+		func(ctx context.Context, channel, chatID, content, requestID string) error {
+			dispatched.Store(true)
+			gotChannel = channel
+			gotChatID = chatID
+			return nil
+		},
+		stateMgr,
+	)
+
+	if err := svc.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce error: %v", err)
+	}
+	if !dispatched.Load() {
+		t.Fatal("expected dispatch to use persisted active session")
+	}
+	if gotChannel != "telegram" || gotChatID != "persisted-chat" {
+		t.Fatalf("unexpected persisted route channel=%q chat_id=%q", gotChannel, gotChatID)
+	}
+}
+
+func TestTrackActivity_PersistsState(t *testing.T) {
+	baseDir := t.TempDir()
+	stateMgr := state.NewManager(baseDir)
+
+	svc := NewService(
+		Config{
+			Enabled:  true,
+			Interval: time.Minute,
+			MaxIdle:  time.Hour,
+		},
+		nil,
+		nil,
+		stateMgr,
+	)
+
+	svc.TrackActivity("telegram", "chat-77")
+
+	got, err := stateMgr.LoadHeartbeatState()
+	if err != nil {
+		t.Fatalf("LoadHeartbeatState error: %v", err)
+	}
+	if got.LastChannel != "telegram" || got.LastChatID != "chat-77" {
+		t.Fatalf("unexpected persisted state: %+v", got)
+	}
+	if got.SeenAt.IsZero() {
+		t.Fatal("expected non-zero seen_at")
 	}
 }

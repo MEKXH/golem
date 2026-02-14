@@ -27,6 +27,7 @@ import (
 	"github.com/MEKXH/golem/internal/gateway"
 	"github.com/MEKXH/golem/internal/heartbeat"
 	"github.com/MEKXH/golem/internal/provider"
+	"github.com/MEKXH/golem/internal/state"
 	"github.com/MEKXH/golem/internal/tools"
 	"github.com/spf13/cobra"
 )
@@ -91,7 +92,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 		slog.Warn("cron service failed to start", "error", err)
 	}
 
-	heartbeatService := buildHeartbeatService(cfg, msgBus, cronService)
+	stateManager := state.NewManager(workspacePath)
+	heartbeatService := buildHeartbeatService(cfg, msgBus, cronService, stateManager)
 	loop.SetActivityRecorder(heartbeatService.TrackActivity)
 	if err := heartbeatService.Start(); err != nil {
 		slog.Warn("heartbeat service failed to start", "error", err)
@@ -141,7 +143,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	return runErr
 }
 
-func buildHeartbeatService(cfg *config.Config, msgBus *bus.MessageBus, cronService *cron.Service) *heartbeat.Service {
+func buildHeartbeatService(cfg *config.Config, msgBus *bus.MessageBus, cronService *cron.Service, stateManager *state.Manager) *heartbeat.Service {
 	return heartbeat.NewService(
 		heartbeat.Config{
 			Enabled:  cfg.Heartbeat.Enabled,
@@ -168,6 +170,7 @@ func buildHeartbeatService(cfg *config.Config, msgBus *bus.MessageBus, cronServi
 			})
 			return nil
 		},
+		stateManager,
 	)
 }
 

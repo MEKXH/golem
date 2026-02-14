@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/MEKXH/golem/internal/bus"
+	appstate "github.com/MEKXH/golem/internal/state"
 )
 
 const (
@@ -40,6 +41,7 @@ type Service struct {
 	cfg      Config
 	probe    ProbeFunc
 	dispatch DispatchFunc
+	state    *appstate.Manager
 
 	now func() time.Time
 
@@ -51,19 +53,22 @@ type Service struct {
 }
 
 // NewService creates a heartbeat service.
-func NewService(cfg Config, probe ProbeFunc, dispatch DispatchFunc) *Service {
+func NewService(cfg Config, probe ProbeFunc, dispatch DispatchFunc, stateMgr *appstate.Manager) *Service {
 	if cfg.Interval <= 0 {
 		cfg.Interval = defaultInterval
 	}
 	if cfg.MaxIdle <= 0 {
 		cfg.MaxIdle = defaultMaxIdle
 	}
-	return &Service{
+	svc := &Service{
 		cfg:      cfg,
 		probe:    probe,
 		dispatch: dispatch,
+		state:    stateMgr,
 		now:      time.Now,
 	}
+	svc.hydratePersistedState()
+	return svc
 }
 
 // TrackActivity marks a channel/chat as the newest active session for heartbeat delivery.
@@ -73,14 +78,26 @@ func (s *Service) TrackActivity(channel, chatID string) {
 	if channel == "" || chatID == "" {
 		return
 	}
+	seenAt := s.now()
 
 	s.mu.Lock()
 	s.active = activeSession{
 		channel: channel,
 		chatID:  chatID,
-		seenAt:  s.now(),
+		seenAt:  seenAt,
 	}
+	stateMgr := s.state
 	s.mu.Unlock()
+
+	if stateMgr != nil {
+		if err := stateMgr.SaveHeartbeatState(appstate.HeartbeatState{
+			LastChannel: channel,
+			LastChatID:  chatID,
+			SeenAt:      seenAt,
+		}); err != nil {
+			slog.Warn("failed to persist heartbeat state", "error", err)
+		}
+	}
 }
 
 // IsRunning returns true when the service loop is active.
@@ -205,4 +222,32 @@ func (s *Service) latestActive() (activeSession, bool) {
 		return activeSession{}, false
 	}
 	return s.active, true
+}
+
+func (s *Service) hydratePersistedState() {
+	if s.state == nil {
+		return
+	}
+
+	st, err := s.state.LoadHeartbeatState()
+	if err != nil {
+		slog.Warn("failed to load heartbeat state", "error", err)
+		return
+	}
+	if st.LastChannel == "" || st.LastChatID == "" {
+		return
+	}
+
+	seenAt := st.SeenAt
+	if seenAt.IsZero() {
+		seenAt = s.now()
+	}
+
+	s.mu.Lock()
+	s.active = activeSession{
+		channel: st.LastChannel,
+		chatID:  st.LastChatID,
+		seenAt:  seenAt,
+	}
+	s.mu.Unlock()
 }
