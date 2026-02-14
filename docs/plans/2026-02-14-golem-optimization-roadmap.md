@@ -111,3 +111,14 @@ Copy this block for each phase:
 - Guaranteed transcription-failure fallback for normal text messages (no regression): `internal/channel/telegram/telegram_test.go`
 - Added configurable voice settings (`tools.voice.enabled/provider/model/timeout_seconds`): `internal/config/config.go`
 - Wired transcriber construction in run path with OpenAI API key/auth-store fallback: `cmd/golem/commands/run.go`
+
+### Phase 5 Verification - 2026-02-15
+- `go test ./...` -> 0, all packages passed
+- `go run ./cmd/golem status` -> 0, status output rendered normally
+- `go run ./cmd/golem chat "ping"` -> 0, returned `Pong` response
+- Regression decision: PASS
+
+### Phase 5 Batch Scope Delivered
+- Added engineering `Makefile` with standard targets: `build`, `test`, `test-race`, `lint`, `run`, `status`, `chat`, `smoke`
+- Added runnable config template: `config/config.example.json`
+- Updated `README.md` with 2-5 minute quick start, template-based config bootstrap, and `make`-based workflow

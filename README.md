@@ -98,7 +98,7 @@ It can chat, run tools, call shell commands, manage files, search/fetch web cont
 | Tool | Description |
 | --- | --- |
 | `exec` | Run shell commands (workspace restriction supported) |
-| `read_file` / `write_file` | Read/write files in workspace |
+| `read_file` / `write_file` / `edit_file` / `append_file` | File read/write/edit/append in workspace |
 | `list_dir` | List directory contents |
 | `read_memory` / `write_memory` | Persistent memory access |
 | `append_diary` | Append daily notes |
@@ -152,29 +152,39 @@ go install github.com/MEKXH/golem/cmd/golem@latest
 golem init
 ```
 
-This creates `~/.golem/config.json`.
+This creates `~/.golem/config.json` and workspace directories.
 
-### 2. Configure provider credentials
+### 2. Bootstrap with the example config
 
-Example:
+Use the provided template as your starting point:
 
-```json
-{
-  "agents": {
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5",
-      "max_tool_iterations": 20
-    }
-  },
-  "providers": {
-    "claude": {
-      "api_key": "your-api-key-here"
-    }
-  }
-}
+```bash
+cp config/config.example.json ~/.golem/config.json
 ```
 
-### 3. Start chatting
+PowerShell:
+
+```powershell
+Copy-Item config/config.example.json "$HOME/.golem/config.json"
+```
+
+Then edit `~/.golem/config.json` and set at least one provider key (for example `providers.openai.api_key`).
+
+### 3. Run smoke checks
+
+```bash
+make smoke
+```
+
+Without `make`:
+
+```bash
+go test ./...
+go run ./cmd/golem status
+go run ./cmd/golem chat "ping"
+```
+
+### 4. Start chatting
 
 ```bash
 golem chat
@@ -186,7 +196,7 @@ One-shot:
 golem chat "Analyze the current directory structure"
 ```
 
-### 4. Start server mode
+### 5. Start server mode
 
 ```bash
 golem run
@@ -258,6 +268,8 @@ golem skills search weather
 ## Configuration
 
 Main file: `~/.golem/config.json`
+  
+Template file in repo: `config/config.example.json`
 
 ```json
 {
@@ -299,6 +311,12 @@ Main file: `~/.golem/config.json`
         "api_key": "",
         "max_results": 5
       }
+    },
+    "voice": {
+      "enabled": false,
+      "provider": "openai",
+      "model": "gpt-4o-mini-transcribe",
+      "timeout_seconds": 30
     }
   },
   "gateway": {
@@ -411,7 +429,16 @@ For incident handling, restart/rollback flow, and production guidance:
 
 ## Development
 
-Run before pushing:
+Common commands:
+
+```bash
+make build
+make test
+make lint
+make smoke
+```
+
+Without `make`, run before pushing:
 
 ```bash
 go test ./...
