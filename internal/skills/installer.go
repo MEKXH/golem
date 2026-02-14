@@ -55,6 +55,7 @@ func (i *Installer) Install(ctx context.Context, repo string) error {
 
 	// Remove github.com prefix if present.
 	repo = strings.TrimPrefix(repo, "https://github.com/")
+	repo = strings.TrimPrefix(repo, "http://github.com/")
 	repo = strings.TrimPrefix(repo, "github.com/")
 	repo = strings.TrimSuffix(repo, "/")
 
@@ -65,18 +66,29 @@ func (i *Installer) Install(ctx context.Context, repo string) error {
 
 	owner := parts[0]
 	repoName := parts[1]
-	filePath := "SKILL.md"
+	filePath := ""
 	if len(parts) == 3 && parts[2] != "" {
 		filePath = parts[2]
 	}
 
+	// Strip GitHub web UI path segments: tree/<branch>/ or blob/<branch>/
+	filePath = stripGitHubBranchPrefix(filePath)
+
+	// If filePath doesn't point to a .md file, treat it as a directory.
+	if !strings.HasSuffix(strings.ToLower(filePath), ".md") {
+		filePath = strings.TrimSuffix(filePath, "/")
+		if filePath == "" {
+			filePath = "SKILL.md"
+		} else {
+			filePath = filePath + "/SKILL.md"
+		}
+	}
+
 	// Derive skill name from repo or directory name.
 	skillName := repoName
-	if len(parts) == 3 {
-		dir := filepath.Dir(parts[2])
-		if dir != "." && dir != "" {
-			skillName = filepath.Base(dir)
-		}
+	dir := filepath.Dir(filePath)
+	if dir != "." && dir != "" {
+		skillName = filepath.Base(dir)
 	}
 
 	rawURL := fmt.Sprintf("%s/%s/%s/main/%s", strings.TrimRight(i.githubRawBase, "/"), owner, repoName, filePath)
@@ -160,6 +172,24 @@ func (i *Installer) Search(ctx context.Context) ([]AvailableSkill, error) {
 		return nil, fmt.Errorf("parse skills index: %w", err)
 	}
 	return list, nil
+}
+
+// stripGitHubBranchPrefix removes "tree/<branch>/" or "blob/<branch>/" from
+// a path that was copied from a GitHub web URL.
+// e.g. "tree/main/skills/find-skills" → "skills/find-skills"
+func stripGitHubBranchPrefix(path string) string {
+	for _, prefix := range []string{"tree/", "blob/"} {
+		if strings.HasPrefix(path, prefix) {
+			// Remove "tree/" or "blob/", then strip the branch name segment.
+			rest := strings.TrimPrefix(path, prefix)
+			if idx := strings.Index(rest, "/"); idx >= 0 {
+				return rest[idx+1:]
+			}
+			// Only "tree/<branch>" with no trailing path — nothing left.
+			return ""
+		}
+	}
+	return path
 }
 
 func resolveSkillsIndexURL() string {
