@@ -21,6 +21,8 @@ It can chat, run tools, call shell commands, manage files, search/fetch web cont
 ## Documentation
 
 - [README (简体中文)](README.zh-CN.md)
+- [User Guide (English)](docs/user-guide.md)
+- [使用手册（简体中文）](docs/user-guide.zh-CN.md)
 - [Operations Runbook (English)](docs/operations/runbook.md)
 - [运行手册（简体中文）](docs/operations/runbook.zh-CN.md)
 

@@ -21,6 +21,8 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 ## 文档导航
 
 - [README (English)](README.md)
+- [使用手册（英文）](docs/user-guide.md)
+- [使用手册（简体中文）](docs/user-guide.zh-CN.md)
 - [运维手册（英文）](docs/operations/runbook.md)
 - [运维手册（简体中文）](docs/operations/runbook.zh-CN.md)
 
