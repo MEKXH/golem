@@ -29,6 +29,8 @@ type Loop struct {
 
 	OnToolStart  func(name, args string)
 	OnToolFinish func(name, result string, err error)
+
+	activityRecorder func(channel, chatID string)
 }
 
 // NewLoop creates a new agent loop
@@ -51,6 +53,11 @@ func NewLoop(cfg *config.Config, msgBus *bus.MessageBus, chatModel model.ChatMod
 // Tools returns the tool registry.
 func (l *Loop) Tools() *tools.Registry {
 	return l.tools
+}
+
+// SetActivityRecorder attaches a callback used to track the latest active channel/chat.
+func (l *Loop) SetActivityRecorder(recorder func(channel, chatID string)) {
+	l.activityRecorder = recorder
 }
 
 // RegisterDefaultTools registers all built-in tools
@@ -233,6 +240,9 @@ func (l *Loop) processSystemMessage(msg *bus.InboundMessage) {
 
 func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bus.OutboundMessage, error) {
 	slog.Info("processing message", "request_id", msg.RequestID, "channel", msg.Channel, "chat_id", msg.ChatID, "sender", msg.SenderID, "session_key", msg.SessionKey())
+	if l.activityRecorder != nil {
+		l.activityRecorder(msg.Channel, msg.ChatID)
+	}
 
 	sess := l.sessions.GetOrCreate(msg.SessionKey())
 
@@ -278,10 +288,14 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 			if err != nil {
 				result = "Error: " + err.Error()
 			}
+			toolDuration := time.Since(toolStart)
 			slog.Info("tool execution finished",
 				"request_id", msg.RequestID,
+				"channel", msg.Channel,
+				"chat_id", msg.ChatID,
 				"tool", tc.Function.Name,
-				"duration_ms", time.Since(toolStart).Milliseconds(),
+				"tool_duration", toolDuration.String(),
+				"duration_ms", toolDuration.Milliseconds(),
 				"success", err == nil,
 			)
 

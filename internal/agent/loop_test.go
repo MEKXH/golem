@@ -403,3 +403,21 @@ func TestRun_HandlesSubagentSystemMessage(t *testing.T) {
 		t.Fatal("timed out waiting for Run shutdown")
 	}
 }
+
+func TestProcessForChannel_RecordsActivity(t *testing.T) {
+	loop := newTestLoop(t, nil, 1)
+
+	var gotChannel, gotChatID string
+	loop.SetActivityRecorder(func(channel, chatID string) {
+		gotChannel = channel
+		gotChatID = chatID
+	})
+
+	if _, err := loop.ProcessForChannel(context.Background(), "telegram", "chat-42", "alice", "hello"); err != nil {
+		t.Fatalf("ProcessForChannel error: %v", err)
+	}
+
+	if gotChannel != "telegram" || gotChatID != "chat-42" {
+		t.Fatalf("unexpected activity record: channel=%q chat=%q", gotChannel, gotChatID)
+	}
+}

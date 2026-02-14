@@ -94,6 +94,7 @@ func NewHandler(token string, processor ChatProcessor) http.Handler {
 	})
 	mux.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
 		requestID := getRequestID(r)
+		start := time.Now()
 		if r.Method != http.MethodPost {
 			writeError(w, requestID, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
@@ -125,6 +126,12 @@ func NewHandler(token string, processor ChatProcessor) http.Handler {
 		if senderID == "" {
 			senderID = "api"
 		}
+		slog.Info("gateway chat request",
+			"request_id", requestID,
+			"channel", "gateway",
+			"session_id", sessionID,
+			"sender_id", senderID,
+		)
 
 		if processor == nil {
 			writeError(w, requestID, http.StatusInternalServerError, "internal_error", "chat processor is not configured")
@@ -134,10 +141,16 @@ func NewHandler(token string, processor ChatProcessor) http.Handler {
 		procCtx := bus.WithRequestID(r.Context(), requestID)
 		resp, err := processor.ProcessForChannel(procCtx, "gateway", sessionID, senderID, msg)
 		if err != nil {
-			slog.Error("gateway chat failed", "request_id", requestID, "session_id", sessionID, "error", err)
+			slog.Error("gateway chat failed", "request_id", requestID, "channel", "gateway", "session_id", sessionID, "error", err)
 			writeError(w, requestID, http.StatusInternalServerError, "internal_error", "failed to process chat request")
 			return
 		}
+		slog.Info("gateway chat completed",
+			"request_id", requestID,
+			"channel", "gateway",
+			"session_id", sessionID,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"response":   resp,
 			"session_id": sessionID,

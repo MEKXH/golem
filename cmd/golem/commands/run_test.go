@@ -2,12 +2,15 @@ package commands
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/MEKXH/golem/internal/agent"
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/channel"
 	"github.com/MEKXH/golem/internal/config"
+	"github.com/MEKXH/golem/internal/cron"
 	"github.com/MEKXH/golem/internal/provider"
 )
 
@@ -87,5 +90,39 @@ func TestRegisterEnabledChannels_SkipsNotReadyChannels(t *testing.T) {
 
 	if got := len(mgr.Names()); got != 0 {
 		t.Fatalf("expected no channels registered, got %d", got)
+	}
+}
+
+func TestBuildHeartbeatService_RunOncePublishesOutbound(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Heartbeat.Enabled = true
+	cfg.Heartbeat.Interval = 5
+	cfg.Heartbeat.MaxIdleMinutes = 60
+
+	msgBus := bus.NewMessageBus(10)
+	cronSvc := cron.NewService(filepath.Join(t.TempDir(), "jobs.json"), nil)
+	svc := buildHeartbeatService(cfg, msgBus, cronSvc)
+	if svc == nil {
+		t.Fatal("expected heartbeat service")
+	}
+
+	svc.TrackActivity("telegram", "chat-1")
+	if err := svc.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce error: %v", err)
+	}
+
+	select {
+	case out := <-msgBus.Outbound():
+		if out.Channel != "telegram" || out.ChatID != "chat-1" {
+			t.Fatalf("unexpected outbound route: %+v", out)
+		}
+		if out.RequestID == "" {
+			t.Fatal("expected outbound request_id")
+		}
+		if !strings.Contains(out.Content, "[heartbeat]") {
+			t.Fatalf("unexpected heartbeat content: %s", out.Content)
+		}
+	default:
+		t.Fatal("expected heartbeat outbound message")
 	}
 }

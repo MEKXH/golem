@@ -25,6 +25,7 @@ import (
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/cron"
 	"github.com/MEKXH/golem/internal/gateway"
+	"github.com/MEKXH/golem/internal/heartbeat"
 	"github.com/MEKXH/golem/internal/provider"
 	"github.com/MEKXH/golem/internal/tools"
 	"github.com/spf13/cobra"
@@ -90,6 +91,12 @@ func runServer(cmd *cobra.Command, args []string) error {
 		slog.Warn("cron service failed to start", "error", err)
 	}
 
+	heartbeatService := buildHeartbeatService(cfg, msgBus, cronService)
+	loop.SetActivityRecorder(heartbeatService.TrackActivity)
+	if err := heartbeatService.Start(); err != nil {
+		slog.Warn("heartbeat service failed to start", "error", err)
+	}
+
 	errCh := make(chan error, 2)
 	go func() {
 		if err := loop.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -124,6 +131,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	defer shutdownCancel()
 
 	slog.Info("shutting down")
+	heartbeatService.Stop()
 	cronService.Stop()
 	chanMgr.StopAll(shutdownCtx)
 	if err := gatewayServer.Shutdown(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
@@ -131,6 +139,36 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 
 	return runErr
+}
+
+func buildHeartbeatService(cfg *config.Config, msgBus *bus.MessageBus, cronService *cron.Service) *heartbeat.Service {
+	return heartbeat.NewService(
+		heartbeat.Config{
+			Enabled:  cfg.Heartbeat.Enabled,
+			Interval: time.Duration(cfg.Heartbeat.Interval) * time.Minute,
+			MaxIdle:  time.Duration(cfg.Heartbeat.MaxIdleMinutes) * time.Minute,
+		},
+		func(ctx context.Context) (string, error) {
+			status := cronService.Status()
+
+			running, _ := status["running"].(bool)
+			enabledJobs, _ := status["enabled_jobs"].(int)
+			totalJobs, _ := status["total_jobs"].(int)
+			return fmt.Sprintf("cron_running=%t enabled_jobs=%d total_jobs=%d", running, enabledJobs, totalJobs), nil
+		},
+		func(ctx context.Context, channel, chatID, content, requestID string) error {
+			msgBus.PublishOutbound(&bus.OutboundMessage{
+				Channel:   channel,
+				ChatID:    chatID,
+				Content:   content,
+				RequestID: requestID,
+				Metadata: map[string]any{
+					"type": "heartbeat",
+				},
+			})
+			return nil
+		},
+	)
 }
 
 func registerEnabledChannels(cfg *config.Config, msgBus *bus.MessageBus, chanMgr *channel.Manager) {

@@ -20,6 +20,7 @@ type Config struct {
 	Gateway   GatewayConfig   `mapstructure:"gateway"`
 	Log       LogConfig       `mapstructure:"log"`
 	Tools     ToolsConfig     `mapstructure:"tools"`
+	Heartbeat HeartbeatConfig `mapstructure:"heartbeat"`
 }
 
 // AgentsConfig agent settings
@@ -168,6 +169,13 @@ type ExecToolConfig struct {
 	RestrictToWorkspace bool `mapstructure:"restrict_to_workspace"`
 }
 
+// HeartbeatConfig heartbeat service settings.
+type HeartbeatConfig struct {
+	Enabled        bool `mapstructure:"enabled"`
+	Interval       int  `mapstructure:"interval"`         // minutes
+	MaxIdleMinutes int  `mapstructure:"max_idle_minutes"` // minutes
+}
+
 // DefaultConfig returns config with sensible defaults
 func DefaultConfig() *Config {
 	homeDir, err := os.UserHomeDir()
@@ -242,6 +250,11 @@ func DefaultConfig() *Config {
 				Timeout:             60,
 				RestrictToWorkspace: true,
 			},
+		},
+		Heartbeat: HeartbeatConfig{
+			Enabled:        true,
+			Interval:       30,
+			MaxIdleMinutes: 720,
 		},
 	}
 }
@@ -368,6 +381,23 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("log.level must be one of debug, info, warn, error; got %q", c.Log.Level)
 		}
 		c.Log.Level = level
+	}
+
+	if c.Heartbeat.Interval < 0 {
+		return fmt.Errorf("heartbeat.interval must not be negative, got %d", c.Heartbeat.Interval)
+	}
+	if c.Heartbeat.Interval == 0 {
+		c.Heartbeat.Interval = 30
+	}
+	if c.Heartbeat.Interval > 0 && c.Heartbeat.Interval < 5 {
+		c.Heartbeat.Interval = 5
+	}
+
+	if c.Heartbeat.MaxIdleMinutes < 0 {
+		return fmt.Errorf("heartbeat.max_idle_minutes must not be negative, got %d", c.Heartbeat.MaxIdleMinutes)
+	}
+	if c.Heartbeat.MaxIdleMinutes == 0 {
+		c.Heartbeat.MaxIdleMinutes = 720
 	}
 
 	return nil

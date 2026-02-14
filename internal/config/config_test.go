@@ -21,6 +21,15 @@ func TestDefaultConfig(t *testing.T) {
 	if !cfg.Tools.Exec.RestrictToWorkspace {
 		t.Errorf("expected RestrictToWorkspace=true by default")
 	}
+	if !cfg.Heartbeat.Enabled {
+		t.Errorf("expected heartbeat enabled by default")
+	}
+	if cfg.Heartbeat.Interval != 30 {
+		t.Errorf("expected heartbeat interval=30, got %d", cfg.Heartbeat.Interval)
+	}
+	if cfg.Heartbeat.MaxIdleMinutes != 720 {
+		t.Errorf("expected heartbeat max_idle_minutes=720, got %d", cfg.Heartbeat.MaxIdleMinutes)
+	}
 }
 
 func TestLoadConfig_CreatesDefault(t *testing.T) {
@@ -153,5 +162,43 @@ func TestValidate_LogLevel(t *testing.T) {
 	cfg.Log.Level = "invalid-level"
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected validation error for invalid log level")
+	}
+}
+
+func TestValidate_HeartbeatDefaultsAndClamp(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Heartbeat.Interval = 0
+	cfg.Heartbeat.MaxIdleMinutes = 0
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Heartbeat.Interval != 30 {
+		t.Fatalf("expected heartbeat interval defaulted to 30, got %d", cfg.Heartbeat.Interval)
+	}
+	if cfg.Heartbeat.MaxIdleMinutes != 720 {
+		t.Fatalf("expected heartbeat max_idle_minutes defaulted to 720, got %d", cfg.Heartbeat.MaxIdleMinutes)
+	}
+
+	cfg = DefaultConfig()
+	cfg.Heartbeat.Interval = 1
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected error when clamping heartbeat interval: %v", err)
+	}
+	if cfg.Heartbeat.Interval != 5 {
+		t.Fatalf("expected heartbeat interval clamped to 5, got %d", cfg.Heartbeat.Interval)
+	}
+}
+
+func TestValidate_HeartbeatNegativeValues(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Heartbeat.Interval = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for heartbeat.interval < 0")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Heartbeat.MaxIdleMinutes = -10
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for heartbeat.max_idle_minutes < 0")
 	}
 }
