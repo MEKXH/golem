@@ -35,6 +35,9 @@ type Manager struct {
 func NewManager(servers map[string]config.MCPServerConfig, connectors Connectors) *Manager {
 	state := make(map[string]*serverState, len(servers))
 	for name, cfg := range servers {
+		if !config.IsMCPServerEnabled(cfg) {
+			continue
+		}
 		transport := strings.ToLower(strings.TrimSpace(cfg.Transport))
 		cfg.Transport = transport
 		state[name] = &serverState{

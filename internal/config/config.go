@@ -41,12 +41,21 @@ type MCPConfig struct {
 
 // MCPServerConfig MCP server transport settings.
 type MCPServerConfig struct {
+	Enabled   *bool             `mapstructure:"enabled"`
 	Transport string            `mapstructure:"transport"`
 	Command   string            `mapstructure:"command"`
 	Args      []string          `mapstructure:"args"`
 	Env       map[string]string `mapstructure:"env"`
 	URL       string            `mapstructure:"url"`
 	Headers   map[string]string `mapstructure:"headers"`
+}
+
+// IsMCPServerEnabled returns true unless the server is explicitly disabled.
+func IsMCPServerEnabled(server MCPServerConfig) bool {
+	if server.Enabled == nil {
+		return true
+	}
+	return *server.Enabled
 }
 
 // AgentsConfig agent settings
@@ -466,6 +475,15 @@ func (c *Config) Validate() error {
 		}
 		if name != serverName {
 			return fmt.Errorf("mcp.servers.%q has leading or trailing whitespace; use %q", serverName, name)
+		}
+
+		if !IsMCPServerEnabled(server) {
+			transport := strings.TrimSpace(server.Transport)
+			if transport != "" {
+				server.Transport = strings.ToLower(transport)
+				c.MCP.Servers[serverName] = server
+			}
+			continue
 		}
 
 		transport := strings.ToLower(strings.TrimSpace(server.Transport))

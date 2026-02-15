@@ -34,6 +34,8 @@ func NewRootCmd() *cobra.Command {
 		NewChatCmd(),
 		NewRunCmd(),
 		NewStatusCmd(),
+		NewPolicyCmd(),
+		NewMCPCmd(),
 		NewChannelsCmd(),
 		NewApprovalCmd(),
 		NewCronCmd(),

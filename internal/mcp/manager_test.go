@@ -301,3 +301,32 @@ func TestManager_CallTool_RecoversFromStartupDegradedState(t *testing.T) {
 		t.Fatalf("expected connected healthy status after recovery, got %+v", after)
 	}
 }
+
+func TestManager_NewManager_SkipsDisabledServers(t *testing.T) {
+	disabled := false
+	mgr := NewManager(
+		map[string]config.MCPServerConfig{
+			"disabled": {
+				Enabled:   &disabled,
+				Transport: "stdio",
+				Command:   "disabled-mcp",
+			},
+			"enabled": {
+				Transport: "stdio",
+				Command:   "enabled-mcp",
+			},
+		},
+		Connectors{
+			Stdio:   &fakeConnector{},
+			HTTPSSE: &fakeConnector{},
+		},
+	)
+
+	statuses := mgr.Statuses()
+	if len(statuses) != 1 {
+		t.Fatalf("expected 1 server status, got %d", len(statuses))
+	}
+	if statuses[0].Name != "enabled" {
+		t.Fatalf("expected enabled server to remain, got %+v", statuses[0])
+	}
+}

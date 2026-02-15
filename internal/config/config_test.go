@@ -358,4 +358,16 @@ func TestValidate_MCPServers(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected valid MCP servers config, got error: %v", err)
 	}
+
+	disabled := false
+	cfg = DefaultConfig()
+	cfg.MCP.Servers = map[string]MCPServerConfig{
+		"disabled_invalid": {
+			Enabled:   &disabled,
+			Transport: "invalid",
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected disabled MCP server to skip transport validation, got error: %v", err)
+	}
 }
