@@ -39,6 +39,15 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Heartbeat.MaxIdleMinutes != 720 {
 		t.Errorf("expected heartbeat max_idle_minutes=720, got %d", cfg.Heartbeat.MaxIdleMinutes)
 	}
+	if cfg.Agents.Subagent.TimeoutSeconds != 300 {
+		t.Errorf("expected subagent timeout_seconds=300, got %d", cfg.Agents.Subagent.TimeoutSeconds)
+	}
+	if cfg.Agents.Subagent.Retry != 1 {
+		t.Errorf("expected subagent retry=1, got %d", cfg.Agents.Subagent.Retry)
+	}
+	if cfg.Agents.Subagent.MaxConcurrency != 3 {
+		t.Errorf("expected subagent max_concurrency=3, got %d", cfg.Agents.Subagent.MaxConcurrency)
+	}
 }
 
 func TestLoadConfig_CreatesDefault(t *testing.T) {
@@ -369,5 +378,43 @@ func TestValidate_MCPServers(t *testing.T) {
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected disabled MCP server to skip transport validation, got error: %v", err)
+	}
+}
+
+func TestValidate_SubagentDefaultsAndBounds(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Agents.Subagent.TimeoutSeconds = 0
+	cfg.Agents.Subagent.Retry = 0
+	cfg.Agents.Subagent.MaxConcurrency = 0
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected error applying subagent defaults: %v", err)
+	}
+	if cfg.Agents.Subagent.TimeoutSeconds != 300 {
+		t.Fatalf("expected subagent timeout default 300, got %d", cfg.Agents.Subagent.TimeoutSeconds)
+	}
+	if cfg.Agents.Subagent.Retry != 1 {
+		t.Fatalf("expected subagent retry default 1, got %d", cfg.Agents.Subagent.Retry)
+	}
+	if cfg.Agents.Subagent.MaxConcurrency != 3 {
+		t.Fatalf("expected subagent max_concurrency default 3, got %d", cfg.Agents.Subagent.MaxConcurrency)
+	}
+
+	cfg = DefaultConfig()
+	cfg.Agents.Subagent.TimeoutSeconds = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for negative subagent timeout_seconds")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Agents.Subagent.Retry = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for negative subagent retry")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Agents.Subagent.MaxConcurrency = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for negative subagent max_concurrency")
 	}
 }

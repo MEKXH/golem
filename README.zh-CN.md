@@ -81,7 +81,7 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 | **渠道系统** | `internal/channel/` | 多平台集成（Telegram、Discord、Slack 等） |
 | **提供商** | `internal/provider/` | 通过 Eino OpenAI 封装层统一 LLM 接口 |
 | **会话** | `internal/session/` | 持久化 JSONL 格式对话历史 |
-| **工具** | `internal/tools/` | 内置工具：文件、Shell、记忆、网页、Cron、消息、子 Agent |
+| **工具** | `internal/tools/` | 内置工具：文件、Shell、记忆、网页、Cron、消息、子 Agent、workflow |
 | **记忆** | `internal/memory/` | 长期记忆与每日日记系统 |
 | **技能** | `internal/skills/` | 可扩展的 Markdown 提示词包 |
 | **Cron** | `internal/cron/` | 定时任务管理 |
@@ -118,7 +118,7 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 | `web_fetch` | 抓取并提取网页内容 |
 | `manage_cron` | 管理定时任务 |
 | `message` | 向渠道发送消息 |
-| `spawn` / `subagent` | 委托任务给子 Agent |
+| `spawn` / `subagent` / `workflow` | 委托任务给子 Agent 与编排工作流 |
 
 ### 支持的 LLM 提供商
 
@@ -130,8 +130,9 @@ Golem 支持将任务委托给子 Agent 并行处理：
 
 - **`spawn`**：异步子 Agent，立即返回任务 ID，通过消息总线通知结果
 - **`subagent`**：同步子 Agent，阻塞直到完成，直接返回结果
+- **`workflow`**：内置工作流编排（拆解任务、串/并行执行子任务、汇总每步结果）
 
-两种模式都使用独立会话，并传播原始渠道/会话信息以便结果回传。
+以上模式都使用独立会话，并传播原始渠道/会话信息以便结果回传。
 
 ### 记忆系统
 
@@ -331,6 +332,11 @@ golem skills search weather
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
+    },
+    "subagent": {
+      "timeout_seconds": 300,
+      "retry": 1,
+      "max_concurrency": 3
     }
   },
   "channels": {
@@ -360,6 +366,7 @@ golem skills search weather
   "mcp": {
     "servers": {
       "localfs": {
+        "enabled": true,
         "transport": "stdio",
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
@@ -406,6 +413,12 @@ golem skills search weather
 - `default`：使用 `~/.golem/workspace`
 - `cwd`：使用当前工作目录
 - `path`：使用 `agents.defaults.workspace` 指定路径
+
+`agents.subagent` 运行时参数：
+
+- `timeout_seconds`：子任务超时（默认 `300`）
+- `retry`：每个子任务重试次数（默认 `1`，总尝试次数 = retry + 1）
+- `max_concurrency`：`spawn/subagent/workflow` 的并发上限（默认 `3`）
 
 `policy.mode` 可选值：
 

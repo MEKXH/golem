@@ -3,6 +3,9 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -89,5 +92,157 @@ func TestSubagentManager_RunSyncReturnsError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected sync run error")
+	}
+}
+
+type flakySubagentProcessor struct {
+	mu        sync.Mutex
+	failFirst int
+	calls     int
+}
+
+func (f *flakySubagentProcessor) ProcessForChannelWithSession(ctx context.Context, channel, chatID, senderID, sessionID, content string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.calls++
+	if f.calls <= f.failFirst {
+		return "", fmt.Errorf("transient error #%d", f.calls)
+	}
+	return "ok:" + strings.TrimSpace(content), nil
+}
+
+func TestSubagentManager_RunSyncRetriesTransientFailure(t *testing.T) {
+	processor := &flakySubagentProcessor{failFirst: 1}
+	manager := NewSubagentManagerWithOptions(nil, processor, SubagentManagerOptions{
+		Timeout:        2 * time.Second,
+		Retry:          1,
+		MaxConcurrency: 2,
+	})
+
+	out, err := manager.RunSync(context.Background(), tools.SubagentRequest{
+		Task:           "retry me",
+		OriginChannel:  "cli",
+		OriginChatID:   "direct",
+		OriginSenderID: "user",
+	})
+	if err != nil {
+		t.Fatalf("RunSync should recover with retry, got err: %v", err)
+	}
+	if !strings.Contains(out, "ok:retry me") {
+		t.Fatalf("unexpected RunSync output: %q", out)
+	}
+	if processor.calls != 2 {
+		t.Fatalf("expected two attempts, got %d", processor.calls)
+	}
+}
+
+type concurrencyProbeProcessor struct {
+	mu        sync.Mutex
+	active    int
+	maxActive int
+	delay     time.Duration
+}
+
+func (p *concurrencyProbeProcessor) ProcessForChannelWithSession(ctx context.Context, channel, chatID, senderID, sessionID, content string) (string, error) {
+	p.mu.Lock()
+	p.active++
+	if p.active > p.maxActive {
+		p.maxActive = p.active
+	}
+	p.mu.Unlock()
+
+	select {
+	case <-ctx.Done():
+		p.mu.Lock()
+		p.active--
+		p.mu.Unlock()
+		return "", ctx.Err()
+	case <-time.After(p.delay):
+	}
+
+	p.mu.Lock()
+	p.active--
+	p.mu.Unlock()
+	return "done", nil
+}
+
+func (p *concurrencyProbeProcessor) MaxActive() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.maxActive
+}
+
+func TestSubagentManager_MaxConcurrencyCapsParallelRuns(t *testing.T) {
+	processor := &concurrencyProbeProcessor{delay: 120 * time.Millisecond}
+	manager := NewSubagentManagerWithOptions(nil, processor, SubagentManagerOptions{
+		Timeout:        2 * time.Second,
+		Retry:          0,
+		MaxConcurrency: 1,
+	})
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 3)
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, err := manager.RunSync(context.Background(), tools.SubagentRequest{
+				Task:           fmt.Sprintf("task-%d", idx),
+				OriginChannel:  "cli",
+				OriginChatID:   "direct",
+				OriginSenderID: "user",
+			})
+			errs <- err
+		}(i + 1)
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("RunSync unexpected error: %v", err)
+		}
+	}
+	if got := processor.MaxActive(); got != 1 {
+		t.Fatalf("expected max active workers=1, got %d", got)
+	}
+}
+
+type workflowTestProcessor struct{}
+
+func (p *workflowTestProcessor) ProcessForChannelWithSession(ctx context.Context, channel, chatID, senderID, sessionID, content string) (string, error) {
+	task := strings.TrimSpace(content)
+	if strings.Contains(task, "fail") {
+		return "", fmt.Errorf("failed subtask: %s", task)
+	}
+	return "done:" + task, nil
+}
+
+func TestSubagentManager_RunWorkflow_ReportsPerTaskFailures(t *testing.T) {
+	manager := NewSubagentManagerWithOptions(nil, &workflowTestProcessor{}, SubagentManagerOptions{
+		Timeout:        2 * time.Second,
+		Retry:          0,
+		MaxConcurrency: 2,
+	})
+
+	out, err := manager.RunWorkflow(context.Background(), tools.WorkflowRequest{
+		Goal:           "deploy verification",
+		Mode:           "parallel",
+		Subtasks:       []string{"check health", "fail smoke", "collect metrics"},
+		OriginChannel:  "cli",
+		OriginChatID:   "direct",
+		OriginSenderID: "user",
+	})
+	if err != nil {
+		t.Fatalf("RunWorkflow should return summary (not hard fail), got err: %v", err)
+	}
+
+	lower := strings.ToLower(out)
+	if !strings.Contains(lower, "failed=1") {
+		t.Fatalf("expected one failed subtask in summary, got: %s", out)
+	}
+	if !strings.Contains(lower, "fail smoke") {
+		t.Fatalf("expected failed subtask name in summary, got: %s", out)
 	}
 }

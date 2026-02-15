@@ -7,6 +7,11 @@
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
+    },
+    "subagent": {
+      "timeout_seconds": 300,
+      "retry": 1,
+      "max_concurrency": 3
     }
   },
   "providers": {
@@ -45,6 +50,7 @@
   "mcp": {
     "servers": {
       "localfs": {
+        "enabled": true,
         "transport": "stdio",
         "command": "npx",
         "args": [
@@ -54,6 +60,7 @@
         ]
       },
       "remote": {
+        "enabled": true,
         "transport": "http_sse",
         "url": "http://localhost:8080/sse"
       }

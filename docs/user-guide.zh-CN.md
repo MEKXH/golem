@@ -110,6 +110,11 @@ golem run
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
+    },
+    "subagent": {
+      "timeout_seconds": 300,
+      "retry": 1,
+      "max_concurrency": 3
     }
   },
   "channels": {
@@ -149,6 +154,7 @@ golem run
   "mcp": {
     "servers": {
       "localfs": {
+        "enabled": true,
         "transport": "stdio",
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
@@ -171,7 +177,7 @@ golem run
 }
 ```
 
-## 5.2 `agents.defaults`
+## 5.2 `agents.defaults`、`agents.subagent`
 
 | 键 | 类型 | 默认值 | 约束 |
 | --- | --- | --- | --- |
@@ -181,6 +187,9 @@ golem run
 | `max_tokens` | int | `8192` | 必须 `> 0` |
 | `temperature` | float | `0.7` | 范围 `[0, 2.0]` |
 | `max_tool_iterations` | int | `20` | 非负；`0` 会回填为 `20` |
+| `subagent.timeout_seconds` | int | `300` | 非负；`0` 会回填为 `300` |
+| `subagent.retry` | int | `1` | 非负；总尝试次数 = `retry + 1` |
+| `subagent.max_concurrency` | int | `3` | 非负；`0` 会回填为 `3` |
 
 ## 5.3 `channels.*`
 
@@ -252,6 +261,7 @@ Provider 选择逻辑：
 | `policy.off_ttl` | string | `""` | 时长（如 `30m`）；`off` 模式下到期后自动回退 strict |
 | `policy.allow_persistent_off` | bool | `false` | 当 `mode=off` 且未设置 `off_ttl` 时必须为 `true` |
 | `policy.require_approval` | array | `[]` | strict 模式下需要审批的工具名列表 |
+| `mcp.servers.<name>.enabled` | bool | `true` | `false` 时会被运行时与运维命令跳过 |
 | `mcp.servers.<name>.transport` | string | - | `stdio` 或 `http_sse` |
 | `mcp.servers.<name>.command` | string | - | `stdio` 传输必填 |
 | `mcp.servers.<name>.args` | array | `[]` | `stdio` 可选参数 |
@@ -471,6 +481,7 @@ golem skills remove weather
 | `message` | `content`, `channel`, `chat_id` | 直接向渠道发送消息 |
 | `spawn` | `task`, `label`, route 参数 | 异步子 Agent |
 | `subagent` | `task`, `label`, route 参数 | 同步子 Agent |
+| `workflow` | `goal`, `mode`, `subtasks`, `label` | 内置编排：串/并行执行子任务并汇总每步结果 |
 | `mcp.<server>.<tool>` | MCP 工具定义对应的 JSON 参数 | 从健康 MCP 服务动态注册 |
 
 安全边界：

@@ -122,7 +122,11 @@ func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 		registered = append(registered, info.Name)
 	}
 
-	l.subagents = NewSubagentManager(l.bus, l, 5*time.Minute)
+	l.subagents = NewSubagentManagerWithOptions(l.bus, l, SubagentManagerOptions{
+		Timeout:        time.Duration(cfg.Agents.Subagent.TimeoutSeconds) * time.Second,
+		Retry:          cfg.Agents.Subagent.Retry,
+		MaxConcurrency: cfg.Agents.Subagent.MaxConcurrency,
+	})
 	spawnTool, err := tools.NewSpawnTool(l.subagents)
 	if err != nil {
 		return err
@@ -142,6 +146,17 @@ func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 		return err
 	}
 	if info, err := subagentTool.Info(context.Background()); err == nil && info != nil && info.Name != "" {
+		registered = append(registered, info.Name)
+	}
+
+	workflowTool, err := tools.NewWorkflowTool(l.subagents)
+	if err != nil {
+		return err
+	}
+	if err := l.tools.Register(workflowTool); err != nil {
+		return err
+	}
+	if info, err := workflowTool.Info(context.Background()); err == nil && info != nil && info.Name != "" {
 		registered = append(registered, info.Name)
 	}
 

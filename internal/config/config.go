@@ -60,7 +60,8 @@ func IsMCPServerEnabled(server MCPServerConfig) bool {
 
 // AgentsConfig agent settings
 type AgentsConfig struct {
-	Defaults AgentDefaults `mapstructure:"defaults"`
+	Defaults AgentDefaults         `mapstructure:"defaults"`
+	Subagent SubagentRuntimeConfig `mapstructure:"subagent"`
 }
 
 // AgentDefaults default agent parameters
@@ -71,6 +72,13 @@ type AgentDefaults struct {
 	MaxTokens         int     `mapstructure:"max_tokens"`
 	Temperature       float64 `mapstructure:"temperature"`
 	MaxToolIterations int     `mapstructure:"max_tool_iterations"`
+}
+
+// SubagentRuntimeConfig controls delegated subagent execution policy.
+type SubagentRuntimeConfig struct {
+	TimeoutSeconds int `mapstructure:"timeout_seconds"`
+	Retry          int `mapstructure:"retry"`
+	MaxConcurrency int `mapstructure:"max_concurrency"`
 }
 
 // ChannelsConfig channel settings
@@ -236,6 +244,11 @@ func DefaultConfig() *Config {
 				MaxTokens:         8192,
 				Temperature:       0.7,
 				MaxToolIterations: 20,
+			},
+			Subagent: SubagentRuntimeConfig{
+				TimeoutSeconds: 300,
+				Retry:          1,
+				MaxConcurrency: 3,
 			},
 		},
 		Channels: ChannelsConfig{
@@ -406,6 +419,25 @@ func (c *Config) Validate() error {
 
 	if d.MaxTokens <= 0 {
 		return fmt.Errorf("agents.defaults.max_tokens must be > 0, got %d", d.MaxTokens)
+	}
+
+	if c.Agents.Subagent.TimeoutSeconds < 0 {
+		return fmt.Errorf("agents.subagent.timeout_seconds must not be negative, got %d", c.Agents.Subagent.TimeoutSeconds)
+	}
+	if c.Agents.Subagent.TimeoutSeconds == 0 {
+		c.Agents.Subagent.TimeoutSeconds = 300
+	}
+	if c.Agents.Subagent.Retry < 0 {
+		return fmt.Errorf("agents.subagent.retry must not be negative, got %d", c.Agents.Subagent.Retry)
+	}
+	if c.Agents.Subagent.Retry == 0 {
+		c.Agents.Subagent.Retry = 1
+	}
+	if c.Agents.Subagent.MaxConcurrency < 0 {
+		return fmt.Errorf("agents.subagent.max_concurrency must not be negative, got %d", c.Agents.Subagent.MaxConcurrency)
+	}
+	if c.Agents.Subagent.MaxConcurrency == 0 {
+		c.Agents.Subagent.MaxConcurrency = 3
 	}
 
 	mode := strings.TrimSpace(d.WorkspaceMode)

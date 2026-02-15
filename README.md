@@ -81,7 +81,7 @@ It can chat, run tools, call shell commands, manage files, search/fetch web cont
 | **Channel System** | `internal/channel/` | Multi-platform integrations (Telegram, Discord, Slack, etc.) |
 | **Provider** | `internal/provider/` | Unified LLM interface via Eino's OpenAI wrapper |
 | **Session** | `internal/session/` | Persistent JSONL-based conversation history |
-| **Tools** | `internal/tools/` | Built-in tools: file, shell, memory, web, cron, message, subagent |
+| **Tools** | `internal/tools/` | Built-in tools: file, shell, memory, web, cron, message, subagent, workflow |
 | **Memory** | `internal/memory/` | Long-term memory and daily diary system |
 | **Skills** | `internal/skills/` | Extensible Markdown-based prompt packs |
 | **Cron** | `internal/cron/` | Scheduled job management |
@@ -116,7 +116,7 @@ It can chat, run tools, call shell commands, manage files, search/fetch web cont
 | `web_fetch` | Fetch and extract web page content |
 | `manage_cron` | Manage scheduled jobs |
 | `message` | Send messages to channels |
-| `spawn` / `subagent` | Delegate tasks to subagents |
+| `spawn` / `subagent` / `workflow` | Delegate tasks to subagents and orchestrated workflows |
 
 ### LLM Providers
 
@@ -128,8 +128,9 @@ Golem supports delegating tasks to subagents for parallel processing:
 
 - **`spawn`**: Asynchronous subagent, returns task ID immediately, notifies via message bus
 - **`subagent`**: Synchronous subagent, blocks until completion, returns result directly
+- **`workflow`**: Built-in workflow orchestration tool (decompose task, run sequential/parallel subtasks, aggregate per-step results)
 
-Both modes use isolated sessions and propagate origin channel/chat for result delivery.
+All modes use isolated sessions and propagate origin channel/chat for result delivery.
 
 ### Memory System
 
@@ -329,6 +330,11 @@ Template file in repo: `config/config.example.json`
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
+    },
+    "subagent": {
+      "timeout_seconds": 300,
+      "retry": 1,
+      "max_concurrency": 3
     }
   },
   "channels": {
@@ -358,6 +364,7 @@ Template file in repo: `config/config.example.json`
   "mcp": {
     "servers": {
       "localfs": {
+        "enabled": true,
         "transport": "stdio",
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
@@ -404,6 +411,12 @@ Template file in repo: `config/config.example.json`
 - `default`: use `~/.golem/workspace`
 - `cwd`: use current working directory
 - `path`: use `agents.defaults.workspace`
+
+`agents.subagent` runtime values:
+
+- `timeout_seconds`: delegated subtask timeout (default `300`)
+- `retry`: retry count per subtask (default `1`, total attempts = retry + 1)
+- `max_concurrency`: max concurrent subtask executions across `spawn/subagent/workflow` (default `3`)
 
 `policy.mode` values:
 

@@ -323,6 +323,9 @@ func TestRegisterDefaultTools_WithoutWebSearchKey(t *testing.T) {
 	if !slices.Contains(names, "web_search") {
 		t.Fatalf("expected web_search to be registered (free fallback mode), got: %v", names)
 	}
+	if !slices.Contains(names, "workflow") {
+		t.Fatalf("expected workflow tool to be registered, got: %v", names)
+	}
 }
 
 func TestRegisterDefaultTools_WithWebSearchKey(t *testing.T) {

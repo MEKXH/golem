@@ -10,7 +10,7 @@ Golem is a terminal-first personal AI assistant built with Go and Eino. It suppo
 
 - Interactive chat (`golem chat`)
 - Long-running multi-channel service (`golem run`)
-- Tool-using agent loop (file, shell, memory, web, cron, messaging, subagent)
+- Tool-using agent loop (file, shell, memory, web, cron, messaging, subagent, workflow)
 - Policy guard modes (`strict`/`relaxed`/`off`) with optional off TTL rollback
 - Approval workflow for high-risk tools (`golem approval list|approve|reject`)
 - MCP dynamic tool registration (`mcp.<server>.<tool>`) with degraded-server isolation
@@ -110,6 +110,11 @@ Main file: `~/.golem/config.json`
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
+    },
+    "subagent": {
+      "timeout_seconds": 300,
+      "retry": 1,
+      "max_concurrency": 3
     }
   },
   "channels": {
@@ -149,6 +154,7 @@ Main file: `~/.golem/config.json`
   "mcp": {
     "servers": {
       "localfs": {
+        "enabled": true,
         "transport": "stdio",
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
@@ -171,7 +177,7 @@ Main file: `~/.golem/config.json`
 }
 ```
 
-## 5.2 `agents.defaults`
+## 5.2 `agents.defaults`, `agents.subagent`
 
 | Key | Type | Default | Rules |
 | --- | --- | --- | --- |
@@ -181,6 +187,9 @@ Main file: `~/.golem/config.json`
 | `max_tokens` | int | `8192` | must be `> 0` |
 | `temperature` | float | `0.7` | must be in `[0, 2.0]` |
 | `max_tool_iterations` | int | `20` | non-negative; `0` resets to `20` |
+| `subagent.timeout_seconds` | int | `300` | non-negative; `0` resets to `300` |
+| `subagent.retry` | int | `1` | non-negative; attempts = `retry + 1` |
+| `subagent.max_concurrency` | int | `3` | non-negative; `0` resets to `3` |
 
 ## 5.3 `channels.*`
 
@@ -252,6 +261,7 @@ Provider selection logic:
 | `policy.off_ttl` | string | `""` | duration (for example `30m`); when set with mode `off`, auto-reverts to strict after ttl |
 | `policy.allow_persistent_off` | bool | `false` | must be `true` to allow `mode=off` without `off_ttl` |
 | `policy.require_approval` | array | `[]` | tool names requiring approval in strict mode |
+| `mcp.servers.<name>.enabled` | bool | `true` | when `false`, server is skipped by runtime and ops commands |
 | `mcp.servers.<name>.transport` | string | - | `stdio` or `http_sse` |
 | `mcp.servers.<name>.command` | string | - | required for `stdio` transport |
 | `mcp.servers.<name>.args` | array | `[]` | optional command args for `stdio` |
@@ -471,6 +481,7 @@ Registered by default:
 | `message` | `content`, `channel`, `chat_id` | Sends direct outbound message |
 | `spawn` | `task`, `label`, route fields | Async subagent task |
 | `subagent` | `task`, `label`, route fields | Sync subagent task |
+| `workflow` | `goal`, `mode`, `subtasks`, `label` | Built-in orchestration for sequential/parallel subtask execution with per-step summary |
 | `mcp.<server>.<tool>` | MCP tool-specific JSON args | Dynamically registered from healthy MCP servers |
 
 Safety boundaries:
