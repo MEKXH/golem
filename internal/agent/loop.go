@@ -10,6 +10,7 @@ import (
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/mcp"
+	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/session"
 	"github.com/MEKXH/golem/internal/tools"
 	"github.com/cloudwego/eino/components/model"
@@ -30,6 +31,7 @@ type Loop struct {
 	maxIterations int
 	workspacePath string
 	now           func() time.Time
+	runtimeMetric *metrics.RuntimeMetrics
 
 	OnToolStart  func(name, args string)
 	OnToolFinish func(name, result string, err error)
@@ -63,6 +65,11 @@ func (l *Loop) Tools() *tools.Registry {
 // SetActivityRecorder attaches a callback used to track the latest active channel/chat.
 func (l *Loop) SetActivityRecorder(recorder func(channel, chatID string)) {
 	l.activityRecorder = recorder
+}
+
+// SetRuntimeMetrics attaches a runtime metrics recorder for tool execution stats.
+func (l *Loop) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
+	l.runtimeMetric = recorder
 }
 
 // RegisterDefaultTools registers all built-in tools
@@ -334,7 +341,7 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 			}
 			l.auditToolExecution(toolCtx, tc.Function.Name, result, err)
 			toolDuration := time.Since(toolStart)
-			slog.Info("tool execution finished",
+			logAttrs := []any{
 				"request_id", msg.RequestID,
 				"channel", msg.Channel,
 				"chat_id", msg.ChatID,
@@ -342,7 +349,20 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 				"tool_duration", toolDuration.String(),
 				"duration_ms", toolDuration.Milliseconds(),
 				"success", err == nil,
-			)
+			}
+			if l.runtimeMetric != nil {
+				snapshot, metricErr := l.runtimeMetric.RecordToolExecution(toolDuration, result, err)
+				if metricErr != nil {
+					slog.Warn("record runtime metrics failed", "scope", "tool", "error", metricErr)
+				}
+				logAttrs = append(logAttrs,
+					"tool_total", snapshot.Tool.Total,
+					"tool_error_ratio", snapshot.Tool.ErrorRatio(),
+					"tool_timeout_ratio", snapshot.Tool.TimeoutRatio(),
+					"tool_latency_p95_proxy_ms", snapshot.Tool.P95ProxyLatencyMs,
+				)
+			}
+			slog.Info("tool execution finished", logAttrs...)
 
 			if l.OnToolFinish != nil {
 				l.OnToolFinish(tc.Function.Name, result, err)

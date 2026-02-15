@@ -2,11 +2,13 @@ package channel
 
 import (
 	"context"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/MEKXH/golem/internal/bus"
+	"github.com/MEKXH/golem/internal/metrics"
 )
 
 type mockManagerChannel struct {
@@ -103,5 +105,51 @@ func TestManager_RouteOutbound_LimitsConcurrency(t *testing.T) {
 
 	if got := ch.maxActive.Load(); got > 2 {
 		t.Fatalf("expected max concurrent sends <= 2, got %d", got)
+	}
+}
+
+func TestManager_RouteOutbound_RecordsMetrics(t *testing.T) {
+	tmpDir := t.TempDir()
+	recorder := metrics.NewRuntimeMetrics(filepath.Join(tmpDir, "workspace"))
+
+	msgBus := bus.NewMessageBus(2)
+	mgr := NewManager(msgBus)
+	mgr.SetRuntimeMetrics(recorder)
+
+	ch := &mockManagerChannel{
+		name:        "test",
+		BaseChannel: BaseChannel{Bus: msgBus},
+		sentNotify:  make(chan struct{}, 1),
+	}
+	mgr.Register(ch)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go mgr.RouteOutbound(ctx)
+
+	msgBus.PublishOutbound(&bus.OutboundMessage{Channel: "test", ChatID: "1", Content: "hi"})
+
+	select {
+	case <-ch.sentNotify:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for outbound send")
+	}
+
+	deadline := time.After(500 * time.Millisecond)
+	for {
+		snap, err := metrics.ReadRuntimeSnapshot(filepath.Join(tmpDir, "workspace"))
+		if err != nil {
+			t.Fatalf("ReadRuntimeSnapshot() error: %v", err)
+		}
+		if snap.Channel.SendAttempts == 1 && snap.Channel.SendFailures == 0 {
+			break
+		}
+
+		select {
+		case <-deadline:
+			t.Fatalf("unexpected channel metrics snapshot: %+v", snap.Channel)
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
 }

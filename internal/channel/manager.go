@@ -6,14 +6,16 @@ import (
 	"sync"
 
 	"github.com/MEKXH/golem/internal/bus"
+	"github.com/MEKXH/golem/internal/metrics"
 )
 
 // Manager coordinates all channels
 type Manager struct {
-	channels map[string]Channel
-	bus      *bus.MessageBus
-	sendSem  chan struct{}
-	mu       sync.RWMutex
+	channels      map[string]Channel
+	bus           *bus.MessageBus
+	sendSem       chan struct{}
+	runtimeMetric *metrics.RuntimeMetrics
+	mu            sync.RWMutex
 }
 
 const defaultMaxConcurrentSends = 16
@@ -40,6 +42,13 @@ func (m *Manager) Register(ch Channel) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.channels[ch.Name()] = ch
+}
+
+// SetRuntimeMetrics attaches a recorder used for outbound send metrics.
+func (m *Manager) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.runtimeMetric = recorder
 }
 
 // Names returns registered channel names
@@ -84,14 +93,34 @@ func (m *Manager) RouteOutbound(ctx context.Context) {
 			}
 			m.mu.RLock()
 			if ch, ok := m.channels[msg.Channel]; ok {
+				metricRecorder := m.runtimeMetric
 				select {
 				case m.sendSem <- struct{}{}:
-					go func(c Channel, outbound *bus.OutboundMessage) {
+					go func(c Channel, outbound *bus.OutboundMessage, recorder *metrics.RuntimeMetrics) {
 						defer func() { <-m.sendSem }()
-						if err := c.Send(ctx, outbound); err != nil {
+						err := c.Send(ctx, outbound)
+
+						if recorder != nil {
+							snapshot, recordErr := recorder.RecordChannelSend(err == nil)
+							if recordErr != nil {
+								slog.Warn("record runtime metrics failed", "scope", "channel", "error", recordErr)
+							} else if err != nil {
+								slog.Error("send outbound failed",
+									"request_id", outbound.RequestID,
+									"channel", outbound.Channel,
+									"chat_id", outbound.ChatID,
+									"error", err,
+									"channel_send_attempts", snapshot.Channel.SendAttempts,
+									"channel_send_failure_ratio", snapshot.Channel.FailureRatio(),
+								)
+								return
+							}
+						}
+
+						if err != nil {
 							slog.Error("send outbound failed", "request_id", outbound.RequestID, "channel", outbound.Channel, "chat_id", outbound.ChatID, "error", err)
 						}
-					}(ch, msg)
+					}(ch, msg, metricRecorder)
 				case <-ctx.Done():
 					m.mu.RUnlock()
 					return

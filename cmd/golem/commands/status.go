@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/cron"
+	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/skills"
 	"github.com/spf13/cobra"
 )
@@ -53,6 +55,31 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Mode: %s\n", workspaceMode)
 
 	fmt.Printf("\nModel: %s\n", cfg.Agents.Defaults.Model)
+
+	// Runtime metrics
+	fmt.Println("\nRuntime Metrics:")
+	runtimeSnapshot, err := metrics.ReadRuntimeSnapshot(workspacePath)
+	if err != nil {
+		fmt.Printf("  Status: unavailable (%v)\n", err)
+	} else if !runtimeSnapshot.HasData() {
+		fmt.Println("  Status: no runtime data yet")
+	} else {
+		fmt.Printf("  updated_at=%s\n", runtimeSnapshot.UpdatedAt.Format(time.RFC3339))
+		fmt.Printf(
+			"  tool_total=%d tool_error_ratio=%.3f tool_timeout_ratio=%.3f tool_p95_proxy_ms=%d tool_avg_ms=%.1f\n",
+			runtimeSnapshot.Tool.Total,
+			runtimeSnapshot.Tool.ErrorRatio(),
+			runtimeSnapshot.Tool.TimeoutRatio(),
+			runtimeSnapshot.Tool.P95ProxyLatencyMs,
+			runtimeSnapshot.Tool.AvgLatencyMs(),
+		)
+		fmt.Printf(
+			"  channel_send_attempts=%d channel_send_failures=%d channel_send_failure_ratio=%.3f\n",
+			runtimeSnapshot.Channel.SendAttempts,
+			runtimeSnapshot.Channel.SendFailures,
+			runtimeSnapshot.Channel.FailureRatio(),
+		)
+	}
 
 	fmt.Println("\nProviders:")
 	providers := map[string]string{

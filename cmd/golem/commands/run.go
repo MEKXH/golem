@@ -28,6 +28,7 @@ import (
 	"github.com/MEKXH/golem/internal/cron"
 	"github.com/MEKXH/golem/internal/gateway"
 	"github.com/MEKXH/golem/internal/heartbeat"
+	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/provider"
 	"github.com/MEKXH/golem/internal/state"
 	"github.com/MEKXH/golem/internal/tools"
@@ -53,6 +54,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+	workspacePath, err := cfg.WorkspacePathChecked()
+	if err != nil {
+		return fmt.Errorf("invalid workspace: %w", err)
+	}
 
 	msgBus := bus.NewMessageBus(100)
 
@@ -68,14 +73,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err := loop.RegisterDefaultTools(cfg); err != nil {
 		return err
 	}
-	slog.Info("runtime policy configured",
-		"mode", cfg.Policy.Mode,
-		"off_ttl", cfg.Policy.OffTTL,
-		"require_approval", cfg.Policy.RequireApproval,
-	)
+	runtimeMetrics := metrics.NewRuntimeMetrics(workspacePath)
+	loop.SetRuntimeMetrics(runtimeMetrics)
+	logAndAuditRuntimePolicyStartup(ctx, loop, cfg)
 
 	// Initialize cron service.
-	workspacePath, _ := cfg.WorkspacePathChecked()
 	cronStorePath := filepath.Join(workspacePath, "cron", "jobs.json")
 	cronService := cron.NewService(cronStorePath, func(job *cron.Job) error {
 		ch := job.Payload.Channel
@@ -116,6 +118,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	voiceTranscriber := buildVoiceTranscriber(cfg)
 	chanMgr := channel.NewManager(msgBus)
+	chanMgr.SetRuntimeMetrics(runtimeMetrics)
 	registerEnabledChannels(cfg, msgBus, chanMgr, voiceTranscriber)
 
 	chanMgr.StartAll(ctx)

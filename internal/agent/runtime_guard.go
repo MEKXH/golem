@@ -49,6 +49,42 @@ func (l *Loop) configureRuntimeGuard(cfg *config.Config) error {
 	return nil
 }
 
+// AuditRuntimePolicyStartup writes startup policy audit events.
+func (l *Loop) AuditRuntimePolicyStartup(ctx context.Context, cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+
+	mode := strings.ToLower(strings.TrimSpace(cfg.Policy.Mode))
+	if mode == "" {
+		mode = string(policy.ModeStrict)
+	}
+
+	offTTL := strings.TrimSpace(cfg.Policy.OffTTL)
+	offTTLResult := offTTL
+	if offTTLResult == "" {
+		offTTLResult = "none"
+	}
+
+	requireApproval := "-"
+	if len(cfg.Policy.RequireApproval) > 0 {
+		requireApproval = strings.Join(cfg.Policy.RequireApproval, ",")
+	}
+
+	startupResult := fmt.Sprintf("mode=%s off_ttl=%s allow_persistent_off=%t require_approval=%s",
+		mode,
+		offTTLResult,
+		cfg.Policy.AllowPersistentOff,
+		requireApproval,
+	)
+	l.appendAuditEvent(ctx, "policy_startup", "", "", startupResult)
+
+	if mode == string(policy.ModeOff) && offTTL == "" {
+		l.appendAuditEvent(ctx, "policy_startup_persistent_off", "", "",
+			"high-risk: policy.mode=off without policy.off_ttl keeps runtime guardrails disabled indefinitely")
+	}
+}
+
 func (l *Loop) evaluateToolGuard(ctx context.Context, name, argsJSON string) (tools.GuardResult, error) {
 	guard := l.runtimeGuard
 	if guard == nil {

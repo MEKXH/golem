@@ -3,12 +3,12 @@ package commands
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/MEKXH/golem/internal/agent"
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
+	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/provider"
 	"github.com/MEKXH/golem/internal/render"
 	"github.com/MEKXH/golem/internal/version"
@@ -565,11 +565,12 @@ func runChat(cmd *cobra.Command, args []string) error {
 	if err := loop.RegisterDefaultTools(cfg); err != nil {
 		return fmt.Errorf("failed to register tools: %w", err)
 	}
-	slog.Info("runtime policy configured",
-		"mode", cfg.Policy.Mode,
-		"off_ttl", cfg.Policy.OffTTL,
-		"require_approval", cfg.Policy.RequireApproval,
-	)
+	workspacePath, err := cfg.WorkspacePathChecked()
+	if err != nil {
+		return fmt.Errorf("invalid workspace: %w", err)
+	}
+	loop.SetRuntimeMetrics(metrics.NewRuntimeMetrics(workspacePath))
+	logAndAuditRuntimePolicyStartup(ctx, loop, cfg)
 
 	if len(args) > 0 {
 		message := strings.Join(args, " ")
