@@ -46,11 +46,11 @@ func NewManager(servers map[string]config.MCPServerConfig, connectors Connectors
 	}
 }
 
-// DefaultConnectors returns placeholders that degrade servers until real connectors are provided.
+// DefaultConnectors returns production connectors for stdio and HTTP/SSE transports.
 func DefaultConnectors() Connectors {
 	return Connectors{
-		Stdio:   unsupportedConnector{transport: TransportStdio},
-		HTTPSSE: unsupportedConnector{transport: TransportHTTPSSE},
+		Stdio:   newStdioConnector(),
+		HTTPSSE: newHTTPSSEConnector(),
 	}
 }
 
@@ -233,12 +233,4 @@ func (m *Manager) serverNames() []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-type unsupportedConnector struct {
-	transport string
-}
-
-func (c unsupportedConnector) Connect(ctx context.Context, serverName string, cfg config.MCPServerConfig) (Client, error) {
-	return nil, fmt.Errorf("%s connector is not configured", c.transport)
 }
