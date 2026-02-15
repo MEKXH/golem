@@ -157,23 +157,97 @@ func TestHTTPSSEConnector_ConnectDiscoverAndCall(t *testing.T) {
 	}
 }
 
+func TestHTTPSSEClient_InvokeRetriesTransientFailure(t *testing.T) {
+	var calls int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			http.Error(w, "temporary upstream error", http.StatusBadGateway)
+			return
+		}
+
+		defer r.Body.Close()
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      req["id"],
+			"result": map[string]any{
+				"tools": []map[string]any{},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := &httpSSEClient{
+		httpClient:       server.Client(),
+		messageEndpoints: []string{server.URL},
+		headers:          map[string]string{},
+	}
+
+	if _, err := client.invoke(context.Background(), "tools/list", map[string]any{}); err != nil {
+		t.Fatalf("invoke() error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 attempts (1 retry), got %d", calls)
+	}
+}
+
+func TestStdioConnector_ConnectInitFailureIncludesStderr(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	connector := newStdioConnector()
+	_, err := connector.Connect(ctx, "broken", config.MCPServerConfig{
+		Transport: "stdio",
+		Command:   os.Args[0],
+		Args:      []string{"-test.run=TestMCPHelperProcess", "--", "mcp-stdio-fail-helper"},
+		Env: map[string]string{
+			"GO_WANT_HELPER_PROCESS": "1",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected connect error for failing helper process")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "stderr") {
+		t.Fatalf("expected error to include stderr hint, got: %v", err)
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "intentional-helper-failure") {
+		t.Fatalf("expected helper stderr text in error, got: %v", err)
+	}
+}
+
 func TestMCPHelperProcess(t *testing.T) {
 	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
 		return
 	}
-	isHelper := false
+	helperMode := ""
 	for _, arg := range os.Args {
 		if arg == "mcp-stdio-helper" {
-			isHelper = true
+			helperMode = arg
+			break
+		}
+		if arg == "mcp-stdio-fail-helper" {
+			helperMode = arg
 			break
 		}
 	}
-	if !isHelper {
+	if helperMode == "" {
 		return
 	}
 
-	runMCPHelperProcess()
-	os.Exit(0)
+	switch helperMode {
+	case "mcp-stdio-helper":
+		runMCPHelperProcess()
+		os.Exit(0)
+	case "mcp-stdio-fail-helper":
+		runMCPFailHelperProcess()
+		os.Exit(2)
+	}
 }
 
 func runMCPHelperProcess() {
@@ -247,6 +321,10 @@ func runMCPHelperProcess() {
 		_, _ = io.WriteString(writer, fmt.Sprintf("Content-Length: %d\r\n\r\n", len(resp)))
 		_, _ = writer.Write(resp)
 	}
+}
+
+func runMCPFailHelperProcess() {
+	_, _ = io.WriteString(os.Stderr, "intentional-helper-failure: bootstrap error\n")
 }
 
 func TestReadSSEEndpointEvent(t *testing.T) {

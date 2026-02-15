@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/MEKXH/golem/internal/config"
 )
@@ -49,16 +50,26 @@ func (c stdioConnector) Connect(ctx context.Context, serverName string, cfg conf
 	}
 
 	client := &stdioClient{
-		cmd:    cmd,
-		stdin:  stdin,
-		reader: bufio.NewReader(stdout),
+		serverName: serverName,
+		cmd:        cmd,
+		stdin:      stdin,
+		reader:     bufio.NewReader(stdout),
+		stderr:     newTailBuffer(4096),
+		exitDone:   make(chan struct{}),
 	}
 
-	// Drain stderr to avoid potential blocking when server writes diagnostics.
-	go io.Copy(io.Discard, stderr)
+	// Drain stderr to avoid blocking and retain a bounded tail for diagnostics.
+	go io.Copy(client.stderr, stderr)
+	go func() {
+		client.markExited(cmd.Wait())
+	}()
 
 	if err := initializeClient(ctx, client); err != nil {
-		return nil, err
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		client.waitForExit(500 * time.Millisecond)
+		return nil, client.decorateError(err)
 	}
 	return client, nil
 }
@@ -95,9 +106,16 @@ func mergeEnv(extra map[string]string) []string {
 }
 
 type stdioClient struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	reader *bufio.Reader
+	serverName string
+	cmd        *exec.Cmd
+	stdin      io.WriteCloser
+	reader     *bufio.Reader
+	stderr     *tailBuffer
+
+	exitMu   sync.RWMutex
+	exited   bool
+	exitErr  error
+	exitDone chan struct{}
 
 	mu     sync.Mutex
 	nextID int64
@@ -127,6 +145,10 @@ func (c *stdioClient) CallTool(ctx context.Context, toolName, argsJSON string) (
 }
 
 func (c *stdioClient) invoke(ctx context.Context, method string, params any) (any, error) {
+	if err := c.processExitError(); err != nil {
+		return nil, c.decorateError(err)
+	}
+
 	id := atomic.AddInt64(&c.nextID, 1)
 	payload, err := json.Marshal(map[string]any{
 		"jsonrpc": jsonRPCVersion,
@@ -142,7 +164,7 @@ func (c *stdioClient) invoke(ctx context.Context, method string, params any) (an
 	defer c.mu.Unlock()
 
 	if err := c.writeFramed(payload); err != nil {
-		return nil, err
+		return nil, c.decorateError(err)
 	}
 
 	for {
@@ -154,7 +176,7 @@ func (c *stdioClient) invoke(ctx context.Context, method string, params any) (an
 
 		responsePayload, err := c.readFramed()
 		if err != nil {
-			return nil, err
+			return nil, c.decorateError(err)
 		}
 		result, matched, err := decodeRPCResponse(responsePayload, id)
 		if err != nil {
@@ -168,6 +190,10 @@ func (c *stdioClient) invoke(ctx context.Context, method string, params any) (an
 }
 
 func (c *stdioClient) notify(ctx context.Context, method string, params any) error {
+	if err := c.processExitError(); err != nil {
+		return c.decorateError(err)
+	}
+
 	payload, err := json.Marshal(map[string]any{
 		"jsonrpc": jsonRPCVersion,
 		"method":  method,
@@ -179,7 +205,7 @@ func (c *stdioClient) notify(ctx context.Context, method string, params any) err
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.writeFramed(payload)
+	return c.decorateError(c.writeFramed(payload))
 }
 
 func (c *stdioClient) writeFramed(payload []byte) error {
@@ -204,6 +230,90 @@ func (c *stdioClient) readFramed() ([]byte, error) {
 		return nil, fmt.Errorf("read mcp payload: %w", err)
 	}
 	return body, nil
+}
+
+func (c *stdioClient) markExited(err error) {
+	c.exitMu.Lock()
+	defer c.exitMu.Unlock()
+
+	if c.exited {
+		return
+	}
+	c.exited = true
+	c.exitErr = err
+	close(c.exitDone)
+}
+
+func (c *stdioClient) waitForExit(timeout time.Duration) {
+	if timeout <= 0 {
+		return
+	}
+	select {
+	case <-c.exitDone:
+	case <-time.After(timeout):
+	}
+}
+
+func (c *stdioClient) processExitError() error {
+	c.exitMu.RLock()
+	defer c.exitMu.RUnlock()
+
+	if !c.exited {
+		return nil
+	}
+	if c.exitErr == nil {
+		return fmt.Errorf("mcp stdio server %q exited", c.serverName)
+	}
+	return fmt.Errorf("mcp stdio server %q exited: %w", c.serverName, c.exitErr)
+}
+
+func (c *stdioClient) decorateError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	stderrTail := strings.TrimSpace(c.stderr.String())
+	if processErr := c.processExitError(); processErr != nil {
+		if stderrTail != "" {
+			return fmt.Errorf("%w; process=%v; stderr=%s", err, processErr, stderrTail)
+		}
+		return fmt.Errorf("%w; process=%v", err, processErr)
+	}
+
+	if stderrTail != "" {
+		return fmt.Errorf("%w; stderr=%s", err, stderrTail)
+	}
+	return err
+}
+
+type tailBuffer struct {
+	mu  sync.Mutex
+	max int
+	buf []byte
+}
+
+func newTailBuffer(max int) *tailBuffer {
+	if max <= 0 {
+		max = 1024
+	}
+	return &tailBuffer{max: max}
+}
+
+func (b *tailBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.buf = append(b.buf, p...)
+	if len(b.buf) > b.max {
+		b.buf = append([]byte(nil), b.buf[len(b.buf)-b.max:]...)
+	}
+	return len(p), nil
+}
+
+func (b *tailBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return string(b.buf)
 }
 
 func readContentLength(reader *bufio.Reader) (int, error) {

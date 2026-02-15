@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +20,35 @@ import (
 
 type httpSSEConnector struct {
 	client *http.Client
+}
+
+const (
+	httpSSERequestMaxAttempts = 2
+	httpSSERetryBaseBackoff   = 150 * time.Millisecond
+)
+
+type retryableError struct {
+	err error
+}
+
+func (e retryableError) Error() string {
+	return e.err.Error()
+}
+
+func (e retryableError) Unwrap() error {
+	return e.err
+}
+
+func makeRetryable(err error) error {
+	if err == nil {
+		return nil
+	}
+	return retryableError{err: err}
+}
+
+func isRetryable(err error) bool {
+	var target retryableError
+	return errors.As(err, &target)
 }
 
 func newHTTPSSEConnector() Connector {
@@ -214,16 +244,24 @@ func (c *httpSSEClient) invoke(ctx context.Context, method string, params any) (
 
 	var lastErr error
 	for _, endpoint := range c.messageEndpoints {
-		result, err := c.postAndReadResponse(ctx, endpoint, reqBody, id)
-		if err == nil {
-			return result, nil
+		for attempt := 0; attempt < httpSSERequestMaxAttempts; attempt++ {
+			result, err := c.postAndReadResponse(ctx, endpoint, reqBody, id)
+			if err == nil {
+				return result, nil
+			}
+			lastErr = fmt.Errorf("endpoint=%s attempt=%d/%d: %w", endpoint, attempt+1, httpSSERequestMaxAttempts, err)
+			if !isRetryable(err) || attempt == httpSSERequestMaxAttempts-1 {
+				break
+			}
+			if err := waitHTTPSSERetry(ctx, attempt+1); err != nil {
+				return nil, err
+			}
 		}
-		lastErr = err
 	}
 	if lastErr == nil {
 		lastErr = fmt.Errorf("no message endpoint available")
 	}
-	return nil, lastErr
+	return nil, fmt.Errorf("mcp http_sse invoke %s failed: %w", strings.TrimSpace(method), lastErr)
 }
 
 func (c *httpSSEClient) notify(ctx context.Context, method string, params any) error {
@@ -241,32 +279,53 @@ func (c *httpSSEClient) notify(ctx context.Context, method string, params any) e
 
 	var lastErr error
 	for _, endpoint := range c.messageEndpoints {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(reqBody))
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "application/json, text/event-stream")
-		applyHeaders(req.Header, c.headers)
+		for attempt := 0; attempt < httpSSERequestMaxAttempts; attempt++ {
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(reqBody))
+			if err != nil {
+				lastErr = err
+				break
+			}
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept", "application/json, text/event-stream")
+			applyHeaders(req.Header, c.headers)
 
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+			resp, err := c.httpClient.Do(req)
+			if err != nil {
+				lastErr = makeRetryable(err)
+				if !isRetryable(lastErr) || attempt == httpSSERequestMaxAttempts-1 {
+					break
+				}
+				if err := waitHTTPSSERetry(ctx, attempt+1); err != nil {
+					return err
+				}
+				continue
+			}
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
 
-		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			return nil
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				return nil
+			}
+
+			statusErr := fmt.Errorf("notification request failed with status %s", resp.Status)
+			if shouldRetryHTTPStatus(resp.StatusCode) {
+				lastErr = makeRetryable(statusErr)
+				if attempt < httpSSERequestMaxAttempts-1 {
+					if err := waitHTTPSSERetry(ctx, attempt+1); err != nil {
+						return err
+					}
+					continue
+				}
+			} else {
+				lastErr = statusErr
+			}
+			break
 		}
-		lastErr = fmt.Errorf("notification request failed with status %s", resp.Status)
 	}
 	if lastErr == nil {
 		lastErr = fmt.Errorf("no message endpoint available")
 	}
-	return lastErr
+	return fmt.Errorf("mcp http_sse notify %s failed: %w", strings.TrimSpace(method), lastErr)
 }
 
 func (c *httpSSEClient) postAndReadResponse(ctx context.Context, endpoint string, reqBody []byte, id int64) (any, error) {
@@ -280,7 +339,7 @@ func (c *httpSSEClient) postAndReadResponse(ctx context.Context, endpoint string
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, makeRetryable(err)
 	}
 	defer resp.Body.Close()
 
@@ -290,7 +349,11 @@ func (c *httpSSEClient) postAndReadResponse(ctx context.Context, endpoint string
 		if msg == "" {
 			msg = resp.Status
 		}
-		return nil, fmt.Errorf("mcp http request failed: %s", msg)
+		statusErr := fmt.Errorf("mcp http request failed: %s", msg)
+		if shouldRetryHTTPStatus(resp.StatusCode) {
+			return nil, makeRetryable(statusErr)
+		}
+		return nil, statusErr
 	}
 
 	contentType := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
@@ -310,6 +373,29 @@ func (c *httpSSEClient) postAndReadResponse(ctx context.Context, endpoint string
 		return nil, fmt.Errorf("json-rpc response id mismatch")
 	}
 	return result, nil
+}
+
+func shouldRetryHTTPStatus(statusCode int) bool {
+	if statusCode == http.StatusRequestTimeout || statusCode == http.StatusTooManyRequests {
+		return true
+	}
+	return statusCode >= 500 && statusCode <= 599
+}
+
+func waitHTTPSSERetry(ctx context.Context, retryIndex int) error {
+	if retryIndex <= 0 {
+		return nil
+	}
+	backoff := time.Duration(retryIndex) * httpSSERetryBaseBackoff
+	timer := time.NewTimer(backoff)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func readRPCResultFromSSE(ctx context.Context, body io.Reader, expectedID int64) (any, error) {
