@@ -242,7 +242,7 @@ golem run
 | `golem init` | 初始化配置和工作区 |
 | `golem chat [message]` | 启动 TUI 对话或单次发送消息 |
 | `golem run` | 启动服务模式 |
-| `golem status` | 查看系统状态摘要 |
+| `golem status [--json]` | 查看系统状态摘要（文本或 JSON） |
 | `golem auth login --provider <name> [--token <token> \| --device-code \| --browser]` | 通过 token 或 OAuth 保存 provider 凭据 |
 | `golem auth logout [--provider <name>]` | 删除指定 provider 凭据，或删除全部凭据 |
 | `golem auth status` | 查看当前认证凭据状态 |

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,6 +49,9 @@ func TestStatusCommand_PrintsConfig(t *testing.T) {
 	}
 	if !strings.Contains(output, "edit_file: ready") || !strings.Contains(output, "append_file: ready") {
 		t.Fatalf("expected edit/append tool readiness lines, got: %s", output)
+	}
+	if !strings.Contains(output, "workflow: ready") {
+		t.Fatalf("expected workflow readiness line, got: %s", output)
 	}
 }
 
@@ -104,5 +108,74 @@ func TestStatusCommand_PrintsRuntimeMetricsSnapshot(t *testing.T) {
 	}
 	if !strings.Contains(output, "channel_send_failure_ratio=1.000") {
 		t.Fatalf("expected channel failure ratio in runtime metrics output, got: %s", output)
+	}
+}
+
+func TestStatusCommand_JSONOutputIncludesRuntimeMetrics(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	workspacePath := filepath.Join(tmpDir, ".golem", "workspace")
+	recorder := metrics.NewRuntimeMetrics(workspacePath)
+	_, _ = recorder.RecordToolExecution(80*time.Millisecond, "", nil)
+	_, _ = recorder.RecordChannelSend(true)
+	_, _ = recorder.RecordMemoryRecall(2, map[string]int{
+		"diary_recent": 2,
+	})
+
+	cmd := NewStatusCmd()
+	if err := cmd.Flags().Set("json", "true"); err != nil {
+		t.Fatalf("set --json: %v", err)
+	}
+
+	output := captureOutput(t, func() {
+		if err := runStatus(cmd, nil); err != nil {
+			t.Fatalf("runStatus error: %v", err)
+		}
+	})
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(output), &payload); err != nil {
+		t.Fatalf("invalid json output: %v, output=%s", err, output)
+	}
+	if strings.TrimSpace(toString(payload["generated_at"])) == "" {
+		t.Fatalf("expected generated_at in json output, got: %v", payload)
+	}
+	runtimeMetrics, ok := payload["runtime_metrics"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected runtime_metrics object, got: %#v", payload["runtime_metrics"])
+	}
+	tool, ok := runtimeMetrics["tool"].(map[string]any)
+	if !ok || toFloat64(tool["total"]) < 1 {
+		t.Fatalf("expected tool metrics in json output, got: %#v", runtimeMetrics["tool"])
+	}
+	channel, ok := runtimeMetrics["channel"].(map[string]any)
+	if !ok || toFloat64(channel["send_attempts"]) < 1 {
+		t.Fatalf("expected channel metrics in json output, got: %#v", runtimeMetrics["channel"])
+	}
+	memorySection, ok := runtimeMetrics["memory"].(map[string]any)
+	if !ok || toFloat64(memorySection["total_items"]) < 1 {
+		t.Fatalf("expected memory metrics in json output, got: %#v", runtimeMetrics["memory"])
+	}
+}
+
+func toString(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func toFloat64(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	default:
+		return 0
 	}
 }

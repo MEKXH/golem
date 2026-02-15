@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -18,6 +19,27 @@ type DiaryEntry struct {
 	Date    string
 	Path    string
 	Content string
+}
+
+// RecallItem is one recalled memory fragment with source attribution.
+type RecallItem struct {
+	Source  string
+	Date    string
+	Path    string
+	Excerpt string
+}
+
+// RecallResult summarizes context recall quality and provenance.
+type RecallResult struct {
+	Query       string
+	RecallCount int
+	SourceHits  map[string]int
+	Items       []RecallItem
+}
+
+type diaryFile struct {
+	date string
+	path string
 }
 
 type Manager struct {
@@ -112,32 +134,9 @@ func (m *Manager) ReadRecentDiaries(limit int) ([]DiaryEntry, error) {
 	if err := m.Ensure(); err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(m.memoryDir)
+	diaries, err := m.collectDiaryFiles()
 	if err != nil {
 		return nil, err
-	}
-
-	type diaryFile struct {
-		date string
-		path string
-	}
-	var diaries []diaryFile
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if name == memoryFileName || !strings.HasSuffix(name, ".md") {
-			continue
-		}
-		date := strings.TrimSuffix(name, ".md")
-		if _, err := time.Parse("2006-01-02", date); err != nil {
-			continue
-		}
-		diaries = append(diaries, diaryFile{
-			date: date,
-			path: filepath.Join(m.memoryDir, name),
-		})
 	}
 
 	sort.Slice(diaries, func(i, j int) bool {
@@ -167,4 +166,214 @@ func (m *Manager) ReadRecentDiaries(limit int) ([]DiaryEntry, error) {
 		})
 	}
 	return out, nil
+}
+
+// RecallContext selects context fragments using recent-first + keyword-hit strategy.
+func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (RecallResult, error) {
+	if recentLimit <= 0 {
+		recentLimit = 3
+	}
+	if keywordLimit <= 0 {
+		keywordLimit = 3
+	}
+	if err := m.Ensure(); err != nil {
+		return RecallResult{}, err
+	}
+
+	result := RecallResult{
+		Query:      strings.TrimSpace(query),
+		SourceHits: map[string]int{},
+		Items:      make([]RecallItem, 0, recentLimit+keywordLimit+1),
+	}
+	seenPaths := map[string]bool{}
+
+	recentEntries, err := m.ReadRecentDiaries(recentLimit)
+	if err != nil {
+		return RecallResult{}, err
+	}
+	for _, entry := range recentEntries {
+		result.SourceHits["diary_recent"]++
+		if seenPaths[entry.Path] {
+			continue
+		}
+		seenPaths[entry.Path] = true
+		result.Items = append(result.Items, RecallItem{
+			Source:  "diary_recent",
+			Date:    entry.Date,
+			Path:    entry.Path,
+			Excerpt: clipText(entry.Content, 320),
+		})
+	}
+
+	keywords := extractRecallKeywords(result.Query)
+	if len(keywords) == 0 {
+		result.RecallCount = len(result.Items)
+		return result, nil
+	}
+
+	longTerm, err := m.ReadLongTerm()
+	if err != nil {
+		return RecallResult{}, err
+	}
+	if strings.TrimSpace(longTerm) != "" && containsAnyKeyword(longTerm, keywords) {
+		result.SourceHits["long_term"]++
+		result.Items = append(result.Items, RecallItem{
+			Source:  "long_term",
+			Date:    "",
+			Path:    m.memoryFile,
+			Excerpt: extractKeywordExcerpt(longTerm, keywords, 380),
+		})
+	}
+
+	diaries, err := m.collectDiaryFiles()
+	if err != nil {
+		return RecallResult{}, err
+	}
+	sort.Slice(diaries, func(i, j int) bool {
+		return diaries[i].date > diaries[j].date
+	})
+
+	addedKeywordItems := 0
+	for _, d := range diaries {
+		contentRaw, readErr := os.ReadFile(d.path)
+		if readErr != nil {
+			continue
+		}
+		content := strings.TrimSpace(string(contentRaw))
+		if content == "" || !containsAnyKeyword(content, keywords) {
+			continue
+		}
+
+		result.SourceHits["diary_keyword"]++
+		if seenPaths[d.path] {
+			continue
+		}
+		if addedKeywordItems >= keywordLimit {
+			continue
+		}
+		seenPaths[d.path] = true
+		addedKeywordItems++
+		result.Items = append(result.Items, RecallItem{
+			Source:  "diary_keyword",
+			Date:    d.date,
+			Path:    d.path,
+			Excerpt: extractKeywordExcerpt(content, keywords, 300),
+		})
+	}
+
+	result.RecallCount = len(result.Items)
+	return result, nil
+}
+
+func (m *Manager) collectDiaryFiles() ([]diaryFile, error) {
+	entries, err := os.ReadDir(m.memoryDir)
+	if err != nil {
+		return nil, err
+	}
+
+	diaries := make([]diaryFile, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if name == memoryFileName || !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		date := strings.TrimSuffix(name, ".md")
+		if _, err := time.Parse("2006-01-02", date); err != nil {
+			continue
+		}
+		diaries = append(diaries, diaryFile{
+			date: date,
+			path: filepath.Join(m.memoryDir, name),
+		})
+	}
+	return diaries, nil
+}
+
+func extractRecallKeywords(query string) []string {
+	query = strings.TrimSpace(strings.ToLower(query))
+	if query == "" {
+		return nil
+	}
+
+	parts := strings.FieldsFunc(query, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r) && !unicode.Is(unicode.Han, r)
+	})
+	seen := map[string]bool{}
+	keywords := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" || seen[p] {
+			continue
+		}
+		if utf8RuneLen(p) < 2 {
+			continue
+		}
+		seen[p] = true
+		keywords = append(keywords, p)
+	}
+	return keywords
+}
+
+func containsAnyKeyword(content string, keywords []string) bool {
+	contentLower := strings.ToLower(content)
+	for _, keyword := range keywords {
+		if strings.Contains(contentLower, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func extractKeywordExcerpt(content string, keywords []string, maxLen int) string {
+	if maxLen <= 0 {
+		maxLen = 280
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return ""
+	}
+
+	contentLower := strings.ToLower(content)
+	matchIndex := -1
+	for _, keyword := range keywords {
+		idx := strings.Index(contentLower, keyword)
+		if idx >= 0 && (matchIndex == -1 || idx < matchIndex) {
+			matchIndex = idx
+		}
+	}
+	if matchIndex < 0 {
+		return clipText(content, maxLen)
+	}
+
+	start := matchIndex - maxLen/3
+	if start < 0 {
+		start = 0
+	}
+	end := start + maxLen
+	if end > len(content) {
+		end = len(content)
+	}
+	snippet := strings.TrimSpace(content[start:end])
+	if start > 0 {
+		snippet = "..." + snippet
+	}
+	if end < len(content) {
+		snippet += "..."
+	}
+	return snippet
+}
+
+func clipText(content string, maxLen int) string {
+	content = strings.TrimSpace(content)
+	if maxLen <= 0 || len(content) <= maxLen {
+		return content
+	}
+	return strings.TrimSpace(content[:maxLen]) + "..."
+}
+
+func utf8RuneLen(text string) int {
+	return len([]rune(text))
 }

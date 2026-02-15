@@ -240,7 +240,7 @@ golem run
 | `golem init` | Initialize config and workspace |
 | `golem chat [message]` | Start TUI chat or send one-shot message |
 | `golem run` | Start server mode |
-| `golem status` | Show system status summary |
+| `golem status [--json]` | Show system status summary (human-readable or JSON) |
 | `golem auth login --provider <name> [--token <token> \| --device-code \| --browser]` | Save provider credentials via token or OAuth |
 | `golem auth logout [--provider <name>]` | Remove one provider credential or all credentials |
 | `golem auth status` | Show current auth credential status |

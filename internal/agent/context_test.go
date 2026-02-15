@@ -83,3 +83,33 @@ func TestBuildSystemPrompt_IncludesBuiltinSkillsSummary(t *testing.T) {
 		t.Fatalf("expected builtin skill summary in prompt, got: %s", prompt)
 	}
 }
+
+func TestBuildMessages_UsesKeywordMemoryRecallWithStats(t *testing.T) {
+	workspace := t.TempDir()
+	memDir := filepath.Join(workspace, "memory")
+	if err := os.MkdirAll(memDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "MEMORY.md"), []byte("payment timeout runbook and mitigation"), 0o644); err != nil {
+		t.Fatalf("WriteFile MEMORY: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "2026-02-15.md"), []byte("- [08:00:00] payment timeout in us-east"), 0o644); err != nil {
+		t.Fatalf("WriteFile diary: %v", err)
+	}
+
+	cb := NewContextBuilder(workspace)
+	msgs := cb.BuildMessages(nil, "Investigate payment timeout", nil)
+	if len(msgs) < 2 {
+		t.Fatalf("expected at least 2 messages, got %d", len(msgs))
+	}
+	sys := msgs[0].Content
+	if !strings.Contains(sys, "Memory Recall") {
+		t.Fatalf("expected memory recall section in system prompt, got: %s", sys)
+	}
+	if !strings.Contains(sys, "recall_count:") || !strings.Contains(sys, "hit_sources:") {
+		t.Fatalf("expected recall observability fields in prompt, got: %s", sys)
+	}
+	if !strings.Contains(strings.ToLower(sys), "payment timeout") {
+		t.Fatalf("expected keyword recall content in prompt, got: %s", sys)
+	}
+}

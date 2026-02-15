@@ -15,6 +15,7 @@ Golem is a terminal-first personal AI assistant built with Go and Eino. It suppo
 - Approval workflow for high-risk tools (`golem approval list|approve|reject`)
 - MCP dynamic tool registration (`mcp.<server>.<tool>`) with degraded-server isolation
 - Audit trail for policy decisions and tool execution
+- Keyword-aware memory recall with source-level observability (`recall_count`, `hit_sources`)
 - Skills system (workspace/global/builtin)
 - Gateway HTTP API
 - Auth store with token/OAuth login
@@ -67,7 +68,7 @@ This creates config/workspace basics and builtin skills.
 | `<workspace>/state/heartbeat.json` | Persisted latest heartbeat target |
 | `<workspace>/state/approvals.json` | Approval request store |
 | `<workspace>/state/audit.jsonl` | Append-only audit trail |
-| `<workspace>/state/runtime_metrics.json` | Runtime metrics snapshot (tool/channel ratios and latency summary) |
+| `<workspace>/state/runtime_metrics.json` | Runtime metrics snapshot (tool/channel/memory-recall summary) |
 
 `<workspace>` is resolved by `agents.defaults.workspace_mode`:
 
@@ -375,6 +376,7 @@ Prints config/workspace/provider/tool/channel/gateway/cron/skills status and run
 
 ```bash
 golem status
+golem status --json
 ```
 
 Runtime metrics section includes:
@@ -384,6 +386,26 @@ Runtime metrics section includes:
 - `tool_timeout_ratio`
 - `tool_p95_proxy_ms`
 - `channel_send_failure_ratio`
+- memory recall fields in JSON mode:
+- `memory.recalls`
+- `memory.total_items`
+- `memory.long_term_hits`
+- `memory.diary_recent_hits`
+- `memory.diary_keyword_hits`
+
+Example (`golem status --json`):
+
+```json
+{
+  "generated_at": "2026-02-16T00:00:00Z",
+  "runtime_metrics": {
+    "updated_at": "2026-02-16T00:00:00Z",
+    "tool": { "total": 42 },
+    "channel": { "send_attempts": 10, "send_failures": 1 },
+    "memory": { "recalls": 6, "total_items": 14, "long_term_hits": 3 }
+  }
+}
+```
 
 ## 7.6 `golem auth`
 

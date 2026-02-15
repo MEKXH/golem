@@ -23,6 +23,7 @@ type RuntimeSnapshot struct {
 	UpdatedAt time.Time    `json:"updated_at"`
 	Tool      ToolStats    `json:"tool"`
 	Channel   ChannelStats `json:"channel"`
+	Memory    MemoryStats  `json:"memory"`
 }
 
 // ToolStats tracks tool execution metrics.
@@ -64,6 +65,17 @@ func (t ToolStats) AvgLatencyMs() float64 {
 type ChannelStats struct {
 	SendAttempts int64 `json:"send_attempts"`
 	SendFailures int64 `json:"send_failures"`
+}
+
+// MemoryStats tracks memory recall observability.
+type MemoryStats struct {
+	Recalls          int64 `json:"recalls"`
+	TotalItems       int64 `json:"total_items"`
+	LastItems        int64 `json:"last_items"`
+	EmptyRecalls     int64 `json:"empty_recalls"`
+	LongTermHits     int64 `json:"long_term_hits"`
+	DiaryRecentHits  int64 `json:"diary_recent_hits"`
+	DiaryKeywordHits int64 `json:"diary_keyword_hits"`
 }
 
 // FailureRatio returns failures/attempts in [0,1].
@@ -156,6 +168,33 @@ func (m *RuntimeMetrics) RecordChannelSend(success bool) (RuntimeSnapshot, error
 	if !success {
 		m.snap.Channel.SendFailures++
 	}
+	snapshot := m.snap
+	m.mu.Unlock()
+
+	return snapshot, persistRuntimeSnapshot(m.path, snapshot)
+}
+
+// RecordMemoryRecall records memory recall count and hit-source breakdown.
+func (m *RuntimeMetrics) RecordMemoryRecall(itemCount int, sourceHits map[string]int) (RuntimeSnapshot, error) {
+	if m == nil {
+		return RuntimeSnapshot{}, nil
+	}
+	if itemCount < 0 {
+		itemCount = 0
+	}
+	now := time.Now().UTC()
+
+	m.mu.Lock()
+	m.snap.UpdatedAt = now
+	m.snap.Memory.Recalls++
+	m.snap.Memory.TotalItems += int64(itemCount)
+	m.snap.Memory.LastItems = int64(itemCount)
+	if itemCount == 0 {
+		m.snap.Memory.EmptyRecalls++
+	}
+	m.snap.Memory.LongTermHits += int64(sourceHits["long_term"])
+	m.snap.Memory.DiaryRecentHits += int64(sourceHits["diary_recent"])
+	m.snap.Memory.DiaryKeywordHits += int64(sourceHits["diary_keyword"])
 	snapshot := m.snap
 	m.mu.Unlock()
 

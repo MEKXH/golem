@@ -10,11 +10,12 @@ Golem 是一个终端优先的个人 AI 助手，基于 Go + Eino 构建，支�
 
 - 交互式对话（`golem chat`）
 - 常驻多渠道服务（`golem run`）
-- 可调用工具的 Agent 循环（文件、Shell、记忆、网页、Cron、消息、子 Agent）
+- 可调用工具的 Agent 循环（文件、Shell、记忆、网页、Cron、消息、子 Agent、workflow）
 - 策略守卫模式（`strict`/`relaxed`/`off`）与 `off_ttl` 到期回收
 - 高风险工具审批流（`golem approval list|approve|reject`）
 - MCP 动态工具注册（`mcp.<server>.<tool>`）与故障隔离降级
 - 策略决策与工具执行审计日志
+- 关键词感知记忆召回与来源可观测字段（`recall_count`、`hit_sources`）
 - 技能系统（工作区/全局/内置）
 - Gateway HTTP API
 - 认证存储（Token/OAuth 登录）
@@ -67,7 +68,7 @@ golem init
 | `<workspace>/state/heartbeat.json` | 心跳目标会话持久化 |
 | `<workspace>/state/approvals.json` | 审批请求持久化 |
 | `<workspace>/state/audit.jsonl` | 追加写入的审计日志 |
-| `<workspace>/state/runtime_metrics.json` | 运行时指标快照（工具/通道比率与延迟摘要） |
+| `<workspace>/state/runtime_metrics.json` | 运行时指标快照（工具/通道/记忆召回摘要） |
 
 `<workspace>` 由 `agents.defaults.workspace_mode` 决定：
 
@@ -375,6 +376,7 @@ golem run
 
 ```bash
 golem status
+golem status --json
 ```
 
 运行时指标字段包括：
@@ -384,6 +386,26 @@ golem status
 - `tool_timeout_ratio`
 - `tool_p95_proxy_ms`
 - `channel_send_failure_ratio`
+- JSON 模式中的记忆召回字段：
+- `memory.recalls`
+- `memory.total_items`
+- `memory.long_term_hits`
+- `memory.diary_recent_hits`
+- `memory.diary_keyword_hits`
+
+示例（`golem status --json`）：
+
+```json
+{
+  "generated_at": "2026-02-16T00:00:00Z",
+  "runtime_metrics": {
+    "updated_at": "2026-02-16T00:00:00Z",
+    "tool": { "total": 42 },
+    "channel": { "send_attempts": 10, "send_failures": 1 },
+    "memory": { "recalls": 6, "total_items": 14, "long_term_hits": 3 }
+  }
+}
+```
 
 ## 7.6 `golem auth`
 

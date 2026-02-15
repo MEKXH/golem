@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,14 +16,21 @@ import (
 )
 
 func NewStatusCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show Golem configuration status",
 		RunE:  runStatus,
 	}
+	cmd.Flags().Bool("json", false, "Output machine-readable JSON")
+	return cmd
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
+	jsonOutput := false
+	if cmd != nil {
+		jsonOutput, _ = cmd.Flags().GetBool("json")
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -30,6 +38,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	workspacePath, err := cfg.WorkspacePathChecked()
 	if err != nil {
 		return fmt.Errorf("invalid workspace: %w", err)
+	}
+	runtimeSnapshot, runtimeErr := metrics.ReadRuntimeSnapshot(workspacePath)
+	if jsonOutput {
+		return printStatusJSON(cfg, workspacePath, runtimeSnapshot, runtimeErr)
 	}
 
 	fmt.Println("=== Golem Status ===")
@@ -58,9 +70,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	// Runtime metrics
 	fmt.Println("\nRuntime Metrics:")
-	runtimeSnapshot, err := metrics.ReadRuntimeSnapshot(workspacePath)
-	if err != nil {
-		fmt.Printf("  Status: unavailable (%v)\n", err)
+	if runtimeErr != nil {
+		fmt.Printf("  Status: unavailable (%v)\n", runtimeErr)
 	} else if !runtimeSnapshot.HasData() {
 		fmt.Println("  Status: no runtime data yet")
 	} else {
@@ -127,6 +138,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("  voice_transcription: %s\n", voiceStatus)
 	fmt.Println("  manage_cron: ready")
+	fmt.Println("  workflow: ready")
 
 	// Channels
 	fmt.Println("\nChannels:")
@@ -180,4 +192,124 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func printStatusJSON(cfg *config.Config, workspacePath string, runtimeSnapshot metrics.RuntimeSnapshot, runtimeErr error) error {
+	configExists := false
+	if _, err := os.Stat(config.ConfigPath()); err == nil {
+		configExists = true
+	}
+	workspaceExists := false
+	if _, err := os.Stat(workspacePath); err == nil {
+		workspaceExists = true
+	}
+	workspaceMode := strings.TrimSpace(cfg.Agents.Defaults.WorkspaceMode)
+	if workspaceMode == "" {
+		workspaceMode = "default"
+	}
+
+	providers := map[string]bool{
+		"openrouter": strings.TrimSpace(cfg.Providers.OpenRouter.APIKey) != "",
+		"claude":     strings.TrimSpace(cfg.Providers.Claude.APIKey) != "",
+		"openai":     strings.TrimSpace(cfg.Providers.OpenAI.APIKey) != "",
+		"deepseek":   strings.TrimSpace(cfg.Providers.DeepSeek.APIKey) != "",
+		"gemini":     strings.TrimSpace(cfg.Providers.Gemini.APIKey) != "",
+		"ollama":     strings.TrimSpace(cfg.Providers.Ollama.BaseURL) != "",
+	}
+
+	toolsState := map[string]string{
+		"read_file":           "ready",
+		"write_file":          "ready",
+		"edit_file":           "ready",
+		"append_file":         "ready",
+		"list_dir":            "ready",
+		"read_memory":         "ready",
+		"write_memory":        "ready",
+		"append_diary":        "ready",
+		"web_fetch":           "ready",
+		"manage_cron":         "ready",
+		"workflow":            "ready",
+		"voice_transcription": "disabled",
+	}
+	if cfg.Tools.Voice.Enabled {
+		toolsState["voice_transcription"] = fmt.Sprintf(
+			"enabled (provider=%s, model=%s, timeout=%ds)",
+			cfg.Tools.Voice.Provider,
+			cfg.Tools.Voice.Model,
+			cfg.Tools.Voice.TimeoutSeconds,
+		)
+	}
+	toolsState["exec"] = fmt.Sprintf(
+		"ready (timeout=%ds, restrict_to_workspace=%v)",
+		cfg.Tools.Exec.Timeout,
+		cfg.Tools.Exec.RestrictToWorkspace,
+	)
+	toolsState["web_search"] = "enabled (DuckDuckGo fallback)"
+	if strings.TrimSpace(cfg.Tools.Web.Search.APIKey) != "" {
+		toolsState["web_search"] = "enabled (Brave + DuckDuckGo fallback)"
+	}
+
+	cronStorePath := filepath.Join(workspacePath, "cron", "jobs.json")
+	cronSvc := cron.NewService(cronStorePath, nil)
+	cronTotal := 0
+	cronEnabled := 0
+	cronStatus := "ok"
+	if err := cronSvc.Start(); err == nil {
+		jobs := cronSvc.ListJobs(true)
+		cronTotal = len(jobs)
+		for _, j := range jobs {
+			if j.Enabled {
+				cronEnabled++
+			}
+		}
+		cronSvc.Stop()
+	} else {
+		cronStatus = "unavailable"
+	}
+
+	loader := skills.NewLoader(workspacePath)
+	skillList := loader.ListSkills()
+	skillNames := make([]string, 0, len(skillList))
+	for _, s := range skillList {
+		skillNames = append(skillNames, s.Name)
+	}
+
+	payload := map[string]any{
+		"generated_at": time.Now().UTC().Format(time.RFC3339),
+		"config": map[string]any{
+			"path":   config.ConfigPath(),
+			"exists": configExists,
+		},
+		"workspace": map[string]any{
+			"path":   workspacePath,
+			"exists": workspaceExists,
+			"mode":   workspaceMode,
+		},
+		"model":           cfg.Agents.Defaults.Model,
+		"runtime_metrics": runtimeSnapshot,
+		"providers":       providers,
+		"tools":           toolsState,
+		"channels":        channelStates(cfg),
+		"gateway": map[string]any{
+			"host":             cfg.Gateway.Host,
+			"port":             cfg.Gateway.Port,
+			"token_configured": strings.TrimSpace(cfg.Gateway.Token) != "",
+		},
+		"cron": map[string]any{
+			"status":  cronStatus,
+			"total":   cronTotal,
+			"enabled": cronEnabled,
+		},
+		"skills": map[string]any{
+			"installed": len(skillList),
+			"names":     skillNames,
+		},
+	}
+	if runtimeErr != nil {
+		payload["runtime_metrics_error"] = runtimeErr.Error()
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(payload)
 }

@@ -72,3 +72,32 @@ func TestRuntimeMetrics_ReadRuntimeSnapshot(t *testing.T) {
 		t.Fatalf("unexpected loaded snapshot: %+v", snap)
 	}
 }
+
+func TestRuntimeMetrics_RecordMemoryRecall(t *testing.T) {
+	workspace := t.TempDir()
+	recorder := NewRuntimeMetrics(workspace)
+
+	sourceHits := map[string]int{
+		"long_term":     1,
+		"diary_recent":  2,
+		"diary_keyword": 1,
+	}
+	snap, err := recorder.RecordMemoryRecall(4, sourceHits)
+	if err != nil {
+		t.Fatalf("RecordMemoryRecall error: %v", err)
+	}
+	if snap.Memory.Recalls != 1 || snap.Memory.TotalItems != 4 || snap.Memory.LastItems != 4 {
+		t.Fatalf("unexpected memory summary: %+v", snap.Memory)
+	}
+	if snap.Memory.LongTermHits != 1 || snap.Memory.DiaryRecentHits != 2 || snap.Memory.DiaryKeywordHits != 1 {
+		t.Fatalf("unexpected memory source hits: %+v", snap.Memory)
+	}
+
+	loaded, err := ReadRuntimeSnapshot(workspace)
+	if err != nil {
+		t.Fatalf("ReadRuntimeSnapshot error: %v", err)
+	}
+	if loaded.Memory.TotalItems != 4 {
+		t.Fatalf("expected persisted memory items=4, got %+v", loaded.Memory)
+	}
+}

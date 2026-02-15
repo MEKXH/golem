@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/MEKXH/golem/internal/memory"
+	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/session"
 	"github.com/MEKXH/golem/internal/skills"
 	"github.com/cloudwego/eino/schema"
@@ -24,8 +26,29 @@ func NewContextBuilder(workspacePath string) *ContextBuilder {
 
 // BuildSystemPrompt assembles the system prompt
 func (c *ContextBuilder) BuildSystemPrompt() string {
-	var parts []string
+	parts := c.buildBaseSystemPromptParts()
 
+	if mem := c.readWorkspaceFile(filepath.Join("memory", "MEMORY.md")); mem != "" {
+		parts = append(parts, "## Long-term Memory\n"+mem)
+	}
+
+	if diary := c.buildRecentDiarySection(); diary != "" {
+		parts = append(parts, diary)
+	}
+
+	return strings.Join(parts, "\n\n")
+}
+
+func (c *ContextBuilder) buildSystemPromptForInput(query string) string {
+	parts := c.buildBaseSystemPromptParts()
+	if recall := c.buildMemoryRecallSection(query); recall != "" {
+		parts = append(parts, recall)
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
+	parts := make([]string, 0, 8)
 	parts = append(parts, c.coreIdentity())
 
 	bootstrapFiles := []string{"IDENTITY.md", "SOUL.md", "USER.md", "TOOLS.md", "AGENTS.md"}
@@ -38,16 +61,7 @@ func (c *ContextBuilder) BuildSystemPrompt() string {
 	if skillsSummary := skills.NewLoader(c.workspacePath).BuildSkillsSummary(); skillsSummary != "" {
 		parts = append(parts, skillsSummary)
 	}
-
-	if mem := c.readWorkspaceFile(filepath.Join("memory", "MEMORY.md")); mem != "" {
-		parts = append(parts, "## Long-term Memory\n"+mem)
-	}
-
-	if diary := c.buildRecentDiarySection(); diary != "" {
-		parts = append(parts, diary)
-	}
-
-	return strings.Join(parts, "\n\n")
+	return parts
 }
 
 func (c *ContextBuilder) coreIdentity() string {
@@ -80,13 +94,60 @@ func (c *ContextBuilder) buildRecentDiarySection() string {
 	return sb.String()
 }
 
+func (c *ContextBuilder) buildMemoryRecallSection(query string) string {
+	memMgr := memory.NewManager(c.workspacePath)
+	recall, err := memMgr.RecallContext(query, 3, 3)
+	if err != nil || recall.RecallCount == 0 {
+		return ""
+	}
+
+	_, _ = metrics.NewRuntimeMetrics(c.workspacePath).RecordMemoryRecall(recall.RecallCount, recall.SourceHits)
+
+	var sb strings.Builder
+	sb.WriteString("## Memory Recall")
+	sb.WriteString(fmt.Sprintf("\nquery: %s", strings.TrimSpace(query)))
+	sb.WriteString(fmt.Sprintf("\nrecall_count: %d", recall.RecallCount))
+	sb.WriteString(fmt.Sprintf("\nhit_sources: %s", formatSourceHits(recall.SourceHits)))
+
+	for i, item := range recall.Items {
+		label := item.Source
+		if item.Date != "" {
+			label = label + ":" + item.Date
+		}
+		sb.WriteString(fmt.Sprintf("\n\n[%d] %s\n%s", i+1, label, strings.TrimSpace(item.Excerpt)))
+	}
+	return sb.String()
+}
+
+func formatSourceHits(sourceHits map[string]int) string {
+	if len(sourceHits) == 0 {
+		return "none"
+	}
+	keys := make([]string, 0, len(sourceHits))
+	for key, count := range sourceHits {
+		if count > 0 {
+			keys = append(keys, key)
+		}
+	}
+	if len(keys) == 0 {
+		return "none"
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", key, sourceHits[key]))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // BuildMessages constructs the full message list
 func (c *ContextBuilder) BuildMessages(history []*session.Message, current string, media []string) []*schema.Message {
 	messages := make([]*schema.Message, 0, len(history)+2)
+	currentContent := strings.TrimSpace(current)
 
 	messages = append(messages, &schema.Message{
 		Role:    schema.System,
-		Content: c.BuildSystemPrompt(),
+		Content: c.buildSystemPromptForInput(currentContent),
 	})
 
 	for _, h := range history {
@@ -100,7 +161,7 @@ func (c *ContextBuilder) BuildMessages(history []*session.Message, current strin
 		})
 	}
 
-	content := strings.TrimSpace(current)
+	content := currentContent
 	if len(media) > 0 {
 		var mb strings.Builder
 		for _, item := range media {
