@@ -68,6 +68,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err := loop.RegisterDefaultTools(cfg); err != nil {
 		return err
 	}
+	slog.Info("runtime policy configured",
+		"mode", cfg.Policy.Mode,
+		"off_ttl", cfg.Policy.OffTTL,
+		"require_approval", cfg.Policy.RequireApproval,
+	)
 
 	// Initialize cron service.
 	workspacePath, _ := cfg.WorkspacePathChecked()

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
@@ -19,8 +20,33 @@ type Config struct {
 	Providers ProvidersConfig `mapstructure:"providers"`
 	Gateway   GatewayConfig   `mapstructure:"gateway"`
 	Log       LogConfig       `mapstructure:"log"`
+	Policy    PolicyConfig    `mapstructure:"policy"`
+	MCP       MCPConfig       `mapstructure:"mcp"`
 	Tools     ToolsConfig     `mapstructure:"tools"`
 	Heartbeat HeartbeatConfig `mapstructure:"heartbeat"`
+}
+
+// PolicyConfig runtime policy settings.
+type PolicyConfig struct {
+	Mode               string   `mapstructure:"mode"`
+	OffTTL             string   `mapstructure:"off_ttl"`
+	AllowPersistentOff bool     `mapstructure:"allow_persistent_off"`
+	RequireApproval    []string `mapstructure:"require_approval"`
+}
+
+// MCPConfig MCP server settings.
+type MCPConfig struct {
+	Servers map[string]MCPServerConfig `mapstructure:"servers"`
+}
+
+// MCPServerConfig MCP server transport settings.
+type MCPServerConfig struct {
+	Transport string            `mapstructure:"transport"`
+	Command   string            `mapstructure:"command"`
+	Args      []string          `mapstructure:"args"`
+	Env       map[string]string `mapstructure:"env"`
+	URL       string            `mapstructure:"url"`
+	Headers   map[string]string `mapstructure:"headers"`
 }
 
 // AgentsConfig agent settings
@@ -249,6 +275,15 @@ func DefaultConfig() *Config {
 			Level: "info",
 			File:  "",
 		},
+		Policy: PolicyConfig{
+			Mode:               "strict",
+			OffTTL:             "",
+			AllowPersistentOff: false,
+			RequireApproval:    []string{},
+		},
+		MCP: MCPConfig{
+			Servers: map[string]MCPServerConfig{},
+		},
 		Tools: ToolsConfig{
 			Web: WebToolsConfig{
 				Search: WebSearchConfig{
@@ -396,6 +431,59 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("log.level must be one of debug, info, warn, error; got %q", c.Log.Level)
 		}
 		c.Log.Level = level
+	}
+
+	policyMode := strings.ToLower(strings.TrimSpace(c.Policy.Mode))
+	if policyMode == "" {
+		policyMode = "strict"
+	}
+	switch policyMode {
+	case "strict", "relaxed", "off":
+	default:
+		return fmt.Errorf("policy.mode must be one of strict, relaxed, off; got %q", c.Policy.Mode)
+	}
+	c.Policy.Mode = policyMode
+
+	offTTL := strings.TrimSpace(c.Policy.OffTTL)
+	if offTTL != "" {
+		offDuration, err := time.ParseDuration(offTTL)
+		if err != nil {
+			return fmt.Errorf("policy.off_ttl must be a valid duration, got %q: %w", c.Policy.OffTTL, err)
+		}
+		if offDuration <= 0 {
+			return fmt.Errorf("policy.off_ttl must be > 0, got %q", c.Policy.OffTTL)
+		}
+		c.Policy.OffTTL = offTTL
+	}
+	if c.Policy.Mode == "off" && offTTL == "" && !c.Policy.AllowPersistentOff {
+		return fmt.Errorf("policy.mode=off without policy.off_ttl requires policy.allow_persistent_off=true")
+	}
+
+	for serverName, server := range c.MCP.Servers {
+		name := strings.TrimSpace(serverName)
+		if name == "" {
+			return fmt.Errorf("mcp.servers contains an empty server name")
+		}
+		if name != serverName {
+			return fmt.Errorf("mcp.servers.%q has leading or trailing whitespace; use %q", serverName, name)
+		}
+
+		transport := strings.ToLower(strings.TrimSpace(server.Transport))
+		switch transport {
+		case "stdio":
+			if strings.TrimSpace(server.Command) == "" {
+				return fmt.Errorf("mcp.servers.%s.command is required when transport=stdio", serverName)
+			}
+		case "http_sse":
+			if strings.TrimSpace(server.URL) == "" {
+				return fmt.Errorf("mcp.servers.%s.url is required when transport=http_sse", serverName)
+			}
+		default:
+			return fmt.Errorf("mcp.servers.%s.transport must be one of stdio, http_sse; got %q", serverName, server.Transport)
+		}
+
+		server.Transport = transport
+		c.MCP.Servers[serverName] = server
 	}
 
 	if c.Heartbeat.Interval < 0 {

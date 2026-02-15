@@ -11,6 +11,10 @@ Golem 是一个终端优先的个人 AI 助手，基于 Go + Eino 构建，支�
 - 交互式对话（`golem chat`）
 - 常驻多渠道服务（`golem run`）
 - 可调用工具的 Agent 循环（文件、Shell、记忆、网页、Cron、消息、子 Agent）
+- 策略守卫模式（`strict`/`relaxed`/`off`）与 `off_ttl` 到期回收
+- 高风险工具审批流（`golem approval list|approve|reject`）
+- MCP 动态工具注册（`mcp.<server>.<tool>`）与故障隔离降级
+- 策略决策与工具执行审计日志
 - 技能系统（工作区/全局/内置）
 - Gateway HTTP API
 - 认证存储（Token/OAuth 登录）
@@ -61,6 +65,8 @@ golem init
 | `<workspace>/sessions/*.jsonl` | 会话历史持久化 |
 | `<workspace>/cron/jobs.json` | Cron 任务持久化 |
 | `<workspace>/state/heartbeat.json` | 心跳目标会话持久化 |
+| `<workspace>/state/approvals.json` | 审批请求持久化 |
+| `<workspace>/state/audit.jsonl` | 追加写入的审计日志 |
 
 `<workspace>` 由 `agents.defaults.workspace_mode` 决定：
 
@@ -129,6 +135,21 @@ golem run
     "qianfan": { "api_key": "", "secret_key": "", "base_url": "" },
     "qwen": { "api_key": "", "secret_key": "", "base_url": "" },
     "ollama": { "api_key": "", "secret_key": "", "base_url": "http://localhost:11434" }
+  },
+  "policy": {
+    "mode": "strict",
+    "off_ttl": "",
+    "allow_persistent_off": false,
+    "require_approval": ["exec"]
+  },
+  "mcp": {
+    "servers": {
+      "localfs": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+      }
+    }
   },
   "tools": {
     "exec": { "timeout": 60, "restrict_to_workspace": true },
@@ -219,7 +240,28 @@ Provider 选择逻辑：
 | `tools.voice.model` | string | `gpt-4o-mini-transcribe` | OpenAI 兼容转写模型 |
 | `tools.voice.timeout_seconds` | int | `30` | 非负；`0` 会回填为 `30` |
 
-## 5.6 `gateway`、`heartbeat`、`log`
+## 5.6 `policy`、`mcp`
+
+| 键 | 类型 | 默认值 | 规则 |
+| --- | --- | --- | --- |
+| `policy.mode` | string | `strict` | 只能是 `strict`/`relaxed`/`off` |
+| `policy.off_ttl` | string | `""` | 时长（如 `30m`）；`off` 模式下到期后自动回退 strict |
+| `policy.allow_persistent_off` | bool | `false` | 当 `mode=off` 且未设置 `off_ttl` 时必须为 `true` |
+| `policy.require_approval` | array | `[]` | strict 模式下需要审批的工具名列表 |
+| `mcp.servers.<name>.transport` | string | - | `stdio` 或 `http_sse` |
+| `mcp.servers.<name>.command` | string | - | `stdio` 传输必填 |
+| `mcp.servers.<name>.args` | array | `[]` | `stdio` 可选参数 |
+| `mcp.servers.<name>.env` | object | `{}` | `stdio` 可选环境变量 |
+| `mcp.servers.<name>.url` | string | - | `http_sse` 传输必填 |
+| `mcp.servers.<name>.headers` | object | `{}` | `http_sse` 可选请求头 |
+
+说明：
+
+- strict 模式下，命中审批策略的调用会创建/复用审批请求并返回 pending。
+- 推荐用 `off_ttl` 做临时放开；到期后系统自动恢复 strict。
+- MCP 单个服务失败会降级隔离，不会拖垮其它健康 MCP 服务。
+
+## 5.7 `gateway`、`heartbeat`、`log`
 
 | 键 | 类型 | 默认值 | 规则 |
 | --- | --- | --- | --- |
@@ -263,6 +305,7 @@ golem --log-level debug <command>
 - `chat`
 - `completion`
 - `cron`
+- `approval`
 - `init`
 - `run`
 - `skills`
@@ -345,7 +388,21 @@ golem channels stop telegram
 - `dingtalk`
 - `maixcam`
 
-## 7.8 `golem cron`
+## 7.8 `golem approval`
+
+```bash
+golem approval list
+golem approval approve <id> --by <name> [--note <text>]
+golem approval reject <id> --by <name> [--note <text>]
+```
+
+说明：
+
+- `list` 仅展示待审批请求。
+- `approve` 与 `reject` 都必须传 `--by` 标记决策人。
+- 审批数据持久化在 `<workspace>/state/approvals.json`。
+
+## 7.9 `golem cron`
 
 ```bash
 golem cron list
@@ -358,7 +415,7 @@ golem cron disable <job_id>
 golem cron remove <job_id>
 ```
 
-## 7.9 `golem skills`
+## 7.10 `golem skills`
 
 ```bash
 golem skills list
@@ -391,12 +448,14 @@ golem skills remove weather
 | `message` | `content`, `channel`, `chat_id` | 直接向渠道发送消息 |
 | `spawn` | `task`, `label`, route 参数 | 异步子 Agent |
 | `subagent` | `task`, `label`, route 参数 | 同步子 Agent |
+| `mcp.<server>.<tool>` | MCP 工具定义对应的 JSON 参数 | 从健康 MCP 服务动态注册 |
 
 安全边界：
 
 - 文件工具和 `exec` 支持工作区路径边界检查。
 - `exec` 会拦截高风险命令模式（如 `rm -rf /`、`mkfs`、fork bomb 等）。
 - `edit_file` 要求 `old_text` 只能匹配一次；零匹配或多匹配都会拒绝。
+- 策略/审批守卫会在执行前统一生效，动态 MCP 工具也同样受控。
 
 ## 9. 渠道与语音转写
 

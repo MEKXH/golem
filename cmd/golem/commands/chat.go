@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/MEKXH/golem/internal/agent"
@@ -564,6 +565,11 @@ func runChat(cmd *cobra.Command, args []string) error {
 	if err := loop.RegisterDefaultTools(cfg); err != nil {
 		return fmt.Errorf("failed to register tools: %w", err)
 	}
+	slog.Info("runtime policy configured",
+		"mode", cfg.Policy.Mode,
+		"off_ttl", cfg.Policy.OffTTL,
+		"require_approval", cfg.Policy.RequireApproval,
+	)
 
 	if len(args) > 0 {
 		message := strings.Join(args, " ")

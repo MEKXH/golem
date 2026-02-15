@@ -239,6 +239,9 @@ golem run
 | `golem cron remove <job_id>` | Remove a job |
 | `golem cron enable <job_id>` | Enable a job |
 | `golem cron disable <job_id>` | Disable a job |
+| `golem approval list` | List pending approval requests |
+| `golem approval approve <id> --by <name> [--note <text>]` | Approve a pending request |
+| `golem approval reject <id> --by <name> [--note <text>]` | Reject a pending request |
 | `golem skills list` | List installed skills |
 | `golem skills install <owner/repo>` | Install skill from GitHub |
 | `golem skills remove <name>` | Remove installed skill |
@@ -332,6 +335,21 @@ Template file in repo: `config/config.example.json`
       "base_url": "http://localhost:11434"
     }
   },
+  "policy": {
+    "mode": "strict",
+    "off_ttl": "",
+    "allow_persistent_off": false,
+    "require_approval": ["exec"]
+  },
+  "mcp": {
+    "servers": {
+      "localfs": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+      }
+    }
+  },
   "tools": {
     "exec": {
       "timeout": 60,
@@ -372,6 +390,17 @@ Template file in repo: `config/config.example.json`
 - `default`: use `~/.golem/workspace`
 - `cwd`: use current working directory
 - `path`: use `agents.defaults.workspace`
+
+`policy.mode` values:
+
+- `strict`: enforce `require_approval` list before tool execution
+- `relaxed`: allow execution without approval gate
+- `off`: disable policy checks (use `off_ttl` for temporary bypass)
+
+Approval and audit state files:
+
+- `workspace/state/approvals.json`
+- `workspace/state/audit.jsonl`
 
 ### Environment Variables
 

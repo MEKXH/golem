@@ -11,6 +11,10 @@ Golem is a terminal-first personal AI assistant built with Go and Eino. It suppo
 - Interactive chat (`golem chat`)
 - Long-running multi-channel service (`golem run`)
 - Tool-using agent loop (file, shell, memory, web, cron, messaging, subagent)
+- Policy guard modes (`strict`/`relaxed`/`off`) with optional off TTL rollback
+- Approval workflow for high-risk tools (`golem approval list|approve|reject`)
+- MCP dynamic tool registration (`mcp.<server>.<tool>`) with degraded-server isolation
+- Audit trail for policy decisions and tool execution
 - Skills system (workspace/global/builtin)
 - Gateway HTTP API
 - Auth store with token/OAuth login
@@ -61,6 +65,8 @@ This creates config/workspace basics and builtin skills.
 | `<workspace>/sessions/*.jsonl` | Session history persistence |
 | `<workspace>/cron/jobs.json` | Cron job store |
 | `<workspace>/state/heartbeat.json` | Persisted latest heartbeat target |
+| `<workspace>/state/approvals.json` | Approval request store |
+| `<workspace>/state/audit.jsonl` | Append-only audit trail |
 
 `<workspace>` is resolved by `agents.defaults.workspace_mode`:
 
@@ -129,6 +135,21 @@ Main file: `~/.golem/config.json`
     "qianfan": { "api_key": "", "secret_key": "", "base_url": "" },
     "qwen": { "api_key": "", "secret_key": "", "base_url": "" },
     "ollama": { "api_key": "", "secret_key": "", "base_url": "http://localhost:11434" }
+  },
+  "policy": {
+    "mode": "strict",
+    "off_ttl": "",
+    "allow_persistent_off": false,
+    "require_approval": ["exec"]
+  },
+  "mcp": {
+    "servers": {
+      "localfs": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+      }
+    }
   },
   "tools": {
     "exec": { "timeout": 60, "restrict_to_workspace": true },
@@ -219,7 +240,28 @@ Provider selection logic:
 | `tools.voice.model` | string | `gpt-4o-mini-transcribe` | OpenAI-compatible model |
 | `tools.voice.timeout_seconds` | int | `30` | non-negative; `0` resets to `30` |
 
-## 5.6 `gateway`, `heartbeat`, `log`
+## 5.6 `policy`, `mcp`
+
+| Key | Type | Default | Rules |
+| --- | --- | --- | --- |
+| `policy.mode` | string | `strict` | one of `strict`/`relaxed`/`off` |
+| `policy.off_ttl` | string | `""` | duration (for example `30m`); when set with mode `off`, auto-reverts to strict after ttl |
+| `policy.allow_persistent_off` | bool | `false` | must be `true` to allow `mode=off` without `off_ttl` |
+| `policy.require_approval` | array | `[]` | tool names requiring approval in strict mode |
+| `mcp.servers.<name>.transport` | string | - | `stdio` or `http_sse` |
+| `mcp.servers.<name>.command` | string | - | required for `stdio` transport |
+| `mcp.servers.<name>.args` | array | `[]` | optional command args for `stdio` |
+| `mcp.servers.<name>.env` | object | `{}` | optional env map for `stdio` |
+| `mcp.servers.<name>.url` | string | - | required for `http_sse` transport |
+| `mcp.servers.<name>.headers` | object | `{}` | optional headers for `http_sse` |
+
+Notes:
+
+- In strict mode, a blocked call creates/uses approval requests and returns pending status until approved.
+- `off_ttl` is recommended for temporary maintenance windows; when ttl expires, strict mode is restored automatically.
+- MCP server failures are isolated as degraded state; healthy servers still load.
+
+## 5.7 `gateway`, `heartbeat`, `log`
 
 | Key | Type | Default | Rules |
 | --- | --- | --- | --- |
@@ -263,6 +305,7 @@ Top-level commands:
 - `chat`
 - `completion`
 - `cron`
+- `approval`
 - `init`
 - `run`
 - `skills`
@@ -345,7 +388,21 @@ Supported names:
 - `dingtalk`
 - `maixcam`
 
-## 7.8 `golem cron`
+## 7.8 `golem approval`
+
+```bash
+golem approval list
+golem approval approve <id> --by <name> [--note <text>]
+golem approval reject <id> --by <name> [--note <text>]
+```
+
+Notes:
+
+- `list` shows pending approval requests.
+- `approve` and `reject` require `--by` for decision attribution.
+- Approval records are stored in `<workspace>/state/approvals.json`.
+
+## 7.9 `golem cron`
 
 ```bash
 golem cron list
@@ -358,7 +415,7 @@ golem cron disable <job_id>
 golem cron remove <job_id>
 ```
 
-## 7.9 `golem skills`
+## 7.10 `golem skills`
 
 ```bash
 golem skills list
@@ -391,12 +448,14 @@ Registered by default:
 | `message` | `content`, `channel`, `chat_id` | Sends direct outbound message |
 | `spawn` | `task`, `label`, route fields | Async subagent task |
 | `subagent` | `task`, `label`, route fields | Sync subagent task |
+| `mcp.<server>.<tool>` | MCP tool-specific JSON args | Dynamically registered from healthy MCP servers |
 
 Safety boundaries:
 
 - File tools and `exec` can enforce workspace boundary.
 - `exec` blocks known dangerous patterns (`rm -rf /`, `mkfs`, fork bomb style, etc).
 - `edit_file` requires unique `old_text` match; refuses 0 or multi-match edits.
+- Policy/approval guard runs before execution, including dynamically registered MCP tools.
 
 ## 9. Channels and Voice Transcription
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
+	"github.com/MEKXH/golem/internal/mcp"
 	"github.com/MEKXH/golem/internal/session"
 	"github.com/MEKXH/golem/internal/tools"
 	"github.com/cloudwego/eino/components/model"
@@ -21,11 +22,14 @@ type Loop struct {
 	bus           *bus.MessageBus
 	model         model.ChatModel
 	tools         *tools.Registry
+	mcpManager    *mcp.Manager
+	runtimeGuard  *runtimeGuard
 	subagents     *SubagentManager
 	sessions      *session.Manager
 	context       *ContextBuilder
 	maxIterations int
 	workspacePath string
+	now           func() time.Time
 
 	OnToolStart  func(name, args string)
 	OnToolFinish func(name, result string, err error)
@@ -47,6 +51,7 @@ func NewLoop(cfg *config.Config, msgBus *bus.MessageBus, chatModel model.ChatMod
 		context:       NewContextBuilder(workspacePath),
 		maxIterations: cfg.Agents.Defaults.MaxToolIterations,
 		workspacePath: workspacePath,
+		now:           time.Now,
 	}, nil
 }
 
@@ -131,6 +136,43 @@ func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 	}
 	if info, err := subagentTool.Info(context.Background()); err == nil && info != nil && info.Name != "" {
 		registered = append(registered, info.Name)
+	}
+
+	if len(cfg.MCP.Servers) > 0 {
+		mgr := mcp.NewManager(cfg.MCP.Servers, mcp.DefaultConnectors())
+		if err := mgr.Connect(context.Background()); err != nil {
+			return err
+		}
+		if err := mgr.RegisterTools(l.tools); err != nil {
+			return err
+		}
+		l.mcpManager = mgr
+
+		for _, status := range mgr.Statuses() {
+			if status.Degraded {
+				slog.Warn("mcp server degraded",
+					"server", status.Name,
+					"transport", status.Transport,
+					"error", status.Message,
+				)
+				continue
+			}
+			slog.Info("mcp server connected",
+				"server", status.Name,
+				"transport", status.Transport,
+				"tools", status.ToolCount,
+			)
+		}
+
+		for _, name := range l.tools.Names() {
+			if strings.HasPrefix(name, "mcp.") {
+				registered = append(registered, name)
+			}
+		}
+	}
+
+	if err := l.configureRuntimeGuard(cfg); err != nil {
+		return err
 	}
 
 	slog.Info("registered tools", "count", len(registered), "tools", registered)
@@ -290,6 +332,7 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 			if err != nil {
 				result = "Error: " + err.Error()
 			}
+			l.auditToolExecution(toolCtx, tc.Function.Name, result, err)
 			toolDuration := time.Since(toolStart)
 			slog.Info("tool execution finished",
 				"request_id", msg.RequestID,

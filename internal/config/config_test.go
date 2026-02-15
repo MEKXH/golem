@@ -241,3 +241,121 @@ func TestValidate_VoiceNegativeTimeout(t *testing.T) {
 		t.Fatal("expected validation error for voice timeout < 0")
 	}
 }
+
+func TestDefaultConfig_PolicyDefaults(t *testing.T) {
+	cfg := DefaultConfig()
+
+	if cfg.Policy.Mode != "strict" {
+		t.Fatalf("expected policy mode strict, got %q", cfg.Policy.Mode)
+	}
+	if cfg.Policy.OffTTL != "" {
+		t.Fatalf("expected empty policy off_ttl by default, got %q", cfg.Policy.OffTTL)
+	}
+	if cfg.Policy.AllowPersistentOff {
+		t.Fatalf("expected allow_persistent_off=false by default")
+	}
+	if len(cfg.Policy.RequireApproval) != 0 {
+		t.Fatalf("expected empty require_approval by default, got %v", cfg.Policy.RequireApproval)
+	}
+}
+
+func TestValidate_PolicyMode(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Policy.Mode = "invalid"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for invalid policy mode")
+	}
+}
+
+func TestValidate_PersistentOffGate(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Policy.Mode = "off"
+	cfg.Policy.OffTTL = ""
+	cfg.Policy.AllowPersistentOff = false
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for persistent off without allow_persistent_off")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Policy.Mode = "off"
+	cfg.Policy.OffTTL = "30m"
+	cfg.Policy.AllowPersistentOff = false
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected ttl-based off mode to be valid, got error: %v", err)
+	}
+
+	cfg = DefaultConfig()
+	cfg.Policy.Mode = "off"
+	cfg.Policy.OffTTL = ""
+	cfg.Policy.AllowPersistentOff = true
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected persistent off to be allowed when gated, got error: %v", err)
+	}
+
+	cfg = DefaultConfig()
+	cfg.Policy.Mode = "off"
+	cfg.Policy.OffTTL = "foo"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for invalid policy.off_ttl duration")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Policy.Mode = "off"
+	cfg.Policy.OffTTL = "-10s"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for non-positive policy.off_ttl")
+	}
+}
+
+func TestValidate_MCPServers(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.MCP.Servers = map[string]MCPServerConfig{
+		"bad_transport": {Transport: "tcp"},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for invalid MCP transport")
+	}
+
+	cfg = DefaultConfig()
+	cfg.MCP.Servers = map[string]MCPServerConfig{
+		"stdio_missing_command": {Transport: "stdio"},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for stdio server without command")
+	}
+
+	cfg = DefaultConfig()
+	cfg.MCP.Servers = map[string]MCPServerConfig{
+		"http_missing_url": {Transport: "http_sse"},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for http_sse server without url")
+	}
+
+	cfg = DefaultConfig()
+	cfg.MCP.Servers = map[string]MCPServerConfig{
+		" localfs ": {
+			Transport: "stdio",
+			Command:   "npx",
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for MCP server name with surrounding whitespace")
+	}
+
+	cfg = DefaultConfig()
+	cfg.MCP.Servers = map[string]MCPServerConfig{
+		"stdio_ok": {
+			Transport: "stdio",
+			Command:   "npx",
+			Args:      []string{"-y", "some-mcp-server"},
+		},
+		"http_ok": {
+			Transport: "http_sse",
+			URL:       "http://localhost:8080/sse",
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid MCP servers config, got error: %v", err)
+	}
+}

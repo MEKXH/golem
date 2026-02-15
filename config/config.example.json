@@ -15,6 +15,31 @@
       "base_url": ""
     }
   },
+  "policy": {
+    "mode": "strict",
+    "off_ttl": "",
+    "allow_persistent_off": false,
+    "require_approval": [
+      "exec"
+    ]
+  },
+  "mcp": {
+    "servers": {
+      "localfs": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem",
+          "."
+        ]
+      },
+      "remote": {
+        "transport": "http_sse",
+        "url": "http://localhost:8080/sse"
+      }
+    }
+  },
   "tools": {
     "exec": {
       "timeout": 60,

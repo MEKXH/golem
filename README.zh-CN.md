@@ -102,6 +102,8 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 - Heartbeat 目标会话持久化：重启后自动恢复最近活跃的渠道/会话路由
 - Telegram / Discord / Slack 音频消息自动转写，失败时回退占位文本，不阻断主流程
 - 文件增量编辑工具：`edit_file` 与 `append_file`
+- 策略守卫与审批流：`strict`/`relaxed`/`off`，支持 `off_ttl` 限时放开后自动回收
+- MCP 动态工具接入：以 `mcp.<server>.<tool>` 注册并复用同一策略/审批链路
 
 ### 内置工具
 
@@ -239,6 +241,9 @@ golem run
 | `golem cron remove <job_id>` | 删除任务 |
 | `golem cron enable <job_id>` | 启用任务 |
 | `golem cron disable <job_id>` | 禁用任务 |
+| `golem approval list` | 列出待审批请求 |
+| `golem approval approve <id> --by <name> [--note <text>]` | 通过审批请求 |
+| `golem approval reject <id> --by <name> [--note <text>]` | 驳回审批请求 |
 | `golem skills list` | 列出已安装技能 |
 | `golem skills install <owner/repo>` | 从 GitHub 安装技能 |
 | `golem skills remove <name>` | 删除技能 |
@@ -332,6 +337,21 @@ golem skills search weather
       "base_url": "http://localhost:11434"
     }
   },
+  "policy": {
+    "mode": "strict",
+    "off_ttl": "",
+    "allow_persistent_off": false,
+    "require_approval": ["exec"]
+  },
+  "mcp": {
+    "servers": {
+      "localfs": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+      }
+    }
+  },
   "tools": {
     "exec": {
       "timeout": 60,
@@ -372,6 +392,17 @@ golem skills search weather
 - `default`：使用 `~/.golem/workspace`
 - `cwd`：使用当前工作目录
 - `path`：使用 `agents.defaults.workspace` 指定路径
+
+`policy.mode` 可选值：
+
+- `strict`：对 `require_approval` 中的工具强制走审批
+- `relaxed`：允许执行，不触发审批
+- `off`：关闭策略检查（建议搭配 `off_ttl` 仅限时放开）
+
+审批与审计状态文件：
+
+- `<workspace>/state/approvals.json`
+- `<workspace>/state/audit.jsonl`
 
 ### 环境变量
 
