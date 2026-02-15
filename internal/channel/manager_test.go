@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ type mockManagerChannel struct {
 	sentNotify chan struct{}
 	started    bool
 	stopped    bool
+	sendErrMu  sync.RWMutex
 	sendErr    error
 }
 
@@ -33,7 +35,15 @@ func (m *mockManagerChannel) Send(ctx context.Context, msg *bus.OutboundMessage)
 		default:
 		}
 	}
+	m.sendErrMu.RLock()
+	defer m.sendErrMu.RUnlock()
 	return m.sendErr
+}
+
+func (m *mockManagerChannel) SetSendErr(err error) {
+	m.sendErrMu.Lock()
+	defer m.sendErrMu.Unlock()
+	m.sendErr = err
 }
 
 func TestManager_RouteOutbound(t *testing.T) {
@@ -344,7 +354,7 @@ func TestManager_RouteOutbound_DedupDoesNotBlockRetryAfterFailure(t *testing.T) 
 		t.Fatal("timed out waiting for first outbound attempt")
 	}
 
-	ch.sendErr = nil
+	ch.SetSendErr(nil)
 	msgBus.PublishOutbound(first)
 	select {
 	case <-ch.sentNotify:
