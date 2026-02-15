@@ -117,7 +117,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}()
 
 	voiceTranscriber := buildVoiceTranscriber(cfg)
-	chanMgr := channel.NewManager(msgBus)
+	chanMgr := channel.NewManagerWithPolicy(msgBus, buildOutboundDeliveryPolicy(cfg))
 	chanMgr.SetRuntimeMetrics(runtimeMetrics)
 	registerEnabledChannels(cfg, msgBus, chanMgr, voiceTranscriber)
 
@@ -218,6 +218,21 @@ func buildVoiceTranscriber(cfg *config.Config) voice.Transcriber {
 		return nil
 	}
 	return tr
+}
+
+func buildOutboundDeliveryPolicy(cfg *config.Config) channel.DeliveryPolicy {
+	if cfg == nil {
+		return channel.DeliveryPolicy{}
+	}
+
+	return channel.DeliveryPolicy{
+		MaxConcurrentSends: cfg.Channels.Outbound.MaxConcurrentSends,
+		RetryMaxAttempts:   cfg.Channels.Outbound.RetryMaxAttempts,
+		RetryBaseBackoff:   time.Duration(cfg.Channels.Outbound.RetryBaseBackoffMs) * time.Millisecond,
+		RetryMaxBackoff:    time.Duration(cfg.Channels.Outbound.RetryMaxBackoffMs) * time.Millisecond,
+		RateLimitPerSecond: cfg.Channels.Outbound.RateLimitPerSecond,
+		DedupWindow:        time.Duration(cfg.Channels.Outbound.DedupWindowSeconds) * time.Second,
+	}
 }
 
 func registerEnabledChannels(cfg *config.Config, msgBus *bus.MessageBus, chanMgr *channel.Manager, transcriber voice.Transcriber) {

@@ -89,6 +89,14 @@
       "enabled": false,
       "token": "",
       "allow_from": []
+    },
+    "outbound": {
+      "max_concurrent_sends": 16,
+      "retry_max_attempts": 3,
+      "retry_base_backoff_ms": 200,
+      "retry_max_backoff_ms": 2000,
+      "rate_limit_per_second": 20,
+      "dedup_window_seconds": 30
     }
   },
   "gateway": {

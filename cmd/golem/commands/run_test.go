@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MEKXH/golem/internal/agent"
 	"github.com/MEKXH/golem/internal/auth"
@@ -168,5 +169,36 @@ func TestBuildVoiceTranscriber_UsesAuthStoreWhenAPIKeyMissing(t *testing.T) {
 
 	if got := buildVoiceTranscriber(cfg); got == nil {
 		t.Fatal("expected non-nil transcriber from auth store token")
+	}
+}
+
+func TestBuildOutboundDeliveryPolicy_FromConfig(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Channels.Outbound.MaxConcurrentSends = 9
+	cfg.Channels.Outbound.RetryMaxAttempts = 4
+	cfg.Channels.Outbound.RetryBaseBackoffMs = 150
+	cfg.Channels.Outbound.RetryMaxBackoffMs = 900
+	cfg.Channels.Outbound.RateLimitPerSecond = 7
+	cfg.Channels.Outbound.DedupWindowSeconds = 42
+
+	policy := buildOutboundDeliveryPolicy(cfg)
+
+	if policy.MaxConcurrentSends != 9 {
+		t.Fatalf("expected MaxConcurrentSends=9, got %d", policy.MaxConcurrentSends)
+	}
+	if policy.RetryMaxAttempts != 4 {
+		t.Fatalf("expected RetryMaxAttempts=4, got %d", policy.RetryMaxAttempts)
+	}
+	if policy.RetryBaseBackoff != 150*time.Millisecond {
+		t.Fatalf("expected RetryBaseBackoff=150ms, got %s", policy.RetryBaseBackoff)
+	}
+	if policy.RetryMaxBackoff != 900*time.Millisecond {
+		t.Fatalf("expected RetryMaxBackoff=900ms, got %s", policy.RetryMaxBackoff)
+	}
+	if policy.RateLimitPerSecond != 7 {
+		t.Fatalf("expected RateLimitPerSecond=7, got %d", policy.RateLimitPerSecond)
+	}
+	if policy.DedupWindow != 42*time.Second {
+		t.Fatalf("expected DedupWindow=42s, got %s", policy.DedupWindow)
 	}
 }

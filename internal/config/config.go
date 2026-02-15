@@ -83,14 +83,25 @@ type SubagentRuntimeConfig struct {
 
 // ChannelsConfig channel settings
 type ChannelsConfig struct {
-	Telegram TelegramConfig `mapstructure:"telegram"`
-	WhatsApp WhatsAppConfig `mapstructure:"whatsapp"`
-	Feishu   FeishuConfig   `mapstructure:"feishu"`
-	Discord  DiscordConfig  `mapstructure:"discord"`
-	Slack    SlackConfig    `mapstructure:"slack"`
-	QQ       QQConfig       `mapstructure:"qq"`
-	DingTalk DingTalkConfig `mapstructure:"dingtalk"`
-	MaixCam  MaixCamConfig  `mapstructure:"maixcam"`
+	Telegram TelegramConfig        `mapstructure:"telegram"`
+	WhatsApp WhatsAppConfig        `mapstructure:"whatsapp"`
+	Feishu   FeishuConfig          `mapstructure:"feishu"`
+	Discord  DiscordConfig         `mapstructure:"discord"`
+	Slack    SlackConfig           `mapstructure:"slack"`
+	QQ       QQConfig              `mapstructure:"qq"`
+	DingTalk DingTalkConfig        `mapstructure:"dingtalk"`
+	MaixCam  MaixCamConfig         `mapstructure:"maixcam"`
+	Outbound ChannelOutboundConfig `mapstructure:"outbound"`
+}
+
+// ChannelOutboundConfig controls outbound reliability behavior.
+type ChannelOutboundConfig struct {
+	MaxConcurrentSends int `mapstructure:"max_concurrent_sends"`
+	RetryMaxAttempts   int `mapstructure:"retry_max_attempts"`
+	RetryBaseBackoffMs int `mapstructure:"retry_base_backoff_ms"`
+	RetryMaxBackoffMs  int `mapstructure:"retry_max_backoff_ms"`
+	RateLimitPerSecond int `mapstructure:"rate_limit_per_second"`
+	DedupWindowSeconds int `mapstructure:"dedup_window_seconds"`
 }
 
 // TelegramConfig telegram bot settings
@@ -286,6 +297,14 @@ func DefaultConfig() *Config {
 				Port:      9000,
 				AllowFrom: []string{},
 			},
+			Outbound: ChannelOutboundConfig{
+				MaxConcurrentSends: 16,
+				RetryMaxAttempts:   3,
+				RetryBaseBackoffMs: 200,
+				RetryMaxBackoffMs:  2000,
+				RateLimitPerSecond: 20,
+				DedupWindowSeconds: 30,
+			},
 		},
 		Providers: ProvidersConfig{},
 		Gateway: GatewayConfig{
@@ -456,6 +475,46 @@ func (c *Config) Validate() error {
 	}
 	if c.Channels.MaixCam.Port != 0 && (c.Channels.MaixCam.Port < 1 || c.Channels.MaixCam.Port > 65535) {
 		return fmt.Errorf("channels.maixcam.port must be between 1 and 65535, got %d", c.Channels.MaixCam.Port)
+	}
+
+	if c.Channels.Outbound.MaxConcurrentSends < 0 {
+		return fmt.Errorf("channels.outbound.max_concurrent_sends must not be negative, got %d", c.Channels.Outbound.MaxConcurrentSends)
+	}
+	if c.Channels.Outbound.MaxConcurrentSends == 0 {
+		c.Channels.Outbound.MaxConcurrentSends = 16
+	}
+	if c.Channels.Outbound.RetryMaxAttempts < 0 {
+		return fmt.Errorf("channels.outbound.retry_max_attempts must not be negative, got %d", c.Channels.Outbound.RetryMaxAttempts)
+	}
+	if c.Channels.Outbound.RetryMaxAttempts == 0 {
+		c.Channels.Outbound.RetryMaxAttempts = 3
+	}
+	if c.Channels.Outbound.RetryBaseBackoffMs < 0 {
+		return fmt.Errorf("channels.outbound.retry_base_backoff_ms must not be negative, got %d", c.Channels.Outbound.RetryBaseBackoffMs)
+	}
+	if c.Channels.Outbound.RetryBaseBackoffMs == 0 {
+		c.Channels.Outbound.RetryBaseBackoffMs = 200
+	}
+	if c.Channels.Outbound.RetryMaxBackoffMs < 0 {
+		return fmt.Errorf("channels.outbound.retry_max_backoff_ms must not be negative, got %d", c.Channels.Outbound.RetryMaxBackoffMs)
+	}
+	if c.Channels.Outbound.RetryMaxBackoffMs == 0 {
+		c.Channels.Outbound.RetryMaxBackoffMs = 2000
+	}
+	if c.Channels.Outbound.RetryMaxBackoffMs < c.Channels.Outbound.RetryBaseBackoffMs {
+		c.Channels.Outbound.RetryMaxBackoffMs = c.Channels.Outbound.RetryBaseBackoffMs
+	}
+	if c.Channels.Outbound.RateLimitPerSecond < 0 {
+		return fmt.Errorf("channels.outbound.rate_limit_per_second must not be negative, got %d", c.Channels.Outbound.RateLimitPerSecond)
+	}
+	if c.Channels.Outbound.RateLimitPerSecond == 0 {
+		c.Channels.Outbound.RateLimitPerSecond = 20
+	}
+	if c.Channels.Outbound.DedupWindowSeconds < 0 {
+		return fmt.Errorf("channels.outbound.dedup_window_seconds must not be negative, got %d", c.Channels.Outbound.DedupWindowSeconds)
+	}
+	if c.Channels.Outbound.DedupWindowSeconds == 0 {
+		c.Channels.Outbound.DedupWindowSeconds = 30
 	}
 
 	level := strings.ToLower(strings.TrimSpace(c.Log.Level))

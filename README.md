@@ -102,6 +102,7 @@ It can chat, run tools, call shell commands, manage files, search/fetch web cont
 - Heartbeat target persistence across restarts (last active channel/chat is restored automatically)
 - Audio transcription in Telegram/Discord/Slack with fallback placeholders when transcription fails
 - File mutation tools `edit_file` and `append_file` for safer incremental edits
+- Outbound channel reliability policy (`channels.outbound`): retry, rate-limit, dedup window, and bounded send concurrency
 
 ### Built-in Tools
 
@@ -342,6 +343,14 @@ Template file in repo: `config/config.example.json`
       "enabled": false,
       "token": "",
       "allow_from": []
+    },
+    "outbound": {
+      "max_concurrent_sends": 16,
+      "retry_max_attempts": 3,
+      "retry_base_backoff_ms": 200,
+      "retry_max_backoff_ms": 2000,
+      "rate_limit_per_second": 20,
+      "dedup_window_seconds": 30
     }
   },
   "providers": {
@@ -417,6 +426,14 @@ Template file in repo: `config/config.example.json`
 - `timeout_seconds`: delegated subtask timeout (default `300`)
 - `retry`: retry count per subtask (default `1`, total attempts = retry + 1)
 - `max_concurrency`: max concurrent subtask executions across `spawn/subagent/workflow` (default `3`)
+
+`channels.outbound` reliability values:
+
+- `max_concurrent_sends`: max concurrent outbound sends (default `16`)
+- `retry_max_attempts`: max attempts per outbound message on retriable channels (default `3`)
+- `retry_base_backoff_ms` / `retry_max_backoff_ms`: exponential backoff window in milliseconds
+- `rate_limit_per_second`: global outbound send rate limit (default `20`)
+- `dedup_window_seconds`: dedup window for same `channel+chat_id+request_id` (default `30`)
 
 `policy.mode` values:
 

@@ -133,7 +133,15 @@ golem run
     "slack": { "enabled": false, "bot_token": "", "app_token": "", "allow_from": [] },
     "qq": { "enabled": false, "app_id": "", "app_secret": "", "allow_from": [] },
     "dingtalk": { "enabled": false, "client_id": "", "client_secret": "", "allow_from": [] },
-    "maixcam": { "enabled": false, "host": "0.0.0.0", "port": 9000, "allow_from": [] }
+    "maixcam": { "enabled": false, "host": "0.0.0.0", "port": 9000, "allow_from": [] },
+    "outbound": {
+      "max_concurrent_sends": 16,
+      "retry_max_attempts": 3,
+      "retry_base_backoff_ms": 200,
+      "retry_max_backoff_ms": 2000,
+      "rate_limit_per_second": 20,
+      "dedup_window_seconds": 30
+    }
   },
   "providers": {
     "openrouter": { "api_key": "", "secret_key": "", "base_url": "" },
@@ -213,6 +221,12 @@ golem run
 | `channels.dingtalk.client_secret` | string | `""` | 是 |
 | `channels.maixcam.host` | string | `"0.0.0.0"` | 是 |
 | `channels.maixcam.port` | int | `9000` | `1..65535` |
+| `channels.outbound.max_concurrent_sends` | int | `16` | 非负；`0` 会回填为 `16` |
+| `channels.outbound.retry_max_attempts` | int | `3` | 非负；`0` 会回填为 `3` |
+| `channels.outbound.retry_base_backoff_ms` | int | `200` | 非负毫秒；`0` 会回填为 `200` |
+| `channels.outbound.retry_max_backoff_ms` | int | `2000` | 非负毫秒；`0` 会回填为 `2000` 且不小于 `retry_base_backoff_ms` |
+| `channels.outbound.rate_limit_per_second` | int | `20` | 非负；`0` 会回填为 `20` |
+| `channels.outbound.dedup_window_seconds` | int | `30` | 非负秒；`0` 会回填为 `30` |
 
 说明：`allow_from` 里的值是“渠道原生发送者 ID”，例如 Telegram 用户数字 ID、Slack 用户 ID、Discord 作者 ID。
 

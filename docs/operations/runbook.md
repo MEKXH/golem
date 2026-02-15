@@ -153,10 +153,15 @@ Actions:
 
 ### Rollback
 
-1. Checkout last known good tag:
-   `git checkout <tag>`
-2. Build and deploy that version.
-3. Verify `/health` and `/version`.
+1. Run standard rollback script:
+   `bash scripts/ops/rollback.sh <tag>`
+2. Deploy the rebuilt binary from that tag.
+3. Verify:
+   - `curl -fsS http://127.0.0.1:18790/health`
+   - `curl -fsS http://127.0.0.1:18790/version`
+4. Manual fallback if script is unavailable:
+   - `git checkout <tag>`
+   - `go build -o golem ./cmd/golem`
 
 ### Container Restart (docker-compose)
 
@@ -172,9 +177,8 @@ Actions:
 
 Release workflow blocks build/release unless verification passes:
 
-- `go test ./...`
-- `go test -race ./...`
-- `go vet ./...`
+- `bash scripts/release/preflight.sh <tag>` (includes `go test ./... -count=1`, `go test -race ./... -count=1`, `go vet ./...`, semver tag check, notes template check)
+- `bash scripts/release/generate_notes.sh <tag> golem golem.exe release_notes.md` (template-based release notes with changelog + checksums)
 
 Do not bypass these checks in production release flow.
 

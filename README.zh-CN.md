@@ -104,6 +104,7 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 - 文件增量编辑工具：`edit_file` 与 `append_file`
 - 策略守卫与审批流：`strict`/`relaxed`/`off`，支持 `off_ttl` 限时放开后自动回收
 - MCP 动态工具接入：以 `mcp.<server>.<tool>` 注册并复用同一策略/审批链路
+- 渠道外发可靠性策略（`channels.outbound`）：统一重试、限流、去重窗口和有界并发
 
 ### 内置工具
 
@@ -344,6 +345,14 @@ golem skills search weather
       "enabled": false,
       "token": "",
       "allow_from": []
+    },
+    "outbound": {
+      "max_concurrent_sends": 16,
+      "retry_max_attempts": 3,
+      "retry_base_backoff_ms": 200,
+      "retry_max_backoff_ms": 2000,
+      "rate_limit_per_second": 20,
+      "dedup_window_seconds": 30
     }
   },
   "providers": {
@@ -419,6 +428,14 @@ golem skills search weather
 - `timeout_seconds`：子任务超时（默认 `300`）
 - `retry`：每个子任务重试次数（默认 `1`，总尝试次数 = retry + 1）
 - `max_concurrency`：`spawn/subagent/workflow` 的并发上限（默认 `3`）
+
+`channels.outbound` 可靠性参数：
+
+- `max_concurrent_sends`：外发最大并发（默认 `16`）
+- `retry_max_attempts`：可重试渠道的最大尝试次数（默认 `3`）
+- `retry_base_backoff_ms` / `retry_max_backoff_ms`：指数退避区间（毫秒）
+- `rate_limit_per_second`：全局外发速率限制（默认 `20`）
+- `dedup_window_seconds`：同 `channel+chat_id+request_id` 去重窗口（默认 `30`）
 
 `policy.mode` 可选值：
 

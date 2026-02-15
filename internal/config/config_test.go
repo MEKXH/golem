@@ -39,6 +39,24 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Heartbeat.MaxIdleMinutes != 720 {
 		t.Errorf("expected heartbeat max_idle_minutes=720, got %d", cfg.Heartbeat.MaxIdleMinutes)
 	}
+	if cfg.Channels.Outbound.MaxConcurrentSends != 16 {
+		t.Errorf("expected outbound max_concurrent_sends=16, got %d", cfg.Channels.Outbound.MaxConcurrentSends)
+	}
+	if cfg.Channels.Outbound.RetryMaxAttempts != 3 {
+		t.Errorf("expected outbound retry_max_attempts=3, got %d", cfg.Channels.Outbound.RetryMaxAttempts)
+	}
+	if cfg.Channels.Outbound.RetryBaseBackoffMs != 200 {
+		t.Errorf("expected outbound retry_base_backoff_ms=200, got %d", cfg.Channels.Outbound.RetryBaseBackoffMs)
+	}
+	if cfg.Channels.Outbound.RetryMaxBackoffMs != 2000 {
+		t.Errorf("expected outbound retry_max_backoff_ms=2000, got %d", cfg.Channels.Outbound.RetryMaxBackoffMs)
+	}
+	if cfg.Channels.Outbound.RateLimitPerSecond != 20 {
+		t.Errorf("expected outbound rate_limit_per_second=20, got %d", cfg.Channels.Outbound.RateLimitPerSecond)
+	}
+	if cfg.Channels.Outbound.DedupWindowSeconds != 30 {
+		t.Errorf("expected outbound dedup_window_seconds=30, got %d", cfg.Channels.Outbound.DedupWindowSeconds)
+	}
 	if cfg.Agents.Subagent.TimeoutSeconds != 300 {
 		t.Errorf("expected subagent timeout_seconds=300, got %d", cfg.Agents.Subagent.TimeoutSeconds)
 	}
@@ -416,5 +434,63 @@ func TestValidate_SubagentDefaultsAndBounds(t *testing.T) {
 	cfg.Agents.Subagent.MaxConcurrency = -1
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected validation error for negative subagent max_concurrency")
+	}
+}
+
+func TestValidate_ChannelOutboundDefaultsAndBounds(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Channels.Outbound.MaxConcurrentSends = 0
+	cfg.Channels.Outbound.RetryMaxAttempts = 0
+	cfg.Channels.Outbound.RetryBaseBackoffMs = 0
+	cfg.Channels.Outbound.RetryMaxBackoffMs = 0
+	cfg.Channels.Outbound.RateLimitPerSecond = 0
+	cfg.Channels.Outbound.DedupWindowSeconds = 0
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected error applying outbound defaults: %v", err)
+	}
+	if cfg.Channels.Outbound.MaxConcurrentSends != 16 ||
+		cfg.Channels.Outbound.RetryMaxAttempts != 3 ||
+		cfg.Channels.Outbound.RetryBaseBackoffMs != 200 ||
+		cfg.Channels.Outbound.RetryMaxBackoffMs != 2000 ||
+		cfg.Channels.Outbound.RateLimitPerSecond != 20 ||
+		cfg.Channels.Outbound.DedupWindowSeconds != 30 {
+		t.Fatalf("unexpected outbound defaults: %+v", cfg.Channels.Outbound)
+	}
+
+	cfg = DefaultConfig()
+	cfg.Channels.Outbound.MaxConcurrentSends = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for negative channels.outbound.max_concurrent_sends")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Channels.Outbound.RetryMaxAttempts = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for negative channels.outbound.retry_max_attempts")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Channels.Outbound.RetryBaseBackoffMs = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for negative channels.outbound.retry_base_backoff_ms")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Channels.Outbound.RetryMaxBackoffMs = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for negative channels.outbound.retry_max_backoff_ms")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Channels.Outbound.RateLimitPerSecond = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for negative channels.outbound.rate_limit_per_second")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Channels.Outbound.DedupWindowSeconds = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for negative channels.outbound.dedup_window_seconds")
 	}
 }

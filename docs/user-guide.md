@@ -133,7 +133,15 @@ Main file: `~/.golem/config.json`
     "slack": { "enabled": false, "bot_token": "", "app_token": "", "allow_from": [] },
     "qq": { "enabled": false, "app_id": "", "app_secret": "", "allow_from": [] },
     "dingtalk": { "enabled": false, "client_id": "", "client_secret": "", "allow_from": [] },
-    "maixcam": { "enabled": false, "host": "0.0.0.0", "port": 9000, "allow_from": [] }
+    "maixcam": { "enabled": false, "host": "0.0.0.0", "port": 9000, "allow_from": [] },
+    "outbound": {
+      "max_concurrent_sends": 16,
+      "retry_max_attempts": 3,
+      "retry_base_backoff_ms": 200,
+      "retry_max_backoff_ms": 2000,
+      "rate_limit_per_second": 20,
+      "dedup_window_seconds": 30
+    }
   },
   "providers": {
     "openrouter": { "api_key": "", "secret_key": "", "base_url": "" },
@@ -213,6 +221,12 @@ Main file: `~/.golem/config.json`
 | `channels.dingtalk.client_secret` | string | `""` | yes |
 | `channels.maixcam.host` | string | `"0.0.0.0"` | yes |
 | `channels.maixcam.port` | int | `9000` | `1..65535` |
+| `channels.outbound.max_concurrent_sends` | int | `16` | non-negative; `0` resets to `16` |
+| `channels.outbound.retry_max_attempts` | int | `3` | non-negative; `0` resets to `3` |
+| `channels.outbound.retry_base_backoff_ms` | int | `200` | non-negative milliseconds; `0` resets to `200` |
+| `channels.outbound.retry_max_backoff_ms` | int | `2000` | non-negative milliseconds; `0` resets to `2000` and clamped `>= retry_base_backoff_ms` |
+| `channels.outbound.rate_limit_per_second` | int | `20` | non-negative; `0` resets to `20` |
+| `channels.outbound.dedup_window_seconds` | int | `30` | non-negative seconds; `0` resets to `30` |
 
 Note: `allow_from` value format is channel-specific sender ID (for example Telegram numeric user id, Slack user id, Discord author id).
 

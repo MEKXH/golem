@@ -2,29 +2,28 @@
 
 ## 适用范围
 
-本手册覆盖以下场景的日常运维与一级故障响应：
+本手册覆盖以下场景的日常运维和一线故障处理：
 
 - `golem run` 服务模式
 - Gateway HTTP API（`/health`、`/version`、`/chat`）
-- Heartbeat 服务（定时健康探测与回传）
-- Telegram 渠道集成
+- Heartbeat 服务（定时探测与回传）
+- Telegram/Discord/Slack 等通道联动
 - Provider/Model 连通性
 - 工具执行与记忆子系统
 - 容器化部署（`Dockerfile` / `docker-compose.yml`）
 
-## 快速健康检查清单
+## 快速健康检查
 
-1. 检查进程与配置状态：`golem status`
+1. 检查进程状态：`golem status`
 2. 检查 API 健康：`curl http://127.0.0.1:18790/health`
 3. 检查版本接口：`curl http://127.0.0.1:18790/version`
-4. 检查日志（若已配置 `log.file`），重点关注：
+4. 检查日志重点：
    - `request_id`
-   - 工具执行耗时
-   - 工具错误/超时比率与 p95 代理延迟
-   - 外发消息失败记录
+   - tool 执行耗时
+   - tool 错误/超时比例和 p95 代理延迟
+   - outbound 发送失败
    - heartbeat 派发状态
-5. 检查运行时指标快照文件：
-   - `<workspace>/state/runtime_metrics.json`
+5. 检查运行时指标快照文件：`<workspace>/state/runtime_metrics.json`
 
 ## 常见故障
 
@@ -32,165 +31,141 @@
 
 症状：
 
-- `golem run` 启动后立刻退出
-- 报错中包含 config/gateway/provider 相关信息
+- `golem run` 立即退出
+- 报错涉及 config/gateway/provider
 
 处理步骤：
 
 1. 校验配置文件 JSON 语法。
-2. 确认 `gateway.port` 在 `1` 到 `65535` 之间。
-3. 确认当前 workspace 模式对应路径有效。
-4. 执行：
+2. 确认 `gateway.port` 位于 `1..65535`。
+3. 确认 workspace 路径与当前模式匹配。
+4. 运行：
    - `go test ./...`
    - `go vet ./...`
 
 ### 2. `/chat` 返回 `401 unauthorized`
 
-症状：
-
-- Gateway 的 `/chat` 请求被拒绝
-
 处理步骤：
 
-1. 检查配置中是否设置了 `gateway.token`。
-2. 若已设置，请在请求头带上：`Authorization: Bearer <token>`
-3. 使用相同请求重试，并附带 `X-Request-ID` 便于追踪。
+1. 检查是否设置了 `gateway.token`。
+2. 若设置，携带请求头：`Authorization: Bearer <token>`。
+3. 重试时附带 `X-Request-ID` 便于追踪。
 
 ### 3. `/chat` 返回 `500 internal_error`
 
-症状：
-
-- Gateway 接收请求成功，但响应失败
-
 处理步骤：
 
-1. 从响应中获取 `request_id`。
+1. 从响应中提取 `request_id`。
 2. 用 `request_id` 检索日志。
-3. 检查 provider 凭据和目标端点连通性。
-4. 核对配置中的模型名与 provider 映射关系。
+3. 检查 provider 凭据与网络连通性。
+4. 核对模型名与 provider 映射。
 
-### 4. 渠道消息无响应
-
-症状：
-
-- 渠道已连接，但不回复消息
+### 4. 通道消息无响应
 
 处理步骤：
 
-1. 确认目标渠道已启用（例如 `channels.telegram.enabled=true`）。
-2. 校验渠道凭据和 `allow_from` 发送者白名单。
-3. 检查日志中的以下错误：
-   - 渠道初始化失败
-   - 外发消息失败
-4. 从白名单账号在该渠道发送测试消息。
+1. 确认目标通道已启用（例如 `channels.telegram.enabled=true`）。
+2. 校验通道凭据和 `allow_from`。
+3. 检查日志中的初始化失败和 outbound 发送失败。
+4. 用白名单账号发送测试消息。
 
 ### 5. 工具执行报错
 
-症状：
+处理步骤：
 
-- Agent 回复中出现工具执行错误
+1. 按 `request_id` 定位具体调用。
+2. 确认 `restrict_to_workspace` 等边界配置。
+3. web 搜索异常时检查 `tools.web.search.api_key`。
+4. memory 异常时检查 `memory/MEMORY.md` 可读写。
+
+### 6. 启动出现高风险策略告警
 
 处理步骤：
 
-1. 定位 `request_id` 并检查对应工具执行日志。
-2. 确认工作区边界配置（`restrict_to_workspace`）。
-3. 若是 web_search，检查 `tools.web.search.api_key`。
-4. 若是 memory 工具，确认 `memory/MEMORY.md` 存在且可写。
-
-### 6. 启动出现策略高风险告警
-
-症状：
-- 启动日志出现高风险策略告警
-- 审计日志包含 `policy_startup_persistent_off`
-
-处理步骤：
-1. 检查配置中的 `policy.mode`、`policy.off_ttl`、`policy.allow_persistent_off`。
-2. 常规运行建议改为：
+1. 检查 `policy.mode`、`policy.off_ttl`、`policy.allow_persistent_off`。
+2. 生产建议使用：
    - `policy.mode=strict`（推荐），或
-   - `policy.mode=off` + 有限 `policy.off_ttl`（仅维护窗口使用）。
-3. 确认 `<workspace>/state/audit.jsonl` 中存在预期的启动策略审计事件。
+   - `policy.mode=off` + 有限 `policy.off_ttl`（仅维护窗口）。
+3. 确认 `<workspace>/state/audit.jsonl` 中策略审计事件完整。
 
-### 7. MCP 工具调用不稳定
-
-症状：
-- MCP 工具调用间歇性失败
-- 日志中出现 degraded/reconnect 相关信息
+### 7. MCP 调用不稳定
 
 处理步骤：
-1. 检查日志中的服务级重连次数和最终降级原因。
-2. 验证远端 MCP 服务健康状态与端点延迟。
-3. `http_sse` 场景检查网关/代理是否破坏 SSE 语义。
-4. `stdio` 场景关注日志中附带的 stderr 上下文，定位进程启动/运行失败。
-5. 若持续不稳定，临时下线故障 MCP 服务配置，保留健康服务继续运行。
+
+1. 检查降级原因和重连日志。
+2. 验证远端 MCP 服务健康与延迟。
+3. `http_sse` 场景确认代理未破坏 SSE。
+4. `stdio` 场景检查 stderr 上下文。
+5. 必要时先临时禁用故障 MCP，保留健康 MCP 服务。
 
 ### 8. Heartbeat 未送达
 
-症状：
-
-- 没有向最近活跃渠道/会话回传周期性心跳
-
 处理步骤：
 
-1. 确认 `~/.golem/config.json` 中 `heartbeat.enabled=true`。
-2. 确认 `heartbeat.interval` 合理（默认 `30`，最小有效值 `5`，单位：分钟）。
-3. 确认该渠道/会话最近有入站对话（heartbeat 只发往最近活跃会话）。
-4. 在日志中检索：
+1. 确认 `heartbeat.enabled=true`。
+2. 确认 `heartbeat.interval` 合理（默认 `30`，有效最小值 `5` 分钟）。
+3. 确认目标会话近期有入站活动。
+4. 检索日志：
    - `heartbeat service started`
    - `heartbeat dispatched`
    - `heartbeat run failed`
-5. 视场景调整 `heartbeat.max_idle_minutes`。
-   降低可收紧“最近活跃”判定，提高可覆盖长时间空闲场景。
 
-## 日志排查建议
+## 日志与观测建议
 
-- `log.level` 建议：
-  - 故障定位期使用 `debug`
-  - 常规生产使用 `info`
-  - 需要降噪时使用 `warn/error`
-- 生产环境建议配置 `log.file`。
-- 故障记录中始终保留 `request_id`。
-- 工具相关故障建议关联 `request_id`、`channel`、`tool_duration`，快速定位慢路径或失败路径。
+- `log.level`：故障期用 `debug`，平时用 `info`，降噪可用 `warn/error`。
+- 生产建议配置 `log.file`。
+- 故障记录始终包含 `request_id`。
+- 关联 `request_id + channel + tool_duration` 快速定位慢路径和失败路径。
 
 ## 恢复流程
 
 ### 平滑重启
 
-1. 发送停止信号（Ctrl+C / SIGTERM）。
-2. 等待优雅退出完成。
-3. 重新启动：`golem run`
+1. 发送终止信号（Ctrl+C / SIGTERM）。
+2. 等待优雅退出。
+3. 重启：`golem run`
 
 ### 回滚
 
-1. 切换到最近稳定标签：`git checkout <tag>`
-2. 构建并部署该版本。
-3. 验证 `/health` 与 `/version`。
+1. 使用标准回滚脚本：`bash scripts/ops/rollback.sh <tag>`
+2. 部署脚本构建的回滚版本二进制。
+3. 验证：
+   - `curl -fsS http://127.0.0.1:18790/health`
+   - `curl -fsS http://127.0.0.1:18790/version`
+4. 脚本不可用时手动执行：
+   - `git checkout <tag>`
+   - `go build -o golem ./cmd/golem`
 
 ### 容器重启（docker-compose）
 
-1. 拉取最新代码并重建：`docker compose build --no-cache`
-2. 重启服务：`docker compose up -d`
+1. `docker compose build --no-cache`
+2. `docker compose up -d`
 3. 验证：
    - `curl http://127.0.0.1:18790/health`
    - `docker compose logs --tail=200 golem`
 
 ## 发布安全门禁
 
-发布流程会在以下检查全部通过后才允许构建/发布：
+发布流程必须通过：
 
-- `go test ./...`
-- `go test -race ./...`
-- `go vet ./...`
-
-生产发布流程不要绕过这些检查。
+- `bash scripts/release/preflight.sh <tag>`
+  - 覆盖 `go test ./... -count=1`
+  - 覆盖 `go test -race ./... -count=1`
+  - 覆盖 `go vet ./...`
+  - 校验语义化 tag 与 notes 模板存在
+- `bash scripts/release/generate_notes.sh <tag> golem golem.exe release_notes.md`
+  - 基于模板自动生成 changelog 与 checksums
 
 ## 容量建议
 
-- Gateway 与渠道负载应与部署资源匹配，建议起步配置：
+- 建议起步资源：
   - `2 vCPU`
   - `2-4 GB RAM`
-  - 用于 `~/.golem` 状态目录的持久化磁盘
-- 控制渠道外发压力：
-  - `channel.Manager` 默认已启用有界并发发送
-  - 持续监控各渠道发送失败峰值
-- heartbeat 间隔建议 `>=5` 分钟，避免噪声回调和不必要的模型/工具压力。
-- 若 cron 任务较多，检查 `enabled_jobs` 与 `next_run` 分布，避免同步触发尖峰。
+  - 用于 `~/.golem` 的持久化磁盘
+- 通道外发建议控制在 `channels.outbound` 策略内：
+  - `max_concurrent_sends`
+  - `retry_max_attempts`
+  - `rate_limit_per_second`
+  - `dedup_window_seconds`
+- heartbeat 间隔建议 `>=5` 分钟。
+- cron 任务多时注意 `enabled_jobs` 和 `next_run` 的分布，避免同一时刻突发。
