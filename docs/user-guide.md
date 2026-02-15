@@ -67,6 +67,7 @@ This creates config/workspace basics and builtin skills.
 | `<workspace>/state/heartbeat.json` | Persisted latest heartbeat target |
 | `<workspace>/state/approvals.json` | Approval request store |
 | `<workspace>/state/audit.jsonl` | Append-only audit trail |
+| `<workspace>/state/runtime_metrics.json` | Runtime metrics snapshot (tool/channel ratios and latency summary) |
 
 `<workspace>` is resolved by `agents.defaults.workspace_mode`:
 
@@ -79,10 +80,13 @@ This creates config/workspace basics and builtin skills.
 ```bash
 golem init
 cp config/config.example.json ~/.golem/config.json
+cp .env.example .env.local
 # edit key(s), for example providers.openai.api_key
 golem status
 golem chat "ping"
 ```
+
+At minimum, fill one provider key (or run `golem auth login`) and set `GOLEM_GATEWAY_TOKEN` for network-exposed staging/production deployments.
 
 Server mode:
 
@@ -259,7 +263,10 @@ Notes:
 
 - In strict mode, a blocked call creates/uses approval requests and returns pending status until approved.
 - `off_ttl` is recommended for temporary maintenance windows; when ttl expires, strict mode is restored automatically.
+- Startup emits explicit policy audit events (`policy_startup`, `policy_startup_persistent_off`) to `<workspace>/state/audit.jsonl`.
+- If `policy.mode=off` without `off_ttl`, startup writes a high-risk warning in logs and audit trail.
 - MCP server failures are isolated as degraded state; healthy servers still load.
+- MCP call path has bounded retry/reconnect behavior for transient failures (HTTP/SSE retry, manager reconnect).
 
 ## 5.7 `gateway`, `heartbeat`, `log`
 
@@ -287,6 +294,14 @@ export GOLEM_LOG_LEVEL=debug
 ```
 
 Use uppercase + underscores; nested keys map naturally (`agents.defaults.model` -> `GOLEM_AGENTS_DEFAULTS_MODEL`).
+
+Recommended environment split:
+
+- `.env.local`
+- `.env.staging`
+- `.env.production`
+
+Start from `.env.example`, keep `policy.mode=strict` and `policy.allow_persistent_off=false` as defaults, and only loosen with explicit TTL windows.
 
 ## 7. CLI Command Reference
 
@@ -346,11 +361,19 @@ golem run
 
 ## 7.5 `golem status`
 
-Prints config/workspace/provider/tool/channel/gateway/cron/skills status.
+Prints config/workspace/provider/tool/channel/gateway/cron/skills status and runtime metrics summary.
 
 ```bash
 golem status
 ```
+
+Runtime metrics section includes:
+
+- `tool_total`
+- `tool_error_ratio`
+- `tool_timeout_ratio`
+- `tool_p95_proxy_ms`
+- `channel_send_failure_ratio`
 
 ## 7.6 `golem auth`
 

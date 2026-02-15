@@ -180,6 +180,20 @@ Copy-Item config/config.example.json "$HOME/.golem/config.json"
 
 Then edit `~/.golem/config.json` and set at least one provider key (for example `providers.openai.api_key`).
 
+Create an environment file from template (recommended for local/staging/production separation):
+
+```bash
+cp .env.example .env.local
+```
+
+PowerShell:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+Fill required secrets in `.env.local` (at least one provider key, and `GOLEM_GATEWAY_TOKEN` for exposed deployments).
+
 Optional (token/OAuth auth store):
 
 ```bash
@@ -411,6 +425,19 @@ export GOLEM_PROVIDERS_OPENROUTER_APIKEY="your-key"
 export GOLEM_PROVIDERS_CLAUDE_APIKEY="your-key"
 export GOLEM_LOG_LEVEL=debug
 ```
+
+Recommended profile files:
+
+- `.env.local`: local development defaults
+- `.env.staging`: pre-release integration environment
+- `.env.production`: production deployment
+
+You can start from `.env.example` and keep `policy.mode=strict` / `policy.allow_persistent_off=false` as safe defaults.
+
+Minimum required secrets:
+
+- At least one provider API key (or use `golem auth login --provider <name>`).
+- `GOLEM_GATEWAY_TOKEN` for staging/production where gateway is network-accessible.
 
 ## Gateway API
 

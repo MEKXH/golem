@@ -182,6 +182,20 @@ Copy-Item config/config.example.json "$HOME/.golem/config.json"
 
 然后编辑 `~/.golem/config.json`，至少填入一个 provider 的 key（例如 `providers.openai.api_key`）。
 
+建议同时基于模板创建环境变量文件（用于 local/staging/production 隔离）：
+
+```bash
+cp .env.example .env.local
+```
+
+PowerShell:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+在 `.env.local` 中补齐必填密钥（至少一个 provider key；若网关对外暴露则必须设置 `GOLEM_GATEWAY_TOKEN`）。
+
 可选（使用 token/OAuth 认证存储）：
 
 ```bash
@@ -413,6 +427,19 @@ export GOLEM_PROVIDERS_OPENROUTER_APIKEY="your-key"
 export GOLEM_PROVIDERS_CLAUDE_APIKEY="your-key"
 export GOLEM_LOG_LEVEL=debug
 ```
+
+推荐按环境拆分文件：
+
+- `.env.local`：本地开发
+- `.env.staging`：预发布联调
+- `.env.production`：生产部署
+
+可从 `.env.example` 复制，并保持 `policy.mode=strict`、`policy.allow_persistent_off=false` 作为安全默认值。
+
+最小必填密钥：
+
+- 至少一个 provider API key（或使用 `golem auth login --provider <name>`）。
+- 对外网络可访问的 staging/production 场景必须配置 `GOLEM_GATEWAY_TOKEN`。
 
 ## Gateway API
 

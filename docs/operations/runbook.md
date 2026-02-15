@@ -23,8 +23,11 @@ This runbook covers routine operations and first-response troubleshooting for:
 4. Check logs (if `log.file` configured):
    - request ids
    - tool execution duration
+   - tool error/timeout ratios and p95 proxy latency
    - outbound send failures
    - heartbeat dispatch status
+5. Check runtime metrics snapshot file:
+   - `<workspace>/state/runtime_metrics.json`
 
 ## Common Incidents
 
@@ -88,7 +91,33 @@ Actions:
 3. For web search, verify `tools.web.search.api_key`.
 4. For memory tools, verify `memory/MEMORY.md` exists and is writable.
 
-### 6. Heartbeat Does Not Deliver Messages
+### 6. Policy High-Risk Warning at Startup
+
+Symptoms:
+- Startup logs show high-risk policy warning
+- Audit log contains `policy_startup_persistent_off`
+
+Actions:
+1. Check `policy.mode`, `policy.off_ttl`, `policy.allow_persistent_off` in config.
+2. For normal operations, switch to:
+   - `policy.mode=strict` (recommended), or
+   - `policy.mode=off` + finite `policy.off_ttl` (temporary maintenance only).
+3. Confirm audit trail in `<workspace>/state/audit.jsonl` includes expected startup policy events.
+
+### 7. MCP Tool Calls Become Unstable
+
+Symptoms:
+- intermittent MCP tool call failures
+- degraded/reconnect messages in logs
+
+Actions:
+1. Check logs for server-level reconnect attempts and final degraded reason.
+2. Verify remote MCP server health and endpoint latency.
+3. For `http_sse`, verify gateway/proxy does not strip SSE semantics.
+4. For `stdio`, inspect wrapped stderr context in logs for process bootstrap/runtime failures.
+5. If unstable persists, disable the failing MCP server block temporarily and keep healthy servers active.
+
+### 8. Heartbeat Does Not Deliver Messages
 
 Symptoms:
 - No periodic heartbeat callback to previously active channel/chat

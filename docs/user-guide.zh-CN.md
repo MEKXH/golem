@@ -67,6 +67,7 @@ golem init
 | `<workspace>/state/heartbeat.json` | 心跳目标会话持久化 |
 | `<workspace>/state/approvals.json` | 审批请求持久化 |
 | `<workspace>/state/audit.jsonl` | 追加写入的审计日志 |
+| `<workspace>/state/runtime_metrics.json` | 运行时指标快照（工具/通道比率与延迟摘要） |
 
 `<workspace>` 由 `agents.defaults.workspace_mode` 决定：
 
@@ -79,10 +80,13 @@ golem init
 ```bash
 golem init
 cp config/config.example.json ~/.golem/config.json
+cp .env.example .env.local
 # 编辑 key，例如 providers.openai.api_key
 golem status
 golem chat "ping"
 ```
+
+最小要求：至少配置一个 provider key（或执行 `golem auth login`），并在对外可访问的 staging/production 场景设置 `GOLEM_GATEWAY_TOKEN`。
 
 服务模式：
 
@@ -259,7 +263,10 @@ Provider 选择逻辑：
 
 - strict 模式下，命中审批策略的调用会创建/复用审批请求并返回 pending。
 - 推荐用 `off_ttl` 做临时放开；到期后系统自动恢复 strict。
+- 启动时会写入明确策略审计事件（`policy_startup`、`policy_startup_persistent_off`）到 `<workspace>/state/audit.jsonl`。
+- 当 `policy.mode=off` 且未设置 `off_ttl` 时，启动阶段会输出高风险告警日志并写入审计。
 - MCP 单个服务失败会降级隔离，不会拖垮其它健康 MCP 服务。
+- MCP 调用链路已加入有界重试/重连（HTTP/SSE 重试、manager 重连恢复）。
 
 ## 5.7 `gateway`、`heartbeat`、`log`
 
@@ -287,6 +294,14 @@ export GOLEM_LOG_LEVEL=debug
 ```
 
 建议使用“全大写 + 下划线”格式；嵌套键可直接展开（`agents.defaults.model` -> `GOLEM_AGENTS_DEFAULTS_MODEL`）。
+
+推荐按环境拆分：
+
+- `.env.local`
+- `.env.staging`
+- `.env.production`
+
+建议从 `.env.example` 复制，默认保持 `policy.mode=strict` 与 `policy.allow_persistent_off=false`，仅在显式 TTL 窗口内临时放开策略。
 
 ## 7. CLI 命令总览
 
@@ -346,11 +361,19 @@ golem run
 
 ## 7.5 `golem status`
 
-输出配置、工作区、provider、工具、渠道、gateway、cron、skills 状态摘要。
+输出配置、工作区、provider、工具、渠道、gateway、cron、skills 以及运行时指标摘要。
 
 ```bash
 golem status
 ```
+
+运行时指标字段包括：
+
+- `tool_total`
+- `tool_error_ratio`
+- `tool_timeout_ratio`
+- `tool_p95_proxy_ms`
+- `channel_send_failure_ratio`
 
 ## 7.6 `golem auth`
 

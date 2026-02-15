@@ -20,8 +20,11 @@
 4. 检查日志（若已配置 `log.file`），重点关注：
    - `request_id`
    - 工具执行耗时
+   - 工具错误/超时比率与 p95 代理延迟
    - 外发消息失败记录
    - heartbeat 派发状态
+5. 检查运行时指标快照文件：
+   - `<workspace>/state/runtime_metrics.json`
 
 ## 常见故障
 
@@ -94,7 +97,33 @@
 3. 若是 web_search，检查 `tools.web.search.api_key`。
 4. 若是 memory 工具，确认 `memory/MEMORY.md` 存在且可写。
 
-### 6. Heartbeat 未送达
+### 6. 启动出现策略高风险告警
+
+症状：
+- 启动日志出现高风险策略告警
+- 审计日志包含 `policy_startup_persistent_off`
+
+处理步骤：
+1. 检查配置中的 `policy.mode`、`policy.off_ttl`、`policy.allow_persistent_off`。
+2. 常规运行建议改为：
+   - `policy.mode=strict`（推荐），或
+   - `policy.mode=off` + 有限 `policy.off_ttl`（仅维护窗口使用）。
+3. 确认 `<workspace>/state/audit.jsonl` 中存在预期的启动策略审计事件。
+
+### 7. MCP 工具调用不稳定
+
+症状：
+- MCP 工具调用间歇性失败
+- 日志中出现 degraded/reconnect 相关信息
+
+处理步骤：
+1. 检查日志中的服务级重连次数和最终降级原因。
+2. 验证远端 MCP 服务健康状态与端点延迟。
+3. `http_sse` 场景检查网关/代理是否破坏 SSE 语义。
+4. `stdio` 场景关注日志中附带的 stderr 上下文，定位进程启动/运行失败。
+5. 若持续不稳定，临时下线故障 MCP 服务配置，保留健康服务继续运行。
+
+### 8. Heartbeat 未送达
 
 症状：
 

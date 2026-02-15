@@ -10,9 +10,28 @@
     }
   },
   "providers": {
-    "openai": {
-      "api_key": "YOUR_OPENAI_API_KEY",
+    "openrouter": {
+      "api_key": "",
       "base_url": ""
+    },
+    "claude": {
+      "api_key": "",
+      "base_url": ""
+    },
+    "openai": {
+      "api_key": "",
+      "base_url": ""
+    },
+    "deepseek": {
+      "api_key": "",
+      "base_url": ""
+    },
+    "gemini": {
+      "api_key": "",
+      "base_url": ""
+    },
+    "ollama": {
+      "base_url": "http://localhost:11434"
     }
   },
   "policy": {
