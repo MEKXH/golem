@@ -41,6 +41,7 @@ func NewRootCmd() *cobra.Command {
 		NewCronCmd(),
 		NewSkillsCmd(),
 		NewAuthCmd(),
+		NewVersionCmd(),
 	)
 
 	return cmd
