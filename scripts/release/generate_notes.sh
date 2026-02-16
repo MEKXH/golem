@@ -54,7 +54,32 @@ checksums="$(printf '%s  %s\n%s  %s\n' "${checksum_linux}" "$(basename "${linux_
   cat "${template_file}"
 } > "${output_file}"
 
-AUTO_CHANGELOG="${changelog}" AUTO_CHECKSUMS="${checksums}" awk '
+summary=""
+if [[ -n "${range_spec}" ]]; then
+  commit_count="$(git rev-list --count "${range_spec}" 2>/dev/null || echo 0)"
+  # Build summary from conventional commit prefixes
+  feats="$(git log "${range_spec}" --pretty=format:'%s' | grep -cE '^feat(\(|:)' || true)"
+  fixes="$(git log "${range_spec}" --pretty=format:'%s' | grep -cE '^fix(\(|:)' || true)"
+  parts=()
+  [[ "${feats}" -gt 0 ]] && parts+=("${feats} feature(s)")
+  [[ "${fixes}" -gt 0 ]] && parts+=("${fixes} fix(es)")
+  others=$(( commit_count - feats - fixes ))
+  [[ "${others}" -gt 0 ]] && parts+=("${others} other change(s)")
+  if [[ ${#parts[@]} -gt 0 ]]; then
+    summary="$(printf '%s, ' "${parts[@]}")"
+    summary="- ${commit_count} commits: ${summary%, } since ${previous_tag}"
+  else
+    summary="- ${commit_count} commits since ${previous_tag}"
+  fi
+else
+  summary="- Initial release"
+fi
+
+AUTO_SUMMARY="${summary}" AUTO_CHANGELOG="${changelog}" AUTO_CHECKSUMS="${checksums}" awk '
+  /<!-- AUTO_SUMMARY -->/ {
+    print ENVIRON["AUTO_SUMMARY"]
+    next
+  }
   /<!-- AUTO_CHANGELOG -->/ {
     print ENVIRON["AUTO_CHANGELOG"]
     next

@@ -1,6 +1,6 @@
 ## Summary
 
-- Replace this section with concise highlights of what changed in this release.
+<!-- AUTO_SUMMARY -->
 
 ## Changelog
 

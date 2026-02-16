@@ -41,7 +41,7 @@ func (c *CronCommand) Execute(ctx context.Context, args string, env Env) Result 
 	case "run":
 		return cronRun(svc, rest)
 	default:
-		return Result{Content: "Usage: /cron [list|remove|enable|disable|run] [id]"}
+		return Result{Content: "Usage: `/cron [list|remove|enable|disable|run] [id]`"}
 	}
 }
 
@@ -51,7 +51,7 @@ func cronList(svc *cron.Service) Result {
 		return Result{Content: "No cron jobs."}
 	}
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Cron jobs (%d):\n", len(jobs)))
+	sb.WriteString(fmt.Sprintf("**Cron jobs (%d):**\n\n", len(jobs)))
 	for _, j := range jobs {
 		status := "enabled"
 		if !j.Enabled {
@@ -61,7 +61,7 @@ func cronList(svc *cron.Service) Result {
 		if j.State.NextRunAtMS != nil {
 			next = time.UnixMilli(*j.State.NextRunAtMS).Format("01-02 15:04")
 		}
-		sb.WriteString(fmt.Sprintf("  [%s] %s — %s (%s) next: %s\n",
+		sb.WriteString(fmt.Sprintf("- `%s` **%s** — %s (%s) next: %s\n",
 			shortID(j.ID), j.Name, j.ScheduleDescription(), status, next))
 	}
 	return Result{Content: sb.String()}
@@ -69,12 +69,12 @@ func cronList(svc *cron.Service) Result {
 
 func cronRemove(svc *cron.Service, id string) Result {
 	if id == "" {
-		return Result{Content: "Usage: /cron remove <id>"}
+		return Result{Content: "Usage: `/cron remove <id>`"}
 	}
 	if err := svc.RemoveJob(id); err != nil {
 		return Result{Content: fmt.Sprintf("Error: %v", err)}
 	}
-	return Result{Content: fmt.Sprintf("Job %s removed.", shortID(id))}
+	return Result{Content: fmt.Sprintf("Job `%s` removed.", shortID(id))}
 }
 
 func cronSetEnabled(svc *cron.Service, id string, enabled bool) Result {
@@ -83,7 +83,7 @@ func cronSetEnabled(svc *cron.Service, id string, enabled bool) Result {
 		if !enabled {
 			action = "disable"
 		}
-		return Result{Content: fmt.Sprintf("Usage: /cron %s <id>", action)}
+		return Result{Content: fmt.Sprintf("Usage: `/cron %s <id>`", action)}
 	}
 	job, err := svc.EnableJob(id, enabled)
 	if err != nil {
@@ -93,25 +93,25 @@ func cronSetEnabled(svc *cron.Service, id string, enabled bool) Result {
 	if !job.Enabled {
 		state = "disabled"
 	}
-	return Result{Content: fmt.Sprintf("Job %s (%s) is now %s.", shortID(job.ID), job.Name, state)}
+	return Result{Content: fmt.Sprintf("Job `%s` (**%s**) is now %s.", shortID(job.ID), job.Name, state)}
 }
 
 func cronRun(svc *cron.Service, id string) Result {
 	if id == "" {
-		return Result{Content: "Usage: /cron run <id>"}
+		return Result{Content: "Usage: `/cron run <id>`"}
 	}
 	job, err := svc.RunJob(id)
 	if err != nil {
 		return Result{Content: fmt.Sprintf("Error: %v", err)}
 	}
 	if job == nil {
-		return Result{Content: fmt.Sprintf("Job %s executed and removed (one-shot).", shortID(id))}
+		return Result{Content: fmt.Sprintf("Job `%s` executed and removed (one-shot).", shortID(id))}
 	}
 	lastStatus := job.State.LastStatus
 	if lastStatus == "" {
 		lastStatus = "ok"
 	}
-	return Result{Content: fmt.Sprintf("Job %s (%s) executed: %s", shortID(job.ID), job.Name, lastStatus)}
+	return Result{Content: fmt.Sprintf("Job `%s` (**%s**) executed: %s", shortID(job.ID), job.Name, lastStatus)}
 }
 
 func shortID(id string) string {

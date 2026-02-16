@@ -28,7 +28,7 @@ func (c *SkillsCommand) Execute(_ context.Context, args string, env Env) Result 
 	case "show":
 		return skillsShow(loader, rest)
 	default:
-		return Result{Content: "Usage: /skills [list|show <name>]"}
+		return Result{Content: "Usage: `/skills [list|show <name>]`"}
 	}
 }
 
@@ -38,16 +38,16 @@ func skillsList(loader *skills.Loader) Result {
 		return Result{Content: "No skills installed."}
 	}
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Skills (%d):\n", len(list)))
+	sb.WriteString(fmt.Sprintf("**Skills (%d):**\n\n", len(list)))
 	for _, s := range list {
-		sb.WriteString(fmt.Sprintf("  %s (%s) — %s\n", s.Name, s.Source, s.Description))
+		sb.WriteString(fmt.Sprintf("- **%s** `%s` — %s\n", s.Name, s.Source, s.Description))
 	}
 	return Result{Content: sb.String()}
 }
 
 func skillsShow(loader *skills.Loader, name string) Result {
 	if name == "" {
-		return Result{Content: "Usage: /skills show <name>"}
+		return Result{Content: "Usage: `/skills show <name>`"}
 	}
 	content, err := loader.LoadSkill(name)
 	if err != nil {

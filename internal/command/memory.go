@@ -28,7 +28,7 @@ func (c *MemoryCommand) Execute(_ context.Context, args string, env Env) Result 
 	case "diary":
 		return memoryDiary(mgr, rest)
 	default:
-		return Result{Content: "Usage: /memory [read|diary [YYYY-MM-DD|recent]]"}
+		return Result{Content: "Usage: `/memory [read|diary [YYYY-MM-DD|recent]]`"}
 	}
 }
 
@@ -49,7 +49,6 @@ func memoryRead(mgr *memory.Manager) Result {
 func memoryDiary(mgr *memory.Manager, dateOrRecent string) Result {
 	dateOrRecent = strings.TrimSpace(dateOrRecent)
 
-	// Default or "recent": show last 3 diary entries
 	if dateOrRecent == "" || dateOrRecent == "recent" {
 		entries, err := mgr.ReadRecentDiaries(3)
 		if err != nil {
@@ -60,12 +59,11 @@ func memoryDiary(mgr *memory.Manager, dateOrRecent string) Result {
 		}
 		var sb strings.Builder
 		for _, e := range entries {
-			sb.WriteString(fmt.Sprintf("--- %s ---\n%s\n\n", e.Date, e.Content))
+			sb.WriteString(fmt.Sprintf("**%s**\n\n%s\n\n", e.Date, e.Content))
 		}
 		return Result{Content: strings.TrimSpace(sb.String())}
 	}
 
-	// Specific date
 	content, err := mgr.ReadDiary(dateOrRecent)
 	if err != nil {
 		return Result{Content: fmt.Sprintf("Error: %v", err)}
@@ -73,5 +71,5 @@ func memoryDiary(mgr *memory.Manager, dateOrRecent string) Result {
 	if content == "" {
 		return Result{Content: fmt.Sprintf("No diary entry for %s.", dateOrRecent)}
 	}
-	return Result{Content: fmt.Sprintf("--- %s ---\n%s", dateOrRecent, content)}
+	return Result{Content: fmt.Sprintf("**%s**\n\n%s", dateOrRecent, content)}
 }
