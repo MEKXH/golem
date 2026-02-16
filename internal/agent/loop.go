@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/MEKXH/golem/internal/bus"
+	"github.com/MEKXH/golem/internal/command"
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/mcp"
 	"github.com/MEKXH/golem/internal/metrics"
@@ -23,11 +24,13 @@ type Loop struct {
 	bus           *bus.MessageBus
 	model         model.ChatModel
 	tools         *tools.Registry
+	commands      *command.Registry
 	mcpManager    *mcp.Manager
 	runtimeGuard  *runtimeGuard
 	subagents     *SubagentManager
 	sessions      *session.Manager
 	context       *ContextBuilder
+	config        *config.Config
 	maxIterations int
 	workspacePath string
 	now           func() time.Time
@@ -45,12 +48,23 @@ func NewLoop(cfg *config.Config, msgBus *bus.MessageBus, chatModel model.ChatMod
 	if err != nil {
 		return nil, err
 	}
+	cmdRegistry := command.NewRegistry()
+	cmdRegistry.Register(&command.NewSessionCommand{})
+	cmdRegistry.Register(&command.HelpCommand{})
+	cmdRegistry.Register(&command.VersionCommand{})
+	cmdRegistry.Register(&command.StatusCommand{})
+	cmdRegistry.Register(&command.CronCommand{})
+	cmdRegistry.Register(&command.SkillsCommand{})
+	cmdRegistry.Register(&command.MemoryCommand{})
+
 	return &Loop{
 		bus:           msgBus,
 		model:         chatModel,
 		tools:         tools.NewRegistry(),
+		commands:      cmdRegistry,
 		sessions:      session.NewManager(workspacePath),
 		context:       NewContextBuilder(workspacePath),
+		config:        cfg,
 		maxIterations: cfg.Agents.Defaults.MaxToolIterations,
 		workspacePath: workspacePath,
 		now:           time.Now,
@@ -308,6 +322,27 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 	slog.Info("processing message", "request_id", msg.RequestID, "channel", msg.Channel, "chat_id", msg.ChatID, "sender", msg.SenderID, "session_key", msg.SessionKey())
 	if l.activityRecorder != nil {
 		l.activityRecorder(msg.Channel, msg.ChatID)
+	}
+
+	// Slash command interception — execute directly, skip LLM.
+	if cmd, args, ok := l.commands.Lookup(msg.Content); ok {
+		result := cmd.Execute(ctx, args, command.Env{
+			Channel:       msg.Channel,
+			ChatID:        msg.ChatID,
+			SenderID:      msg.SenderID,
+			SessionKey:    msg.SessionKey(),
+			Sessions:      l.sessions,
+			WorkspacePath: l.workspacePath,
+			Config:        l.config,
+			Metrics:       l.runtimeMetric,
+			ListCommands:  l.commands.List,
+		})
+		return &bus.OutboundMessage{
+			Channel:   msg.Channel,
+			ChatID:    msg.ChatID,
+			Content:   result.Content,
+			RequestID: msg.RequestID,
+		}, nil
 	}
 
 	sess := l.sessions.GetOrCreate(msg.SessionKey())

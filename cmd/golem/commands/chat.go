@@ -415,6 +415,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			input := m.textarea.Value()
 			m.textarea.Reset()
 
+			// Slash command: /new — clear UI history before processing.
+			if strings.TrimSpace(input) == "/new" {
+				m.messages = nil
+				m.currentHelper = &ChatMessage{Role: "golem"}
+				m.thinking = true
+				m.viewport.SetContent(m.renderAll())
+				m.viewport.GotoBottom()
+				if m.viewport.Height > 5 {
+					m.viewport.Height -= 1
+				}
+				return m, tea.Batch(
+					m.spinner.Tick,
+					func() tea.Msg {
+						resp, err := m.loop.ProcessDirect(m.ctx, input)
+						if err != nil {
+							return errMsg(err)
+						}
+						return responseMsg(resp)
+					},
+				)
+			}
+
 			// Add User Message
 			m.messages = append(m.messages, ChatMessage{Role: "user", Content: input})
 

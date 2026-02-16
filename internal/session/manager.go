@@ -141,6 +141,19 @@ func (m *Manager) loadFromDisk(sess *Session) error {
 	return nil
 }
 
+// Reset clears a session's history in memory and removes its file from disk.
+func (m *Manager) Reset(key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if sess, ok := m.sessions[key]; ok {
+		sess.mu.Lock()
+		sess.Messages = nil
+		sess.mu.Unlock()
+	}
+	os.Remove(m.sessionPath(key))
+}
+
 func (m *Manager) sessionPath(key string) string {
 	safeKey := strings.NewReplacer(":", "_", "/", "_", "\\", "_").Replace(key)
 	return filepath.Join(m.dir, safeKey+".jsonl")
