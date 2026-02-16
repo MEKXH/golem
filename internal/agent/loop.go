@@ -327,8 +327,13 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 			return nil, err
 		}
 
-		if len(resp.ToolCalls) == 0 {
+		// Always capture the latest content from the LLM response,
+		// even when tool calls are present.
+		if resp.Content != "" {
 			finalContent = resp.Content
+		}
+
+		if len(resp.ToolCalls) == 0 {
 			break
 		}
 

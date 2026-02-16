@@ -125,6 +125,12 @@ func (m *Manager) RouteOutbound(ctx context.Context) {
 			if msg == nil {
 				continue
 			}
+			// Skip internal messages (e.g. heartbeat) — don't route to channels.
+			if msg.Metadata != nil {
+				if mt, ok := msg.Metadata["type"]; ok && mt == "heartbeat" {
+					continue
+				}
+			}
 			ch, recorder, ok := m.resolveChannel(msg.Channel)
 			if !ok {
 				continue
