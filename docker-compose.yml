@@ -1,0 +1,12 @@
+services:
+  golem:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: golem:latest
+    container_name: golem
+    restart: unless-stopped
+    ports:
+      - "18790:18790"
+    volumes:
+      - ./data/.golem:/home/golem/.golem

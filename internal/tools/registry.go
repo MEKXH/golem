@@ -3,16 +3,33 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 )
 
+type GuardAction string
+
+const (
+	GuardAllow           GuardAction = "allow"
+	GuardDeny            GuardAction = "deny"
+	GuardRequireApproval GuardAction = "require_approval"
+)
+
+type GuardResult struct {
+	Action  GuardAction
+	Message string
+}
+
+type GuardFunc func(ctx context.Context, name, argsJSON string) (GuardResult, error)
+
 // Registry manages tools by name
 type Registry struct {
 	mu    sync.RWMutex
 	tools map[string]tool.InvokableTool
+	guard GuardFunc
 }
 
 // NewRegistry creates a new registry
@@ -49,41 +66,85 @@ func (r *Registry) Get(name string) (tool.InvokableTool, bool) {
 	return tool, ok
 }
 
+// SetGuard sets a pre-execution guard for tool execution.
+func (r *Registry) SetGuard(fn GuardFunc) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.guard = fn
+}
+
+func (r *Registry) getGuard() GuardFunc {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.guard
+}
+
 // GetToolInfos returns all tool schemas for ChatModel binding
 func (r *Registry) GetToolInfos(ctx context.Context) ([]*schema.ToolInfo, error) {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
+	r.mu.RLock()
+	toolsList := make([]tool.InvokableTool, 0, len(r.tools))
+	for _, t := range r.tools {
+		toolsList = append(toolsList, t)
+	}
+	r.mu.RUnlock()
 
-    infos := make([]*schema.ToolInfo, 0, len(r.tools))
-    for _, t := range r.tools {
-        info, err := t.Info(ctx)
-        if err != nil {
-            return nil, err
-        }
-        infos = append(infos, info)
-    }
-    return infos, nil
+	infos := make([]*schema.ToolInfo, 0, len(toolsList))
+	for _, t := range toolsList {
+		info, err := t.Info(ctx)
+		if err != nil {
+			return nil, err
+		}
+		infos = append(infos, info)
+	}
+	return infos, nil
 }
 
 // Execute runs a tool by name
 func (r *Registry) Execute(ctx context.Context, name string, argsJSON string) (string, error) {
-    t, ok := r.Get(name)
-    if !ok {
-        return "", fmt.Errorf("tool not found: %s", name)
-    }
-    return t.InvokableRun(ctx, argsJSON)
+	t, ok := r.Get(name)
+	if !ok {
+		return "", fmt.Errorf("tool not found: %s", name)
+	}
+
+	if guard := r.getGuard(); guard != nil {
+		result, err := guard(ctx, name, argsJSON)
+		if err != nil {
+			return "", err
+		}
+
+		switch result.Action {
+		case "", GuardAllow:
+			// Continue to tool execution.
+		case GuardDeny:
+			msg := strings.TrimSpace(result.Message)
+			if msg == "" {
+				msg = "tool execution denied"
+			}
+			return "", fmt.Errorf("tool execution denied: %s", msg)
+		case GuardRequireApproval:
+			msg := strings.TrimSpace(result.Message)
+			if msg == "" {
+				return "pending approval", nil
+			}
+			return "pending approval: " + msg, nil
+		default:
+			return "", fmt.Errorf("unknown guard action: %s", result.Action)
+		}
+	}
+
+	return t.InvokableRun(ctx, argsJSON)
 }
 
 // Names returns all registered tool names
 func (r *Registry) Names() []string {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
-    names := make([]string, 0, len(r.tools))
-    for name := range r.tools {
-        names = append(names, name)
-    }
-    return names
+	names := make([]string, 0, len(r.tools))
+	for name := range r.tools {
+		names = append(names, name)
+	}
+	return names
 }
 
 // List returns all tools

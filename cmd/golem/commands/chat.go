@@ -3,15 +3,16 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
-	"log/slog"
-	"regexp"
 	"strings"
 
 	"github.com/MEKXH/golem/internal/agent"
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
+	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/provider"
+	"github.com/MEKXH/golem/internal/render"
+	"github.com/MEKXH/golem/internal/version"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,6 +20,48 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
+
+const (
+// No fixed width constant, we rely on updated width
+)
+
+var (
+	// Styles
+	userHeaderStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FAFAFA")).
+			Background(lipgloss.Color("#8E4EC6")). // Purple
+			Bold(true).
+			Padding(0, 1)
+
+	userBodyStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#8E4EC6")).
+			Padding(0, 1)
+
+	golemHeaderStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#FAFAFA")).
+				Background(lipgloss.Color("#2E8B57")). // SeaGreen
+				Bold(true).
+				Padding(0, 1)
+
+	golemBodyStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#2E8B57")).
+			Padding(0, 1)
+
+	toolLogStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#888888")).
+			Italic(true)
+)
+
+// Golem ASCII Art
+const golemArt = `
+   ______      __
+  / ____/___  / /__  ____ ___
+ / / __/ __ \/ / _ \/ __  __ \
+/ /_/ / /_/ / /  __/ / / / / /
+\____/\____/_/\___/_/ /_/ /_/
+`
 
 func NewChatCmd() *cobra.Command {
 	return &cobra.Command{
@@ -47,45 +90,52 @@ func renderMarkdown(r markdownRenderer, input string) string {
 	return rendered
 }
 
-func splitThink(content string) (string, string, bool) {
-	re := regexp.MustCompile(`(?s)<think>(.*?)</think>`)
-	matches := re.FindStringSubmatch(content)
-	if len(matches) > 1 {
-		think := strings.TrimSpace(matches[1])
-		main := strings.TrimSpace(re.ReplaceAllString(content, ""))
-		return think, main, true
-	}
-	return "", content, false
-}
-
 func renderResponseParts(content string, r markdownRenderer) (string, string, bool) {
-	think, main, hasThink := splitThink(content)
+	think, main, hasThink := render.SplitThink(content)
 	if hasThink {
+		// Render both thinking and main content with markdown formatting.
 		return renderMarkdown(r, think), renderMarkdown(r, main), true
 	}
 	return "", renderMarkdown(r, main), false
 }
 
-func indentLines(s, prefix string) string {
-	lines := strings.Split(s, "\n")
-	for i := range lines {
-		lines[i] = prefix + lines[i]
-	}
-	return strings.Join(lines, "\n")
+// Data Structures for Structured History
+type ToolLog struct {
+	Name   string
+	Result string
+	Err    error
+}
+
+type ChatMessage struct {
+	Role     string // "user", "golem"
+	Content  string
+	Thinking string
+	Tools    []ToolLog
+	IsError  bool
 }
 
 type model struct {
-	viewport      viewport.Model
-	textarea      textarea.Model
+	viewport viewport.Model
+	textarea textarea.Model
+	spinner  spinner.Model
+	thinking bool
+
+	// Styles
 	senderStyle   lipgloss.Style
 	aiStyle       lipgloss.Style
 	thinkingStyle lipgloss.Style
-	toolStyle     lipgloss.Style
-	renderer      markdownRenderer
-	history       *strings.Builder
-	err           error
-	loop          *agent.Loop
-	ctx           context.Context
+
+	renderer markdownRenderer
+
+	// Structured History
+	messages      []ChatMessage
+	currentHelper *ChatMessage // Tracks the message currently being generated
+
+	loop *agent.Loop
+	ctx  context.Context
+	err  error
+
+	width int // Track window width for re-rendering
 }
 
 func initialModel(ctx context.Context, loop *agent.Loop) model {
@@ -102,41 +152,67 @@ func initialModel(ctx context.Context, loop *agent.Loop) model {
 	ta.Focus()
 
 	ta.Prompt = "┃ "
-	ta.CharLimit = 280
+	ta.CharLimit = 2000
 
 	ta.SetWidth(30)
-	ta.SetHeight(3)
+	ta.SetHeight(1)
 
 	// Remove cursor line styling
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	ta.ShowLineNumbers = false
 
+	// Style the textarea
+	ta.FocusedStyle.Base = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("62")). // Purple-ish
+		Padding(0, 1)
+
+	ta.BlurredStyle.Base = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(0, 1)
+
 	vp := viewport.New(30, 5)
 
-	history := &strings.Builder{}
-	history.WriteString(`Welcome to Golem Chat!
-Type a message and press Enter to send.`)
-	vp.SetContent(history.String())
+	// Initial Welcome Message
+
+	welcomeMsg := ChatMessage{
+		Role:    "system",
+		Content: golemArt + fmt.Sprintf("\nWelcome to Golem Chat %s\nType a message and press Enter to send.", version.Version),
+	}
+
+	messages := []ChatMessage{welcomeMsg}
 
 	ta.KeyMap.InsertNewline.SetEnabled(false)
 
-	return model{
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
+	m := model{
 		textarea:      ta,
 		viewport:      vp,
-		senderStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
-		aiStyle:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
+		spinner:       s,
+		thinking:      false,
+		senderStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true),
+		aiStyle:       lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true),
 		thinkingStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true),
-		toolStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		renderer:      renderer,
-		history:       history,
+		messages:      messages,
 		loop:          loop,
 		ctx:           ctx,
 		err:           nil,
+		width:         30, // Default initial width
 	}
+
+	// Pre-render initial state
+	m.viewport.SetContent(m.renderAll())
+
+	return m
 }
 
 func (m model) Init() tea.Cmd {
-	return textarea.Blink
+	return tea.Batch(textarea.Blink, m.spinner.Tick, tea.EnableMouseCellMotion)
 }
 
 type responseMsg string
@@ -152,33 +228,181 @@ type toolFinishMsg struct {
 	err    error
 }
 
+// renderAll re-renders the entire chat history based on current width
+func (m model) renderAll() string {
+	var sb strings.Builder
+
+	for _, msg := range m.messages {
+		sb.WriteString(m.renderMessage(msg))
+		sb.WriteString("\n")
+	}
+
+	if m.currentHelper != nil {
+		sb.WriteString(m.renderMessage(*m.currentHelper))
+	}
+
+	return sb.String()
+}
+
+func (m model) renderMessage(msg ChatMessage) string {
+	// Adjust max width for content (Total Width - Padding - Border)
+	// Approximate padding/border is 4 chars
+	contentWidth := m.width - 6
+	if contentWidth < 10 {
+		contentWidth = 10
+	}
+
+	switch msg.Role {
+	case "system":
+		// Left aligned system message to preserve ASCII art alignment
+		style := lipgloss.NewStyle().Width(m.width).Foreground(lipgloss.Color("240"))
+		return style.Render(msg.Content) + "\n"
+
+	case "user":
+		// Render content with a header inside
+		header := userHeaderStyle.Render("USER")
+
+		fullContent := header + "\n" + msg.Content
+
+		body := userBodyStyle.
+			Width(contentWidth).
+			Render(fullContent)
+		return fmt.Sprintf("\n%s", body)
+
+	case "golem":
+		// Golem Header
+		header := golemHeaderStyle.Render("GOLEM")
+
+		var contentBuilder strings.Builder
+		contentBuilder.WriteString(header + "\n")
+
+		// Render Tools
+		if len(msg.Tools) > 0 {
+			contentBuilder.WriteString("\n")
+			for _, t := range msg.Tools {
+				toolTxt := fmt.Sprintf("➢ %s", t.Name)
+				if t.Err != nil {
+					toolTxt += fmt.Sprintf(" ✖ %v", t.Err)
+				} else {
+					res := t.Result
+					if len(res) > 50 {
+						res = res[:50] + "..."
+					}
+					toolTxt += fmt.Sprintf(" ✔ %s", res)
+				}
+				contentBuilder.WriteString(toolLogStyle.Render(toolTxt) + "\n")
+			}
+		}
+
+		// Render Thinking
+		if msg.Thinking != "" {
+			if len(msg.Tools) > 0 {
+				contentBuilder.WriteString("\n")
+			}
+
+			// We render thinking as a distinct block
+			// Use layout width - 2 (left/right padding of parent) for wrap
+			thinkStyle := m.thinkingStyle.Width(contentWidth - 2)
+
+			thinkTxt := "◉ Thinking:\n" + msg.Thinking
+			contentBuilder.WriteString(thinkStyle.Render(thinkTxt) + "\n")
+
+			// Add separator
+			// Separator width should match content width minus a bit of safe margin to prevent wrapping
+			sep := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("240")).
+				Render(strings.Repeat("─", contentWidth-2))
+			contentBuilder.WriteString(sep + "\n")
+		} else if len(msg.Tools) > 0 {
+			contentBuilder.WriteString("\n")
+		}
+
+		// Render Content (main)
+		contentBuilder.WriteString(msg.Content)
+
+		// Trim trailing newlines to prevent extra bottom padding in the bubble
+		finalContent := strings.TrimRight(contentBuilder.String(), "\n")
+
+		body := golemBodyStyle.
+			Width(contentWidth).
+			Render(finalContent)
+
+		return fmt.Sprintf("\n%s", body)
+	}
+	return ""
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		tiCmd tea.Cmd
 		vpCmd tea.Cmd
+		spCmd tea.Cmd
 	)
 
 	m.textarea, tiCmd = m.textarea.Update(msg)
+
+	// Handle mouse events before viewport update to override default scroll speed
+	if mouseMsg, ok := msg.(tea.MouseMsg); ok {
+		switch mouseMsg.Type {
+		case tea.MouseWheelUp:
+			m.viewport.LineUp(3)
+			return m, nil
+		case tea.MouseWheelDown:
+			m.viewport.LineDown(3)
+			return m, nil
+		}
+	}
+
 	m.viewport, vpCmd = m.viewport.Update(msg)
+
+	// Calculate the available height and width
+	// WindowHeight = Viewport + Processing + Textarea
+	textareaHeight := 3
+
+	// Processing indicator height
+	processingHeight := 0
+	if m.thinking {
+		processingHeight = 1
+	}
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.viewport.Width = msg.Width
-		m.textarea.SetWidth(msg.Width)
-		// Height - textarea height - 1 line for separation
-		m.viewport.Height = msg.Height - m.textarea.Height() - 1
-		m.textarea.SetWidth(msg.Width)
+		m.width = msg.Width
+
+		// Width calculation:
+		// Subtract safety margin to avoid edge artifacts with CJK characters
+		// WindowWidth - 4 gives buffer.
+		availableWidth := msg.Width - 4
+		if availableWidth < 20 {
+			availableWidth = 20 // Minimum width
+		}
+
+		m.textarea.SetWidth(availableWidth)
+
+		// Update viewport width
+		m.viewport.Width = availableWidth
+
+		// Calculate available height for viewport
+		// WindowHeight - TextareaHeight - ProcessingHeight
+		availableHeight := msg.Height - textareaHeight - processingHeight
+		if availableHeight < 5 {
+			availableHeight = 5 // Minimum height
+		}
+		m.viewport.Height = availableHeight
 
 		// Update renderer width
 		if m.renderer != nil {
 			newRenderer, err := glamour.NewTermRenderer(
 				glamour.WithStandardStyle("dark"),
-				glamour.WithWordWrap(msg.Width),
+				glamour.WithWordWrap(availableWidth-6),
 			)
 			if err == nil {
 				m.renderer = newRenderer
 			}
 		}
+
+		// Re-render all messages with new width
+		m.viewport.SetContent(m.renderAll())
 
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -191,71 +415,151 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			input := m.textarea.Value()
 			m.textarea.Reset()
 
-			m.history.WriteString("\n\n" + m.senderStyle.Render("You: ") + input)
-			m.viewport.SetContent(m.history.String())
+			// Slash command: /new — clear UI history before processing.
+			if strings.TrimSpace(input) == "/new" {
+				m.messages = nil
+				m.currentHelper = &ChatMessage{Role: "golem"}
+				m.thinking = true
+				m.viewport.SetContent(m.renderAll())
+				m.viewport.GotoBottom()
+				if m.viewport.Height > 5 {
+					m.viewport.Height -= 1
+				}
+				return m, tea.Batch(
+					m.spinner.Tick,
+					func() tea.Msg {
+						resp, err := m.loop.ProcessDirect(m.ctx, input)
+						if err != nil {
+							return errMsg(err)
+						}
+						return responseMsg(resp)
+					},
+				)
+			}
+
+			// Add User Message
+			m.messages = append(m.messages, ChatMessage{Role: "user", Content: input})
+
+			// Initialize Golem Helper
+			m.currentHelper = &ChatMessage{Role: "golem"}
+			m.thinking = true
+
+			// Render
+			m.viewport.SetContent(m.renderAll())
 			m.viewport.GotoBottom()
 
-			return m, func() tea.Msg {
-				resp, err := m.loop.ProcessDirect(m.ctx, input)
-				if err != nil {
-					return errMsg(err)
-				}
-				return responseMsg(resp)
+			// Reduce viewport height to make room for thinking indicator
+			if m.viewport.Height > 5 {
+				m.viewport.Height -= 1
 			}
+
+			return m, tea.Batch(
+				m.spinner.Tick,
+				func() tea.Msg {
+					resp, err := m.loop.ProcessDirect(m.ctx, input)
+					if err != nil {
+						return errMsg(err)
+					}
+					return responseMsg(resp)
+				},
+			)
+
 		}
 
 	case responseMsg:
-		content := string(msg)
-		var viewContent string
-		thinkRendered, mainRendered, hasThink := renderResponseParts(content, m.renderer)
-		if hasThink {
-			thinkRendered = indentLines(thinkRendered, "  ")
-			viewContent = "\n\n" + m.thinkingStyle.Render("💭 Thinking:\n"+thinkRendered) +
-				"\n\n" + m.aiStyle.Render("Golem: ") + mainRendered
-		} else {
-			viewContent = "\n\n" + m.aiStyle.Render("Golem: ") + mainRendered
+		// Restore viewport height
+		if m.thinking {
+			m.viewport.Height += 1
+		}
+		m.thinking = false
+
+		// Finalize Golem Message
+		if m.currentHelper != nil {
+			content := string(msg)
+			think, main, hasThink := renderResponseParts(content, m.renderer)
+
+			if hasThink {
+				// indentation handled by renderAll
+				m.currentHelper.Thinking = think
+			}
+			m.currentHelper.Content = main
+
+			m.messages = append(m.messages, *m.currentHelper)
+			m.currentHelper = nil
 		}
 
-		m.history.WriteString(viewContent)
-		m.viewport.SetContent(m.history.String())
+		m.viewport.SetContent(m.renderAll())
 		m.viewport.GotoBottom()
 
 	case toolStartMsg:
-		content := fmt.Sprintf("🛠️  Executing tool: %s\n", msg.name)
-		m.history.WriteString("\n" + m.toolStyle.Render(content))
-		m.viewport.SetContent(m.history.String())
+		if m.currentHelper == nil {
+			m.currentHelper = &ChatMessage{Role: "golem"}
+		}
+		// Wait for finish to append log.
+		m.viewport.SetContent(m.renderAll())
 		m.viewport.GotoBottom()
 
 	case toolFinishMsg:
-		var content string
-		if msg.err != nil {
-			content = fmt.Sprintf("❌ Tool failed: %v", msg.err)
-		} else {
-			// Truncate result if too long
-			result := msg.result
-			if len(result) > 100 {
-				result = result[:100] + "..."
-			}
-			content = fmt.Sprintf("✅ Tool finished: %s", result)
+		if m.currentHelper == nil {
+			m.currentHelper = &ChatMessage{Role: "golem"}
 		}
-		m.history.WriteString("\n" + m.toolStyle.Render(content))
-		m.viewport.SetContent(m.history.String())
+		m.currentHelper.Tools = append(m.currentHelper.Tools, ToolLog{
+			Name:   msg.name,
+			Result: msg.result,
+			Err:    msg.err,
+		})
+
+		m.viewport.SetContent(m.renderAll())
 		m.viewport.GotoBottom()
 
 	case errMsg:
+		if m.thinking {
+			m.viewport.Height += 1
+		}
+		m.thinking = false
+
+		if m.currentHelper != nil {
+			m.currentHelper.Content = fmt.Sprintf("Error: %v", msg)
+			m.currentHelper.IsError = true
+			m.messages = append(m.messages, *m.currentHelper)
+			m.currentHelper = nil
+		} else {
+			// Standalone error
+			m.messages = append(m.messages, ChatMessage{Role: "golem", Content: fmt.Sprintf("System Error: %v", msg), IsError: true})
+		}
+
+		m.viewport.SetContent(m.renderAll())
+		m.viewport.GotoBottom()
+
 		m.err = msg
 		return m, nil
 	}
 
-	return m, tea.Batch(tiCmd, vpCmd)
+	if m.thinking {
+		m.spinner, spCmd = m.spinner.Update(msg)
+	}
+
+	return m, tea.Batch(tiCmd, vpCmd, spCmd)
 }
 
 func (m model) View() string {
-	return fmt.Sprintf(
-		"%s\n%s",
+	var processingView string
+	if m.thinking {
+		// When thinking, we show the spinner
+		padding := strings.Repeat(" ", 2)
+		processingView = fmt.Sprintf("%s%s Thinking...", padding, m.spinner.View())
+		processingView = m.thinkingStyle.Render(processingView)
+	}
+
+	// Use JoinVertical for cleaner stacking
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
 		m.viewport.View(),
+		processingView,
 		m.textarea.View(),
 	)
+
+	return content
 }
 
 func runChat(cmd *cobra.Command, args []string) error {
@@ -265,8 +569,9 @@ func runChat(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Disable logging for TUI
-	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := configureLogger(cfg, logLevelOverride, true); err != nil {
+		return fmt.Errorf("failed to configure logger: %w", err)
+	}
 
 	modelProvider, err := provider.NewChatModel(ctx, cfg)
 	if err != nil {
@@ -282,6 +587,12 @@ func runChat(cmd *cobra.Command, args []string) error {
 	if err := loop.RegisterDefaultTools(cfg); err != nil {
 		return fmt.Errorf("failed to register tools: %w", err)
 	}
+	workspacePath, err := cfg.WorkspacePathChecked()
+	if err != nil {
+		return fmt.Errorf("invalid workspace: %w", err)
+	}
+	loop.SetRuntimeMetrics(metrics.NewRuntimeMetrics(workspacePath))
+	logAndAuditRuntimePolicyStartup(ctx, loop, cfg)
 
 	if len(args) > 0 {
 		message := strings.Join(args, " ")
