@@ -131,6 +131,8 @@ func (m *RuntimeMetrics) RecordToolExecution(duration time.Duration, result stri
 	}
 
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.snap.UpdatedAt = now
 	m.snap.Tool.Total++
 	m.snap.Tool.TotalLatencyMs += latencyMs
@@ -148,10 +150,7 @@ func (m *RuntimeMetrics) RecordToolExecution(duration time.Duration, result stri
 	m.buckets[latencyBucketIndex(latencyMs)]++
 	m.snap.Tool.P95ProxyLatencyMs = p95ProxyFromBuckets(m.buckets, m.snap.Tool.Total)
 
-	snapshot := m.snap
-	m.mu.Unlock()
-
-	return snapshot, persistRuntimeSnapshot(m.path, snapshot)
+	return m.snap, persistRuntimeSnapshot(m.path, m.snap)
 }
 
 // RecordChannelSend updates outbound channel send metrics and persists the snapshot.
@@ -163,15 +162,15 @@ func (m *RuntimeMetrics) RecordChannelSend(success bool) (RuntimeSnapshot, error
 	now := time.Now().UTC()
 
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.snap.UpdatedAt = now
 	m.snap.Channel.SendAttempts++
 	if !success {
 		m.snap.Channel.SendFailures++
 	}
-	snapshot := m.snap
-	m.mu.Unlock()
 
-	return snapshot, persistRuntimeSnapshot(m.path, snapshot)
+	return m.snap, persistRuntimeSnapshot(m.path, m.snap)
 }
 
 // RecordMemoryRecall records memory recall count and hit-source breakdown.
@@ -185,6 +184,8 @@ func (m *RuntimeMetrics) RecordMemoryRecall(itemCount int, sourceHits map[string
 	now := time.Now().UTC()
 
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.snap.UpdatedAt = now
 	m.snap.Memory.Recalls++
 	m.snap.Memory.TotalItems += int64(itemCount)
@@ -195,10 +196,8 @@ func (m *RuntimeMetrics) RecordMemoryRecall(itemCount int, sourceHits map[string
 	m.snap.Memory.LongTermHits += int64(sourceHits["long_term"])
 	m.snap.Memory.DiaryRecentHits += int64(sourceHits["diary_recent"])
 	m.snap.Memory.DiaryKeywordHits += int64(sourceHits["diary_keyword"])
-	snapshot := m.snap
-	m.mu.Unlock()
 
-	return snapshot, persistRuntimeSnapshot(m.path, snapshot)
+	return m.snap, persistRuntimeSnapshot(m.path, m.snap)
 }
 
 // ReadRuntimeSnapshot reads the persisted snapshot from workspace state.
