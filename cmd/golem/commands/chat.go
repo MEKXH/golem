@@ -591,7 +591,9 @@ func runChat(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid workspace: %w", err)
 	}
-	loop.SetRuntimeMetrics(metrics.NewRuntimeMetrics(workspacePath))
+	runtimeMetrics := metrics.NewRuntimeMetrics(workspacePath)
+	defer runtimeMetrics.Close()
+	loop.SetRuntimeMetrics(runtimeMetrics)
 	logAndAuditRuntimePolicyStartup(ctx, loop, cfg)
 
 	if len(args) > 0 {

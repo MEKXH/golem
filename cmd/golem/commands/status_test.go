@@ -104,6 +104,7 @@ func TestStatusCommand_PrintsRuntimeMetricsSnapshot(t *testing.T) {
 	_, _ = recorder.RecordToolExecution(123*time.Millisecond, "", nil)
 	_, _ = recorder.RecordToolExecution(2*time.Second, "", os.ErrDeadlineExceeded)
 	_, _ = recorder.RecordChannelSend(false)
+	recorder.Close()
 
 	output := captureOutput(t, func() {
 		if err := runStatus(nil, nil); err != nil {
@@ -136,6 +137,7 @@ func TestStatusCommand_JSONOutputIncludesRuntimeMetrics(t *testing.T) {
 	_, _ = recorder.RecordMemoryRecall(2, map[string]int{
 		"diary_recent": 2,
 	})
+	recorder.Close()
 
 	cmd := NewStatusCmd()
 	if err := cmd.Flags().Set("json", "true"); err != nil {

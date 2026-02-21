@@ -10,6 +10,7 @@ import (
 func TestRuntimeMetrics_AggregatesToolAndChannelStats(t *testing.T) {
 	workspace := t.TempDir()
 	recorder := NewRuntimeMetrics(workspace)
+	defer recorder.Close()
 
 	snap, err := recorder.RecordToolExecution(120*time.Millisecond, "", nil)
 	if err != nil {
@@ -64,6 +65,9 @@ func TestRuntimeMetrics_ReadRuntimeSnapshot(t *testing.T) {
 		t.Fatalf("RecordChannelSend error: %v", err)
 	}
 
+	// Must close to flush to disk
+	recorder.Close()
+
 	snap, err := ReadRuntimeSnapshot(workspace)
 	if err != nil {
 		t.Fatalf("ReadRuntimeSnapshot error: %v", err)
@@ -92,6 +96,9 @@ func TestRuntimeMetrics_RecordMemoryRecall(t *testing.T) {
 	if snap.Memory.LongTermHits != 1 || snap.Memory.DiaryRecentHits != 2 || snap.Memory.DiaryKeywordHits != 1 {
 		t.Fatalf("unexpected memory source hits: %+v", snap.Memory)
 	}
+
+	// Must close to flush to disk
+	recorder.Close()
 
 	loaded, err := ReadRuntimeSnapshot(workspace)
 	if err != nil {
