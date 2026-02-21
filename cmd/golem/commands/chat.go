@@ -135,6 +135,8 @@ type model struct {
 	ctx  context.Context
 	err  error
 
+	currentTool string // Track the tool currently running
+
 	width int // Track window width for re-rendering
 }
 
@@ -467,6 +469,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case responseMsg:
+		// Clear running tool
+		m.currentTool = ""
+
 		// Restore viewport height
 		if m.thinking {
 			m.viewport.Height += 1
@@ -492,6 +497,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 
 	case toolStartMsg:
+		m.currentTool = msg.name
 		if m.currentHelper == nil {
 			m.currentHelper = &ChatMessage{Role: "golem"}
 		}
@@ -500,6 +506,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 
 	case toolFinishMsg:
+		m.currentTool = ""
 		if m.currentHelper == nil {
 			m.currentHelper = &ChatMessage{Role: "golem"}
 		}
@@ -547,7 +554,11 @@ func (m model) View() string {
 	if m.thinking {
 		// When thinking, we show the spinner
 		padding := strings.Repeat(" ", 2)
-		processingView = fmt.Sprintf("%s%s Thinking...", padding, m.spinner.View())
+		label := "Thinking..."
+		if m.currentTool != "" {
+			label = fmt.Sprintf("Running tool: %s...", m.currentTool)
+		}
+		processingView = fmt.Sprintf("%s%s %s", padding, m.spinner.View(), label)
 		processingView = m.thinkingStyle.Render(processingView)
 	}
 
