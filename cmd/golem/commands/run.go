@@ -74,6 +74,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	runtimeMetrics := metrics.NewRuntimeMetrics(workspacePath)
+	defer runtimeMetrics.Close()
 	loop.SetRuntimeMetrics(runtimeMetrics)
 	logAndAuditRuntimePolicyStartup(ctx, loop, cfg)
 

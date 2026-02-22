@@ -16,12 +16,18 @@ import (
 
 // ContextBuilder builds LLM context
 type ContextBuilder struct {
-	workspacePath string
+	workspacePath  string
+	runtimeMetrics *metrics.RuntimeMetrics
 }
 
 // NewContextBuilder creates a context builder
 func NewContextBuilder(workspacePath string) *ContextBuilder {
 	return &ContextBuilder{workspacePath: workspacePath}
+}
+
+// SetRuntimeMetrics attaches a runtime metrics recorder
+func (c *ContextBuilder) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
+	c.runtimeMetrics = recorder
 }
 
 // BuildSystemPrompt assembles the system prompt
@@ -101,7 +107,9 @@ func (c *ContextBuilder) buildMemoryRecallSection(query string) string {
 		return ""
 	}
 
-	_, _ = metrics.NewRuntimeMetrics(c.workspacePath).RecordMemoryRecall(recall.RecallCount, recall.SourceHits)
+	if c.runtimeMetrics != nil {
+		_, _ = c.runtimeMetrics.RecordMemoryRecall(recall.RecallCount, recall.SourceHits)
+	}
 
 	var sb strings.Builder
 	sb.WriteString("## Memory Recall")

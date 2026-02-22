@@ -85,6 +85,9 @@ func (l *Loop) SetActivityRecorder(recorder func(channel, chatID string)) {
 // SetRuntimeMetrics attaches a runtime metrics recorder for tool execution stats.
 func (l *Loop) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
 	l.runtimeMetric = recorder
+	if l.context != nil {
+		l.context.SetRuntimeMetrics(recorder)
+	}
 }
 
 // RegisterDefaultTools registers all built-in tools
