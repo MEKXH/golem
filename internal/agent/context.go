@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/MEKXH/golem/internal/memory"
 	"github.com/MEKXH/golem/internal/metrics"
@@ -16,8 +17,10 @@ import (
 
 // ContextBuilder builds LLM context
 type ContextBuilder struct {
-	workspacePath  string
-	runtimeMetrics *metrics.RuntimeMetrics
+	workspacePath   string
+	runtimeMetrics  *metrics.RuntimeMetrics
+	mu              sync.RWMutex
+	cachedBaseParts []string
 }
 
 // NewContextBuilder creates a context builder
@@ -28,6 +31,13 @@ func NewContextBuilder(workspacePath string) *ContextBuilder {
 // SetRuntimeMetrics attaches a runtime metrics recorder
 func (c *ContextBuilder) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
 	c.runtimeMetrics = recorder
+}
+
+// InvalidateCache clears the cached system prompt parts
+func (c *ContextBuilder) InvalidateCache() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cachedBaseParts = nil
 }
 
 // BuildSystemPrompt assembles the system prompt
@@ -54,6 +64,26 @@ func (c *ContextBuilder) buildSystemPromptForInput(query string) string {
 }
 
 func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
+	c.mu.RLock()
+	if c.cachedBaseParts != nil {
+		defer c.mu.RUnlock()
+		// Return a copy to avoid modification by caller
+		result := make([]string, len(c.cachedBaseParts))
+		copy(result, c.cachedBaseParts)
+		return result
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Double check after acquiring write lock
+	if c.cachedBaseParts != nil {
+		result := make([]string, len(c.cachedBaseParts))
+		copy(result, c.cachedBaseParts)
+		return result
+	}
+
 	parts := make([]string, 0, 8)
 	parts = append(parts, c.coreIdentity())
 
@@ -67,6 +97,11 @@ func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
 	if skillsSummary := skills.NewLoader(c.workspacePath).BuildSkillsSummary(); skillsSummary != "" {
 		parts = append(parts, skillsSummary)
 	}
+
+	// Store copy in cache
+	c.cachedBaseParts = make([]string, len(parts))
+	copy(c.cachedBaseParts, parts)
+
 	return parts
 }
 
