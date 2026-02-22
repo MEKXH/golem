@@ -52,6 +52,10 @@ var (
 	toolLogStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#888888")).
 			Italic(true)
+
+	helpStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241")).
+			Padding(0, 1)
 )
 
 // Golem ASCII Art
@@ -367,6 +371,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		processingHeight = 1
 	}
 
+	// Help height
+	helpHeight := 1
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -385,8 +392,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Width = availableWidth
 
 		// Calculate available height for viewport
-		// WindowHeight - TextareaHeight - ProcessingHeight
-		availableHeight := msg.Height - textareaHeight - processingHeight
+		// WindowHeight - TextareaHeight - ProcessingHeight - HelpHeight
+		availableHeight := msg.Height - textareaHeight - processingHeight - helpHeight
 		if availableHeight < 5 {
 			availableHeight = 5 // Minimum height
 		}
@@ -563,11 +570,13 @@ func (m model) View() string {
 	}
 
 	// Use JoinVertical for cleaner stacking
+	helpView := helpStyle.Render("Enter: Send • /new: Reset • Esc: Quit")
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		m.viewport.View(),
 		processingView,
 		m.textarea.View(),
+		helpView,
 	)
 
 	return content
