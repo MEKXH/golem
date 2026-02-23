@@ -409,6 +409,11 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 				if err != nil {
 					result = "Error: " + err.Error()
 				}
+
+				if err == nil && (tc.Function.Name == "write_file" || tc.Function.Name == "edit_file" || tc.Function.Name == "append_file") {
+					l.context.InvalidateCache()
+				}
+
 				l.auditToolExecution(toolCtx, tc.Function.Name, result, err)
 				toolDuration := time.Since(toolStart)
 				logAttrs := []any{
