@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -411,7 +412,12 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 				}
 
 				if err == nil && (tc.Function.Name == "write_file" || tc.Function.Name == "edit_file" || tc.Function.Name == "append_file") {
-					l.context.InvalidateCache()
+					var fileArg struct {
+						Path string `json:"path"`
+					}
+					// Best effort parsing; if fails, we pass empty string which forces invalidation
+					_ = json.Unmarshal([]byte(tc.Function.Arguments), &fileArg)
+					l.context.InvalidateCache(fileArg.Path)
 				}
 
 				l.auditToolExecution(toolCtx, tc.Function.Name, result, err)
