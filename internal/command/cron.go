@@ -14,8 +14,10 @@ import (
 // Subcommands: list, remove <id>, enable <id>, disable <id>, run <id>
 type CronCommand struct{}
 
-func (c *CronCommand) Name() string        { return "cron" }
-func (c *CronCommand) Description() string { return "Manage cron jobs (list|remove|enable|disable|run)" }
+func (c *CronCommand) Name() string { return "cron" }
+func (c *CronCommand) Description() string {
+	return "Manage cron jobs (list|remove|enable|disable|run)"
+}
 
 func (c *CronCommand) Execute(ctx context.Context, args string, env Env) Result {
 	sub, rest, _ := strings.Cut(args, " ")
