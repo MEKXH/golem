@@ -302,8 +302,9 @@ func (m model) renderMessage(msg ChatMessage) string {
 					toolTxt += fmt.Sprintf(" ✖ %v", t.Err)
 				} else {
 					res := t.Result
-					if len(res) > 50 {
-						res = res[:50] + "..."
+					// Show more context for tool output (200 chars)
+					if len(res) > 200 {
+						res = res[:200] + "..."
 					}
 					toolTxt += fmt.Sprintf(" ✔ %s", res)
 				}
@@ -587,9 +588,18 @@ func (m model) View() string {
 		descStyle.Render("Send"),
 		keyStyle.Render("/new"),
 		descStyle.Render("Reset"),
-		keyStyle.Render("Esc"),
+		keyStyle.Render("PgUp/Dn"),
+		descStyle.Render("Scroll"),
+		keyStyle.Render("Esc/Ctrl+C"),
 		descStyle.Render("Quit"),
 	)
+
+	// Add scroll indicator if not at bottom
+	if !m.viewport.AtBottom() {
+		scrollIndicator := keyStyle.Copy().Background(lipgloss.Color("172")).Render("↓ Scrolled Up") // Orange
+		helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, scrollIndicator)
+	}
+
 	helpView = helpStyle.Render(helpView)
 
 	content := lipgloss.JoinVertical(
