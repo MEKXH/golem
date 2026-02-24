@@ -9,9 +9,9 @@ import (
 // Schedule defines when a job should run.
 type Schedule struct {
 	Kind    string `json:"kind"`               // "at" | "every" | "cron"
-	AtMS    *int64 `json:"at_ms,omitempty"`     // one-shot timestamp (milliseconds)
-	EveryMS *int64 `json:"every_ms,omitempty"`  // interval (milliseconds)
-	Expr    string `json:"expr,omitempty"`      // cron expression (5-field)
+	AtMS    *int64 `json:"at_ms,omitempty"`    // one-shot timestamp (milliseconds)
+	EveryMS *int64 `json:"every_ms,omitempty"` // interval (milliseconds)
+	Expr    string `json:"expr,omitempty"`     // cron expression (5-field)
 }
 
 // Payload defines what a job does when triggered.

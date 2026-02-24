@@ -56,6 +56,17 @@ var (
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241")).
 			Padding(0, 1)
+
+	keyStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FAFAFA")).
+			Background(lipgloss.Color("240")).
+			Padding(0, 1).
+			Bold(true)
+
+	descStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241")).
+			PaddingLeft(1).
+			PaddingRight(2)
 )
 
 // Golem ASCII Art
@@ -570,7 +581,17 @@ func (m model) View() string {
 	}
 
 	// Use JoinVertical for cleaner stacking
-	helpView := helpStyle.Render("Enter: Send • /new: Reset • Esc: Quit")
+	helpView := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		keyStyle.Render("Enter"),
+		descStyle.Render("Send"),
+		keyStyle.Render("/new"),
+		descStyle.Render("Reset"),
+		keyStyle.Render("Esc"),
+		descStyle.Render("Quit"),
+	)
+	helpView = helpStyle.Render(helpView)
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		m.viewport.View(),

@@ -64,10 +64,10 @@ func TestStripGitHubBranchPrefix(t *testing.T) {
 
 func TestInstall_URLConstruction(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		wantPath   string // expected request path on the mock server
-		wantSkill  string // expected skill directory name
+		name      string
+		input     string
+		wantPath  string // expected request path on the mock server
+		wantSkill string // expected skill directory name
 	}{
 		{
 			name:      "simple owner/repo",
