@@ -16,6 +16,10 @@ import (
 )
 
 // ContextBuilder builds LLM context
+var watchedBaseFiles = []string{
+	"IDENTITY.md", "SOUL.md", "USER.md", "TOOLS.md", "AGENTS.md",
+}
+
 type ContextBuilder struct {
 	workspacePath   string
 	runtimeMetrics  *metrics.RuntimeMetrics
@@ -33,11 +37,49 @@ func (c *ContextBuilder) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
 	c.runtimeMetrics = recorder
 }
 
-// InvalidateCache clears the cached system prompt parts
-func (c *ContextBuilder) InvalidateCache() {
+// InvalidateCache clears the cached system prompt parts if the changed path is relevant.
+// If changedPath is empty, it forces invalidation.
+func (c *ContextBuilder) InvalidateCache(changedPath string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.cachedBaseParts = nil
+
+	if changedPath == "" {
+		c.cachedBaseParts = nil
+		return
+	}
+
+	// Resolve workspace absolute path
+	workspaceAbs, err := filepath.Abs(c.workspacePath)
+	if err != nil {
+		// Fallback: if we can't resolve workspace, play it safe and invalidate
+		c.cachedBaseParts = nil
+		return
+	}
+
+	// Resolve changed path absolute
+	changedAbs, err := filepath.Abs(changedPath)
+	if err != nil {
+		c.cachedBaseParts = nil
+		return
+	}
+
+	// Check against base files
+	for _, name := range watchedBaseFiles {
+		if changedAbs == filepath.Join(workspaceAbs, name) {
+			c.cachedBaseParts = nil
+			return
+		}
+	}
+
+	// Check against skills directory
+	skillsDir := filepath.Join(workspaceAbs, "skills")
+	// Check if changedAbs is inside skillsDir
+	// We use HasPrefix with separator check to ensure correct directory matching
+	rel, err := filepath.Rel(skillsDir, changedAbs)
+	if err == nil && !strings.HasPrefix(rel, "..") {
+		c.cachedBaseParts = nil
+		return
+	}
 }
 
 // BuildSystemPrompt assembles the system prompt
@@ -87,8 +129,7 @@ func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
 	parts := make([]string, 0, 8)
 	parts = append(parts, c.coreIdentity())
 
-	bootstrapFiles := []string{"IDENTITY.md", "SOUL.md", "USER.md", "TOOLS.md", "AGENTS.md"}
-	for _, name := range bootstrapFiles {
+	for _, name := range watchedBaseFiles {
 		if content := c.readWorkspaceFile(name); content != "" {
 			parts = append(parts, "## "+strings.TrimSuffix(name, ".md")+"\n"+content)
 		}
