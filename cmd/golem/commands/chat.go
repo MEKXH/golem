@@ -127,6 +127,13 @@ type ChatMessage struct {
 	Thinking string
 	Tools    []ToolLog
 	IsError  bool
+
+	// Cache
+	renderedContent        string
+	renderedWidth          int
+	lastRenderedContent    string
+	lastRenderedThinking   string
+	lastRenderedToolsLen   int
 }
 
 type model struct {
@@ -249,19 +256,19 @@ type toolFinishMsg struct {
 func (m model) renderAll() string {
 	var sb strings.Builder
 
-	for _, msg := range m.messages {
-		sb.WriteString(m.renderMessage(msg))
+	for i := range m.messages {
+		sb.WriteString(m.renderMessage(&m.messages[i]))
 		sb.WriteString("\n")
 	}
 
 	if m.currentHelper != nil {
-		sb.WriteString(m.renderMessage(*m.currentHelper))
+		sb.WriteString(m.renderMessage(m.currentHelper))
 	}
 
 	return sb.String()
 }
 
-func (m model) renderMessage(msg ChatMessage) string {
+func (m model) renderMessage(msg *ChatMessage) string {
 	// Adjust max width for content (Total Width - Padding - Border)
 	// Approximate padding/border is 4 chars
 	contentWidth := m.width - 6
@@ -269,11 +276,21 @@ func (m model) renderMessage(msg ChatMessage) string {
 		contentWidth = 10
 	}
 
+	if msg.renderedContent != "" &&
+		msg.renderedWidth == m.width &&
+		msg.Content == msg.lastRenderedContent &&
+		msg.Thinking == msg.lastRenderedThinking &&
+		len(msg.Tools) == msg.lastRenderedToolsLen {
+		return msg.renderedContent
+	}
+
+	var result string
+
 	switch msg.Role {
 	case "system":
 		// Left aligned system message to preserve ASCII art alignment
 		style := lipgloss.NewStyle().Width(m.width).Foreground(lipgloss.Color("240"))
-		return style.Render(msg.Content) + "\n"
+		result = style.Render(msg.Content) + "\n"
 
 	case "user":
 		// Render content with a header inside
@@ -284,7 +301,7 @@ func (m model) renderMessage(msg ChatMessage) string {
 		body := userBodyStyle.
 			Width(contentWidth).
 			Render(fullContent)
-		return fmt.Sprintf("\n%s", body)
+		result = fmt.Sprintf("\n%s", body)
 
 	case "golem":
 		// Golem Header
@@ -345,9 +362,15 @@ func (m model) renderMessage(msg ChatMessage) string {
 			Width(contentWidth).
 			Render(finalContent)
 
-		return fmt.Sprintf("\n%s", body)
+		result = fmt.Sprintf("\n%s", body)
 	}
-	return ""
+
+	msg.renderedContent = result
+	msg.renderedWidth = m.width
+	msg.lastRenderedContent = msg.Content
+	msg.lastRenderedThinking = msg.Thinking
+	msg.lastRenderedToolsLen = len(msg.Tools)
+	return result
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
