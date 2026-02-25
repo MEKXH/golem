@@ -2,9 +2,11 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/MEKXH/golem/internal/bus"
@@ -84,6 +86,9 @@ func (l *Loop) SetActivityRecorder(recorder func(channel, chatID string)) {
 // SetRuntimeMetrics attaches a runtime metrics recorder for tool execution stats.
 func (l *Loop) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
 	l.runtimeMetric = recorder
+	if l.context != nil {
+		l.context.SetRuntimeMetrics(recorder)
+	}
 }
 
 // RegisterDefaultTools registers all built-in tools
@@ -374,61 +379,97 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 
 		messages = append(messages, resp)
 
-		for _, tc := range resp.ToolCalls {
-			toolStart := time.Now()
-			slog.Debug("executing tool", "request_id", msg.RequestID, "name", tc.Function.Name)
-
-			if l.OnToolStart != nil {
-				l.OnToolStart(tc.Function.Name, tc.Function.Arguments)
-			}
-
-			toolCtx := tools.WithInvocationContext(ctx, tools.InvocationContext{
-				Channel:   msg.Channel,
-				ChatID:    msg.ChatID,
-				SenderID:  msg.SenderID,
-				RequestID: msg.RequestID,
-				SessionID: msg.SessionKey(),
-			})
-
-			result, err := l.tools.Execute(toolCtx, tc.Function.Name, tc.Function.Arguments)
-			if err != nil {
-				result = "Error: " + err.Error()
-			}
-			l.auditToolExecution(toolCtx, tc.Function.Name, result, err)
-			toolDuration := time.Since(toolStart)
-			logAttrs := []any{
-				"request_id", msg.RequestID,
-				"channel", msg.Channel,
-				"chat_id", msg.ChatID,
-				"tool", tc.Function.Name,
-				"tool_duration", toolDuration.String(),
-				"duration_ms", toolDuration.Milliseconds(),
-				"success", err == nil,
-			}
-			if l.runtimeMetric != nil {
-				snapshot, metricErr := l.runtimeMetric.RecordToolExecution(toolDuration, result, err)
-				if metricErr != nil {
-					slog.Warn("record runtime metrics failed", "scope", "tool", "error", metricErr)
-				}
-				logAttrs = append(logAttrs,
-					"tool_total", snapshot.Tool.Total,
-					"tool_error_ratio", snapshot.Tool.ErrorRatio(),
-					"tool_timeout_ratio", snapshot.Tool.TimeoutRatio(),
-					"tool_latency_p95_proxy_ms", snapshot.Tool.P95ProxyLatencyMs,
-				)
-			}
-			slog.Info("tool execution finished", logAttrs...)
-
-			if l.OnToolFinish != nil {
-				l.OnToolFinish(tc.Function.Name, result, err)
-			}
-
-			messages = append(messages, &schema.Message{
-				Role:       schema.Tool,
-				Content:    result,
-				ToolCallID: tc.ID,
-			})
+		type toolResult struct {
+			index int
+			msg   *schema.Message
 		}
+
+		resultChan := make(chan toolResult, len(resp.ToolCalls))
+		var wg sync.WaitGroup
+
+		for i, tc := range resp.ToolCalls {
+			wg.Add(1)
+			go func(i int, tc schema.ToolCall) {
+				defer wg.Done()
+				toolStart := time.Now()
+				slog.Debug("executing tool", "request_id", msg.RequestID, "name", tc.Function.Name)
+
+				if l.OnToolStart != nil {
+					l.OnToolStart(tc.Function.Name, tc.Function.Arguments)
+				}
+
+				toolCtx := tools.WithInvocationContext(ctx, tools.InvocationContext{
+					Channel:   msg.Channel,
+					ChatID:    msg.ChatID,
+					SenderID:  msg.SenderID,
+					RequestID: msg.RequestID,
+					SessionID: msg.SessionKey(),
+				})
+
+				result, err := l.tools.Execute(toolCtx, tc.Function.Name, tc.Function.Arguments)
+				if err != nil {
+					result = "Error: " + err.Error()
+				}
+
+				if err == nil && (tc.Function.Name == "write_file" || tc.Function.Name == "edit_file" || tc.Function.Name == "append_file") {
+					var fileArg struct {
+						Path string `json:"path"`
+					}
+					// Best effort parsing; if fails, we pass empty string which forces invalidation
+					_ = json.Unmarshal([]byte(tc.Function.Arguments), &fileArg)
+					l.context.InvalidateCache(fileArg.Path)
+				}
+
+				l.auditToolExecution(toolCtx, tc.Function.Name, result, err)
+				toolDuration := time.Since(toolStart)
+				logAttrs := []any{
+					"request_id", msg.RequestID,
+					"channel", msg.Channel,
+					"chat_id", msg.ChatID,
+					"tool", tc.Function.Name,
+					"tool_duration", toolDuration.String(),
+					"duration_ms", toolDuration.Milliseconds(),
+					"success", err == nil,
+				}
+				if l.runtimeMetric != nil {
+					snapshot, metricErr := l.runtimeMetric.RecordToolExecution(toolDuration, result, err)
+					if metricErr != nil {
+						slog.Warn("record runtime metrics failed", "scope", "tool", "error", metricErr)
+					}
+					logAttrs = append(logAttrs,
+						"tool_total", snapshot.Tool.Total,
+						"tool_error_ratio", snapshot.Tool.ErrorRatio(),
+						"tool_timeout_ratio", snapshot.Tool.TimeoutRatio(),
+						"tool_latency_p95_proxy_ms", snapshot.Tool.P95ProxyLatencyMs,
+					)
+				}
+				slog.Info("tool execution finished", logAttrs...)
+
+				if l.OnToolFinish != nil {
+					l.OnToolFinish(tc.Function.Name, result, err)
+				}
+
+				resultChan <- toolResult{
+					index: i,
+					msg: &schema.Message{
+						Role:       schema.Tool,
+						Content:    result,
+						ToolCallID: tc.ID,
+					},
+				}
+			}(i, tc)
+		}
+
+		wg.Wait()
+		close(resultChan)
+
+		// Collect results and sort them to maintain original order
+		results := make([]*schema.Message, len(resp.ToolCalls))
+		for res := range resultChan {
+			results[res.index] = res.msg
+		}
+
+		messages = append(messages, results...)
 	}
 
 	if finalContent == "" {

@@ -98,14 +98,64 @@ type RuntimeMetrics struct {
 	mu      sync.Mutex
 	snap    RuntimeSnapshot
 	buckets []int64
+
+	dirty    bool
+	stopChan chan struct{}
+	wg       sync.WaitGroup
 }
 
 // NewRuntimeMetrics creates a metrics recorder rooted at <workspace>/state/runtime_metrics.json.
 func NewRuntimeMetrics(workspacePath string) *RuntimeMetrics {
-	return &RuntimeMetrics{
-		path:    runtimeMetricsPath(workspacePath),
-		buckets: make([]int64, len(latencyBucketUpperBoundsMs)+1),
+	m := &RuntimeMetrics{
+		path:     runtimeMetricsPath(workspacePath),
+		buckets:  make([]int64, len(latencyBucketUpperBoundsMs)+1),
+		stopChan: make(chan struct{}),
 	}
+	m.wg.Add(1)
+	go m.runFlusher()
+	return m
+}
+
+// runFlusher periodically persists metrics if they are dirty.
+func (m *RuntimeMetrics) runFlusher() {
+	defer m.wg.Done()
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			m.Flush()
+		case <-m.stopChan:
+			m.Flush()
+			return
+		}
+	}
+}
+
+// Flush forces persistence of the snapshot if dirty.
+func (m *RuntimeMetrics) Flush() {
+	m.mu.Lock()
+	if !m.dirty {
+		m.mu.Unlock()
+		return
+	}
+	// Copy snapshot to release lock during I/O
+	snap := m.snap
+	m.dirty = false
+	m.mu.Unlock()
+
+	_ = persistRuntimeSnapshot(m.path, snap)
+}
+
+// Close stops the flusher and ensures final persistence.
+func (m *RuntimeMetrics) Close() error {
+	if m == nil {
+		return nil
+	}
+	close(m.stopChan)
+	m.wg.Wait()
+	return nil
 }
 
 // Snapshot returns the latest in-memory snapshot.
@@ -118,7 +168,7 @@ func (m *RuntimeMetrics) Snapshot() RuntimeSnapshot {
 	return m.snap
 }
 
-// RecordToolExecution updates tool metrics and persists the snapshot.
+// RecordToolExecution updates tool metrics and marks for persistence.
 func (m *RuntimeMetrics) RecordToolExecution(duration time.Duration, result string, runErr error) (RuntimeSnapshot, error) {
 	if m == nil {
 		return RuntimeSnapshot{}, nil
@@ -131,6 +181,8 @@ func (m *RuntimeMetrics) RecordToolExecution(duration time.Duration, result stri
 	}
 
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.snap.UpdatedAt = now
 	m.snap.Tool.Total++
 	m.snap.Tool.TotalLatencyMs += latencyMs
@@ -148,13 +200,11 @@ func (m *RuntimeMetrics) RecordToolExecution(duration time.Duration, result stri
 	m.buckets[latencyBucketIndex(latencyMs)]++
 	m.snap.Tool.P95ProxyLatencyMs = p95ProxyFromBuckets(m.buckets, m.snap.Tool.Total)
 
-	snapshot := m.snap
-	m.mu.Unlock()
-
-	return snapshot, persistRuntimeSnapshot(m.path, snapshot)
+	m.dirty = true
+	return m.snap, nil
 }
 
-// RecordChannelSend updates outbound channel send metrics and persists the snapshot.
+// RecordChannelSend updates outbound channel send metrics and marks for persistence.
 func (m *RuntimeMetrics) RecordChannelSend(success bool) (RuntimeSnapshot, error) {
 	if m == nil {
 		return RuntimeSnapshot{}, nil
@@ -163,15 +213,16 @@ func (m *RuntimeMetrics) RecordChannelSend(success bool) (RuntimeSnapshot, error
 	now := time.Now().UTC()
 
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.snap.UpdatedAt = now
 	m.snap.Channel.SendAttempts++
 	if !success {
 		m.snap.Channel.SendFailures++
 	}
-	snapshot := m.snap
-	m.mu.Unlock()
 
-	return snapshot, persistRuntimeSnapshot(m.path, snapshot)
+	m.dirty = true
+	return m.snap, nil
 }
 
 // RecordMemoryRecall records memory recall count and hit-source breakdown.
@@ -185,6 +236,8 @@ func (m *RuntimeMetrics) RecordMemoryRecall(itemCount int, sourceHits map[string
 	now := time.Now().UTC()
 
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.snap.UpdatedAt = now
 	m.snap.Memory.Recalls++
 	m.snap.Memory.TotalItems += int64(itemCount)
@@ -195,10 +248,9 @@ func (m *RuntimeMetrics) RecordMemoryRecall(itemCount int, sourceHits map[string
 	m.snap.Memory.LongTermHits += int64(sourceHits["long_term"])
 	m.snap.Memory.DiaryRecentHits += int64(sourceHits["diary_recent"])
 	m.snap.Memory.DiaryKeywordHits += int64(sourceHits["diary_keyword"])
-	snapshot := m.snap
-	m.mu.Unlock()
 
-	return snapshot, persistRuntimeSnapshot(m.path, snapshot)
+	m.dirty = true
+	return m.snap, nil
 }
 
 // ReadRuntimeSnapshot reads the persisted snapshot from workspace state.

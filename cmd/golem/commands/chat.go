@@ -52,6 +52,21 @@ var (
 	toolLogStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#888888")).
 			Italic(true)
+
+	helpStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241")).
+			Padding(0, 1)
+
+	keyStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FAFAFA")).
+			Background(lipgloss.Color("240")).
+			Padding(0, 1).
+			Bold(true)
+
+	descStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241")).
+			PaddingLeft(1).
+			PaddingRight(2)
 )
 
 // Golem ASCII Art
@@ -112,6 +127,13 @@ type ChatMessage struct {
 	Thinking string
 	Tools    []ToolLog
 	IsError  bool
+
+	// Cache
+	renderedContent        string
+	renderedWidth          int
+	lastRenderedContent    string
+	lastRenderedThinking   string
+	lastRenderedToolsLen   int
 }
 
 type model struct {
@@ -134,6 +156,8 @@ type model struct {
 	loop *agent.Loop
 	ctx  context.Context
 	err  error
+
+	currentTool string // Track the tool currently running
 
 	width int // Track window width for re-rendering
 }
@@ -232,19 +256,19 @@ type toolFinishMsg struct {
 func (m model) renderAll() string {
 	var sb strings.Builder
 
-	for _, msg := range m.messages {
-		sb.WriteString(m.renderMessage(msg))
+	for i := range m.messages {
+		sb.WriteString(m.renderMessage(&m.messages[i]))
 		sb.WriteString("\n")
 	}
 
 	if m.currentHelper != nil {
-		sb.WriteString(m.renderMessage(*m.currentHelper))
+		sb.WriteString(m.renderMessage(m.currentHelper))
 	}
 
 	return sb.String()
 }
 
-func (m model) renderMessage(msg ChatMessage) string {
+func (m model) renderMessage(msg *ChatMessage) string {
 	// Adjust max width for content (Total Width - Padding - Border)
 	// Approximate padding/border is 4 chars
 	contentWidth := m.width - 6
@@ -252,11 +276,21 @@ func (m model) renderMessage(msg ChatMessage) string {
 		contentWidth = 10
 	}
 
+	if msg.renderedContent != "" &&
+		msg.renderedWidth == m.width &&
+		msg.Content == msg.lastRenderedContent &&
+		msg.Thinking == msg.lastRenderedThinking &&
+		len(msg.Tools) == msg.lastRenderedToolsLen {
+		return msg.renderedContent
+	}
+
+	var result string
+
 	switch msg.Role {
 	case "system":
 		// Left aligned system message to preserve ASCII art alignment
 		style := lipgloss.NewStyle().Width(m.width).Foreground(lipgloss.Color("240"))
-		return style.Render(msg.Content) + "\n"
+		result = style.Render(msg.Content) + "\n"
 
 	case "user":
 		// Render content with a header inside
@@ -267,7 +301,7 @@ func (m model) renderMessage(msg ChatMessage) string {
 		body := userBodyStyle.
 			Width(contentWidth).
 			Render(fullContent)
-		return fmt.Sprintf("\n%s", body)
+		result = fmt.Sprintf("\n%s", body)
 
 	case "golem":
 		// Golem Header
@@ -285,8 +319,9 @@ func (m model) renderMessage(msg ChatMessage) string {
 					toolTxt += fmt.Sprintf(" ✖ %v", t.Err)
 				} else {
 					res := t.Result
-					if len(res) > 50 {
-						res = res[:50] + "..."
+					// Show more context for tool output (200 chars)
+					if len(res) > 200 {
+						res = res[:200] + "..."
 					}
 					toolTxt += fmt.Sprintf(" ✔ %s", res)
 				}
@@ -327,9 +362,15 @@ func (m model) renderMessage(msg ChatMessage) string {
 			Width(contentWidth).
 			Render(finalContent)
 
-		return fmt.Sprintf("\n%s", body)
+		result = fmt.Sprintf("\n%s", body)
 	}
-	return ""
+
+	msg.renderedContent = result
+	msg.renderedWidth = m.width
+	msg.lastRenderedContent = msg.Content
+	msg.lastRenderedThinking = msg.Thinking
+	msg.lastRenderedToolsLen = len(msg.Tools)
+	return result
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -365,6 +406,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		processingHeight = 1
 	}
 
+	// Help height
+	helpHeight := 1
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -383,8 +427,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Width = availableWidth
 
 		// Calculate available height for viewport
-		// WindowHeight - TextareaHeight - ProcessingHeight
-		availableHeight := msg.Height - textareaHeight - processingHeight
+		// WindowHeight - TextareaHeight - ProcessingHeight - HelpHeight
+		availableHeight := msg.Height - textareaHeight - processingHeight - helpHeight
 		if availableHeight < 5 {
 			availableHeight = 5 // Minimum height
 		}
@@ -467,6 +511,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case responseMsg:
+		// Clear running tool
+		m.currentTool = ""
+
 		// Restore viewport height
 		if m.thinking {
 			m.viewport.Height += 1
@@ -492,6 +539,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 
 	case toolStartMsg:
+		m.currentTool = msg.name
 		if m.currentHelper == nil {
 			m.currentHelper = &ChatMessage{Role: "golem"}
 		}
@@ -500,6 +548,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 
 	case toolFinishMsg:
+		m.currentTool = ""
 		if m.currentHelper == nil {
 			m.currentHelper = &ChatMessage{Role: "golem"}
 		}
@@ -547,16 +596,41 @@ func (m model) View() string {
 	if m.thinking {
 		// When thinking, we show the spinner
 		padding := strings.Repeat(" ", 2)
-		processingView = fmt.Sprintf("%s%s Thinking...", padding, m.spinner.View())
+		label := "Thinking..."
+		if m.currentTool != "" {
+			label = fmt.Sprintf("Running tool: %s...", m.currentTool)
+		}
+		processingView = fmt.Sprintf("%s%s %s", padding, m.spinner.View(), label)
 		processingView = m.thinkingStyle.Render(processingView)
 	}
 
 	// Use JoinVertical for cleaner stacking
+	helpView := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		keyStyle.Render("Enter"),
+		descStyle.Render("Send"),
+		keyStyle.Render("/new"),
+		descStyle.Render("Reset"),
+		keyStyle.Render("PgUp/Dn"),
+		descStyle.Render("Scroll"),
+		keyStyle.Render("Esc/Ctrl+C"),
+		descStyle.Render("Quit"),
+	)
+
+	// Add scroll indicator if not at bottom
+	if !m.viewport.AtBottom() {
+		scrollIndicator := keyStyle.Copy().Background(lipgloss.Color("172")).Render("↓ Scrolled Up") // Orange
+		helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, scrollIndicator)
+	}
+
+	helpView = helpStyle.Render(helpView)
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		m.viewport.View(),
 		processingView,
 		m.textarea.View(),
+		helpView,
 	)
 
 	return content
@@ -591,7 +665,9 @@ func runChat(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid workspace: %w", err)
 	}
-	loop.SetRuntimeMetrics(metrics.NewRuntimeMetrics(workspacePath))
+	runtimeMetrics := metrics.NewRuntimeMetrics(workspacePath)
+	defer runtimeMetrics.Close()
+	loop.SetRuntimeMetrics(runtimeMetrics)
 	logAndAuditRuntimePolicyStartup(ctx, loop, cfg)
 
 	if len(args) > 0 {

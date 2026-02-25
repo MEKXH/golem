@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/MEKXH/golem/internal/memory"
 	"github.com/MEKXH/golem/internal/metrics"
@@ -15,13 +16,70 @@ import (
 )
 
 // ContextBuilder builds LLM context
+var watchedBaseFiles = []string{
+	"IDENTITY.md", "SOUL.md", "USER.md", "TOOLS.md", "AGENTS.md",
+}
+
 type ContextBuilder struct {
-	workspacePath string
+	workspacePath   string
+	runtimeMetrics  *metrics.RuntimeMetrics
+	mu              sync.RWMutex
+	cachedBaseParts []string
 }
 
 // NewContextBuilder creates a context builder
 func NewContextBuilder(workspacePath string) *ContextBuilder {
 	return &ContextBuilder{workspacePath: workspacePath}
+}
+
+// SetRuntimeMetrics attaches a runtime metrics recorder
+func (c *ContextBuilder) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
+	c.runtimeMetrics = recorder
+}
+
+// InvalidateCache clears the cached system prompt parts if the changed path is relevant.
+// If changedPath is empty, it forces invalidation.
+func (c *ContextBuilder) InvalidateCache(changedPath string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if changedPath == "" {
+		c.cachedBaseParts = nil
+		return
+	}
+
+	// Resolve workspace absolute path
+	workspaceAbs, err := filepath.Abs(c.workspacePath)
+	if err != nil {
+		// Fallback: if we can't resolve workspace, play it safe and invalidate
+		c.cachedBaseParts = nil
+		return
+	}
+
+	// Resolve changed path absolute
+	changedAbs, err := filepath.Abs(changedPath)
+	if err != nil {
+		c.cachedBaseParts = nil
+		return
+	}
+
+	// Check against base files
+	for _, name := range watchedBaseFiles {
+		if changedAbs == filepath.Join(workspaceAbs, name) {
+			c.cachedBaseParts = nil
+			return
+		}
+	}
+
+	// Check against skills directory
+	skillsDir := filepath.Join(workspaceAbs, "skills")
+	// Check if changedAbs is inside skillsDir
+	// We use HasPrefix with separator check to ensure correct directory matching
+	rel, err := filepath.Rel(skillsDir, changedAbs)
+	if err == nil && !strings.HasPrefix(rel, "..") {
+		c.cachedBaseParts = nil
+		return
+	}
 }
 
 // BuildSystemPrompt assembles the system prompt
@@ -48,11 +106,30 @@ func (c *ContextBuilder) buildSystemPromptForInput(query string) string {
 }
 
 func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
+	c.mu.RLock()
+	if c.cachedBaseParts != nil {
+		defer c.mu.RUnlock()
+		// Return a copy to avoid modification by caller
+		result := make([]string, len(c.cachedBaseParts))
+		copy(result, c.cachedBaseParts)
+		return result
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Double check after acquiring write lock
+	if c.cachedBaseParts != nil {
+		result := make([]string, len(c.cachedBaseParts))
+		copy(result, c.cachedBaseParts)
+		return result
+	}
+
 	parts := make([]string, 0, 8)
 	parts = append(parts, c.coreIdentity())
 
-	bootstrapFiles := []string{"IDENTITY.md", "SOUL.md", "USER.md", "TOOLS.md", "AGENTS.md"}
-	for _, name := range bootstrapFiles {
+	for _, name := range watchedBaseFiles {
 		if content := c.readWorkspaceFile(name); content != "" {
 			parts = append(parts, "## "+strings.TrimSuffix(name, ".md")+"\n"+content)
 		}
@@ -61,6 +138,11 @@ func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
 	if skillsSummary := skills.NewLoader(c.workspacePath).BuildSkillsSummary(); skillsSummary != "" {
 		parts = append(parts, skillsSummary)
 	}
+
+	// Store copy in cache
+	c.cachedBaseParts = make([]string, len(parts))
+	copy(c.cachedBaseParts, parts)
+
 	return parts
 }
 
@@ -101,7 +183,9 @@ func (c *ContextBuilder) buildMemoryRecallSection(query string) string {
 		return ""
 	}
 
-	_, _ = metrics.NewRuntimeMetrics(c.workspacePath).RecordMemoryRecall(recall.RecallCount, recall.SourceHits)
+	if c.runtimeMetrics != nil {
+		_, _ = c.runtimeMetrics.RecordMemoryRecall(recall.RecallCount, recall.SourceHits)
+	}
 
 	var sb strings.Builder
 	sb.WriteString("## Memory Recall")

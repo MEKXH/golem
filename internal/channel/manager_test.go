@@ -149,6 +149,7 @@ func TestManager_RouteOutbound_RecordsMetrics(t *testing.T) {
 
 	deadline := time.After(500 * time.Millisecond)
 	for {
+		recorder.Flush()
 		snap, err := metrics.ReadRuntimeSnapshot(filepath.Join(tmpDir, "workspace"))
 		if err != nil {
 			t.Fatalf("ReadRuntimeSnapshot() error: %v", err)
@@ -164,6 +165,7 @@ func TestManager_RouteOutbound_RecordsMetrics(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
+	recorder.Close()
 }
 
 type flakyManagerChannel struct {

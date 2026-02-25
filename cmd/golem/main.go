@@ -1,13 +1,13 @@
 package main
 
 import (
-    "os"
+	"os"
 
-    "github.com/MEKXH/golem/cmd/golem/commands"
+	"github.com/MEKXH/golem/cmd/golem/commands"
 )
 
 func main() {
-    if err := commands.NewRootCmd().Execute(); err != nil {
-        os.Exit(1)
-    }
+	if err := commands.NewRootCmd().Execute(); err != nil {
+		os.Exit(1)
+	}
 }

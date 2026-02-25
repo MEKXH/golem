@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/MEKXH/golem/internal/cron"
 	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/skills"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -44,38 +46,61 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return printStatusJSON(cfg, workspacePath, runtimeSnapshot, runtimeErr)
 	}
 
-	fmt.Println("=== Golem Status ===")
-	fmt.Println()
+	// Styles
+	var (
+		headerStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FAFAFA")).Background(lipgloss.Color("#8E4EC6")).Padding(0, 1).MarginBottom(1)
+		sectionStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#8E4EC6")).MarginTop(1).MarginBottom(0) // Purple
+		keyStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#CCCCCC"))
+		valStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF"))
+		okStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#2E8B57")) // SeaGreen
+		warnStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500")) // Orange
+		errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4500")) // OrangeRed
+		dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
+	)
 
-	fmt.Printf("Config: %s\n", config.ConfigPath())
-	if _, err := os.Stat(config.ConfigPath()); err == nil {
-		fmt.Println("  Status: OK")
-	} else {
-		fmt.Println("  Status: Not found (run 'golem init')")
+	fmt.Println(headerStyle.Render("Golem Status"))
+
+	// Helper to print status line
+	printStatus := func(label string, status string, isOk bool) {
+		s := errorStyle
+		if isOk {
+			s = okStyle
+		}
+		fmt.Printf("  %s: %s\n", keyStyle.Render(label), s.Render(status))
 	}
 
-	fmt.Printf("\nWorkspace: %s\n", workspacePath)
-	if _, err := os.Stat(workspacePath); err == nil {
-		fmt.Println("  Status: OK")
+	fmt.Println(sectionStyle.Render("Config"))
+	fmt.Printf("  %s: %s\n", keyStyle.Render("Path"), valStyle.Render(config.ConfigPath()))
+	if _, err := os.Stat(config.ConfigPath()); err == nil {
+		printStatus("Status", "OK", true)
 	} else {
-		fmt.Println("  Status: Not found")
+		printStatus("Status", "Not found (run 'golem init')", false)
+	}
+
+	fmt.Println(sectionStyle.Render("Workspace"))
+	fmt.Printf("  %s: %s\n", keyStyle.Render("Path"), valStyle.Render(workspacePath))
+	if _, err := os.Stat(workspacePath); err == nil {
+		printStatus("Status", "OK", true)
+	} else {
+		printStatus("Status", "Not found", false)
 	}
 	workspaceMode := strings.TrimSpace(cfg.Agents.Defaults.WorkspaceMode)
 	if workspaceMode == "" {
 		workspaceMode = "default"
 	}
-	fmt.Printf("  Mode: %s\n", workspaceMode)
+	fmt.Printf("  %s: %s\n", keyStyle.Render("Mode"), valStyle.Render(workspaceMode))
 
-	fmt.Printf("\nModel: %s\n", cfg.Agents.Defaults.Model)
+	fmt.Println(sectionStyle.Render("Model"))
+	fmt.Printf("  %s: %s\n", keyStyle.Render("Name"), valStyle.Render(cfg.Agents.Defaults.Model))
 
 	// Runtime metrics
-	fmt.Println("\nRuntime Metrics:")
+	fmt.Println(sectionStyle.Render("Runtime Metrics"))
 	if runtimeErr != nil {
-		fmt.Printf("  Status: unavailable (%v)\n", runtimeErr)
+		fmt.Printf("  %s: %s\n", keyStyle.Render("Status"), errorStyle.Render(fmt.Sprintf("unavailable (%v)", runtimeErr)))
 	} else if !runtimeSnapshot.HasData() {
-		fmt.Println("  Status: no runtime data yet")
+		fmt.Printf("  %s: %s\n", keyStyle.Render("Status"), dimStyle.Render("no runtime data yet"))
 	} else {
-		fmt.Printf("  updated_at=%s\n", runtimeSnapshot.UpdatedAt.Format(time.RFC3339))
+		fmt.Printf("  %s: %s\n", keyStyle.Render("updated_at"), valStyle.Render(runtimeSnapshot.UpdatedAt.Format(time.RFC3339)))
 		fmt.Printf(
 			"  tool_total=%d tool_error_ratio=%.3f tool_timeout_ratio=%.3f tool_p95_proxy_ms=%d tool_avg_ms=%.1f\n",
 			runtimeSnapshot.Tool.Total,
@@ -92,7 +117,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	fmt.Println("\nProviders:")
+	fmt.Println(sectionStyle.Render("Providers"))
 	providers := map[string]string{
 		"OpenRouter": cfg.Providers.OpenRouter.APIKey,
 		"Claude":     cfg.Providers.Claude.APIKey,
@@ -102,70 +127,76 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		"Ollama":     cfg.Providers.Ollama.BaseURL,
 	}
 
-	for name, key := range providers {
-		status := "Not configured"
+	providerNames := make([]string, 0, len(providers))
+	for name := range providers {
+		providerNames = append(providerNames, name)
+	}
+	sort.Strings(providerNames)
+
+	for _, name := range providerNames {
+		key := providers[name]
+		status := dimStyle.Render("Not configured")
 		if key != "" {
-			status = "Configured"
+			status = okStyle.Render("Configured")
 		}
-		fmt.Printf("  %s: %s\n", name, status)
+		fmt.Printf("  %s: %s\n", keyStyle.Render(name), status)
 	}
 
 	// Tools
-	fmt.Println("\nTools:")
-	fmt.Println("  read_file: ready")
-	fmt.Println("  write_file: ready")
-	fmt.Println("  edit_file: ready")
-	fmt.Println("  append_file: ready")
-	fmt.Println("  list_dir: ready")
-	fmt.Println("  read_memory: ready")
-	fmt.Println("  write_memory: ready")
-	fmt.Println("  append_diary: ready")
-	fmt.Printf("  exec: ready (timeout=%ds, restrict_to_workspace=%v)\n", cfg.Tools.Exec.Timeout, cfg.Tools.Exec.RestrictToWorkspace)
-	fmt.Println("  web_fetch: ready")
-	webSearchStatus := "enabled (DuckDuckGo fallback)"
-	if strings.TrimSpace(cfg.Tools.Web.Search.APIKey) != "" {
-		webSearchStatus = "enabled (Brave + DuckDuckGo fallback)"
+	fmt.Println(sectionStyle.Render("Tools"))
+	tools := []string{
+		"read_file", "write_file", "edit_file", "append_file",
+		"list_dir", "read_memory", "write_memory", "append_diary",
+		"web_fetch", "manage_cron", "workflow",
 	}
-	fmt.Printf("  web_search: %s\n", webSearchStatus)
-	voiceStatus := "disabled"
+	for _, t := range tools {
+		fmt.Printf("  %s: %s\n", keyStyle.Render(t), okStyle.Render("ready"))
+	}
+	fmt.Printf("  %s: %s\n", keyStyle.Render("exec"), okStyle.Render(fmt.Sprintf("ready (timeout=%ds, restrict_to_workspace=%v)", cfg.Tools.Exec.Timeout, cfg.Tools.Exec.RestrictToWorkspace)))
+
+	webSearchStatus := okStyle.Render("enabled (DuckDuckGo fallback)")
+	if strings.TrimSpace(cfg.Tools.Web.Search.APIKey) != "" {
+		webSearchStatus = okStyle.Render("enabled (Brave + DuckDuckGo fallback)")
+	}
+	fmt.Printf("  %s: %s\n", keyStyle.Render("web_search"), webSearchStatus)
+
+	voiceStatus := dimStyle.Render("disabled")
 	if cfg.Tools.Voice.Enabled {
-		voiceStatus = fmt.Sprintf(
+		voiceStatus = okStyle.Render(fmt.Sprintf(
 			"enabled (provider=%s, model=%s, timeout=%ds)",
 			cfg.Tools.Voice.Provider,
 			cfg.Tools.Voice.Model,
 			cfg.Tools.Voice.TimeoutSeconds,
-		)
+		))
 	}
-	fmt.Printf("  voice_transcription: %s\n", voiceStatus)
-	fmt.Println("  manage_cron: ready")
-	fmt.Println("  workflow: ready")
+	fmt.Printf("  %s: %s\n", keyStyle.Render("voice_transcription"), voiceStatus)
 
 	// Channels
-	fmt.Println("\nChannels:")
+	fmt.Println(sectionStyle.Render("Channels"))
 	for _, state := range channelStates(cfg) {
-		line := "disabled"
+		line := dimStyle.Render("disabled")
 		if state.Enabled {
-			line = "enabled"
+			line = okStyle.Render("enabled")
 			if state.Ready {
-				line += " (ready)"
+				line += okStyle.Render(" (ready)")
 			} else {
-				line += " (" + state.Reason + ")"
+				line += warnStyle.Render(" (" + state.Reason + ")")
 			}
 		}
-		fmt.Printf("  %s: %s\n", titleCase(state.Name), line)
+		fmt.Printf("  %s: %s\n", keyStyle.Render(titleCase(state.Name)), line)
 	}
 
 	// Gateway
-	fmt.Println("\nGateway:")
-	fmt.Printf("  Address: %s:%d\n", cfg.Gateway.Host, cfg.Gateway.Port)
+	fmt.Println(sectionStyle.Render("Gateway"))
+	fmt.Printf("  %s: %s\n", keyStyle.Render("Address"), valStyle.Render(fmt.Sprintf("%s:%d", cfg.Gateway.Host, cfg.Gateway.Port)))
 	if cfg.Gateway.Token != "" {
-		fmt.Println("  Auth:    token configured")
+		fmt.Printf("  %s: %s\n", keyStyle.Render("Auth"), okStyle.Render("token configured"))
 	} else {
-		fmt.Println("  Auth:    no token (open)")
+		fmt.Printf("  %s: %s\n", keyStyle.Render("Auth"), warnStyle.Render("no token (open)"))
 	}
 
 	// Cron
-	fmt.Println("\nCron:")
+	fmt.Println(sectionStyle.Render("Cron"))
 	cronStorePath := filepath.Join(workspacePath, "cron", "jobs.json")
 	cronSvc := cron.NewService(cronStorePath, nil)
 	if err := cronSvc.Start(); err == nil {
@@ -176,20 +207,23 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				enabled++
 			}
 		}
-		fmt.Printf("  Jobs: %d total, %d enabled\n", len(jobs), enabled)
+		fmt.Printf("  %s: %s\n", keyStyle.Render("Jobs"), valStyle.Render(fmt.Sprintf("%d total, %d enabled", len(jobs), enabled)))
 		cronSvc.Stop()
 	} else {
-		fmt.Println("  Status: unavailable")
+		fmt.Printf("  %s: %s\n", keyStyle.Render("Status"), errorStyle.Render("unavailable"))
 	}
 
 	// Skills
-	fmt.Println("\nSkills:")
+	fmt.Println(sectionStyle.Render("Skills"))
 	loader := skills.NewLoader(workspacePath)
 	skillList := loader.ListSkills()
-	fmt.Printf("  Installed: %d\n", len(skillList))
+	fmt.Printf("  %s: %s\n", keyStyle.Render("Installed"), valStyle.Render(fmt.Sprintf("%d", len(skillList))))
 	for _, s := range skillList {
-		fmt.Printf("    - %s (%s)\n", s.Name, s.Source)
+		fmt.Printf("    - %s (%s)\n", s.Name, dimStyle.Render(s.Source))
 	}
+
+	// Footer spacing
+	fmt.Println()
 
 	return nil
 }
