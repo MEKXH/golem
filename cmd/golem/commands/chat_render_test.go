@@ -1,12 +1,15 @@
 package commands
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 type fakeRenderer struct {
@@ -70,10 +73,43 @@ func TestView_RendersFooter(t *testing.T) {
 
 	output := m.View()
 
-	expected := []string{"Enter", "Send", "/new", "Reset", "Esc", "Quit"}
+	expected := []string{"Enter", "Send", "•", "/new", "Reset", "•", "Esc", "Quit"}
 	for _, exp := range expected {
 		if !strings.Contains(output, exp) {
 			t.Errorf("expected view to contain %q, but it didn't. Output:\n%s", exp, output)
 		}
+	}
+}
+
+func TestRenderMessage_ToolIcons(t *testing.T) {
+	// Force color output for testing
+	lipgloss.SetColorProfile(termenv.TrueColor)
+
+	m := model{
+		width: 100, // Ensure width is enough
+	}
+	msg := &ChatMessage{
+		Role:    "golem",
+		Content: "test",
+		Tools: []ToolLog{
+			{Name: "success_tool", Result: "ok"},
+			{Name: "error_tool", Err: fmt.Errorf("fail")},
+		},
+	}
+
+	output := m.renderMessage(msg)
+
+	// We expect ANSI escape sequences for colors.
+	// Green for success
+	// Red for error
+	if !strings.Contains(output, "✔") {
+		t.Error("expected output to contain ✔")
+	}
+	if !strings.Contains(output, "✖") {
+		t.Error("expected output to contain ✖")
+	}
+	// Check if color codes are present (basic check for escape char)
+	if !strings.Contains(output, "\x1b[") {
+		t.Error("expected output to contain ANSI escape codes")
 	}
 }
