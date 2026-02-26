@@ -129,11 +129,11 @@ type ChatMessage struct {
 	IsError  bool
 
 	// Cache
-	renderedContent        string
-	renderedWidth          int
-	lastRenderedContent    string
-	lastRenderedThinking   string
-	lastRenderedToolsLen   int
+	renderedContent      string
+	renderedWidth        int
+	lastRenderedContent  string
+	lastRenderedThinking string
+	lastRenderedToolsLen int
 }
 
 type model struct {
@@ -314,18 +314,24 @@ func (m model) renderMessage(msg *ChatMessage) string {
 		if len(msg.Tools) > 0 {
 			contentBuilder.WriteString("\n")
 			for _, t := range msg.Tools {
-				toolTxt := fmt.Sprintf("➢ %s", t.Name)
+				// Tool Name
+				contentBuilder.WriteString(toolLogStyle.Render(fmt.Sprintf("➢ %s", t.Name)))
+
 				if t.Err != nil {
-					toolTxt += fmt.Sprintf(" ✖ %v", t.Err)
+					// Error (Red X)
+					contentBuilder.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(" ✖ "))
+					contentBuilder.WriteString(toolLogStyle.Render(fmt.Sprintf("%v", t.Err)))
 				} else {
 					res := t.Result
 					// Show more context for tool output (200 chars)
 					if len(res) > 200 {
 						res = res[:200] + "..."
 					}
-					toolTxt += fmt.Sprintf(" ✔ %s", res)
+					// Success (Green Check)
+					contentBuilder.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#2E8B57")).Render(" ✔ "))
+					contentBuilder.WriteString(toolLogStyle.Render(res))
 				}
-				contentBuilder.WriteString(toolLogStyle.Render(toolTxt) + "\n")
+				contentBuilder.WriteString("\n")
 			}
 		}
 
@@ -605,14 +611,18 @@ func (m model) View() string {
 	}
 
 	// Use JoinVertical for cleaner stacking
+	separator := descStyle.Render(" • ")
 	helpView := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		keyStyle.Render("Enter"),
 		descStyle.Render("Send"),
+		separator,
 		keyStyle.Render("/new"),
 		descStyle.Render("Reset"),
+		separator,
 		keyStyle.Render("PgUp/Dn"),
 		descStyle.Render("Scroll"),
+		separator,
 		keyStyle.Render("Esc/Ctrl+C"),
 		descStyle.Render("Quit"),
 	)
