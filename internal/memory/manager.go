@@ -187,22 +187,40 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 	}
 	seenPaths := map[string]bool{}
 
-	recentEntries, err := m.ReadRecentDiaries(recentLimit)
+	// 1. Collect all diary files once
+	diaries, err := m.collectDiaryFiles()
 	if err != nil {
 		return RecallResult{}, err
 	}
-	for _, entry := range recentEntries {
-		result.SourceHits["diary_recent"]++
-		if seenPaths[entry.Path] {
+	sort.Slice(diaries, func(i, j int) bool {
+		return diaries[i].date > diaries[j].date // Newest first
+	})
+
+	// 2. Process recent entries directly from the sorted list
+	recentCount := 0
+	for _, d := range diaries {
+		if recentCount >= recentLimit {
+			break
+		}
+
+		contentRaw, readErr := os.ReadFile(d.path)
+		if readErr != nil {
 			continue
 		}
-		seenPaths[entry.Path] = true
+		content := strings.TrimSpace(string(contentRaw))
+		if content == "" {
+			continue
+		}
+
+		result.SourceHits["diary_recent"]++
+		seenPaths[d.path] = true
 		result.Items = append(result.Items, RecallItem{
 			Source:  "diary_recent",
-			Date:    entry.Date,
-			Path:    entry.Path,
-			Excerpt: clipText(entry.Content, 320),
+			Date:    d.date,
+			Path:    d.path,
+			Excerpt: clipText(content, 320),
 		})
+		recentCount++
 	}
 
 	keywords := extractRecallKeywords(result.Query)
@@ -211,6 +229,7 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 		return result, nil
 	}
 
+	// 3. Process long-term memory
 	longTerm, err := m.ReadLongTerm()
 	if err != nil {
 		return RecallResult{}, err
@@ -225,16 +244,18 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 		})
 	}
 
-	diaries, err := m.collectDiaryFiles()
-	if err != nil {
-		return RecallResult{}, err
-	}
-	sort.Slice(diaries, func(i, j int) bool {
-		return diaries[i].date > diaries[j].date
-	})
-
+	// 4. Process keyword search on remaining diaries
 	addedKeywordItems := 0
 	for _, d := range diaries {
+		if addedKeywordItems >= keywordLimit {
+			break
+		}
+
+		// Optimization: Skip file read if already processed as "recent"
+		if seenPaths[d.path] {
+			continue
+		}
+
 		contentRaw, readErr := os.ReadFile(d.path)
 		if readErr != nil {
 			continue
@@ -245,12 +266,6 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 		}
 
 		result.SourceHits["diary_keyword"]++
-		if seenPaths[d.path] {
-			continue
-		}
-		if addedKeywordItems >= keywordLimit {
-			continue
-		}
 		seenPaths[d.path] = true
 		addedKeywordItems++
 		result.Items = append(result.Items, RecallItem{
