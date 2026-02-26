@@ -27,14 +27,16 @@ type Session struct {
 }
 
 // AddMessage adds a message to the session
-func (s *Session) AddMessage(role, content string) {
+func (s *Session) AddMessage(role, content string) *Message {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Messages = append(s.Messages, &Message{
+	msg := &Message{
 		Role:      role,
 		Content:   content,
 		Timestamp: time.Now(),
-	})
+	}
+	s.Messages = append(s.Messages, msg)
+	return msg
 }
 
 // GetHistory returns the last n messages
@@ -109,6 +111,24 @@ func (m *Manager) Save(sess *Session) error {
 
 	enc := json.NewEncoder(f)
 	for _, msg := range sess.Messages {
+		if err := enc.Encode(msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Append appends messages to the session file
+func (m *Manager) Append(key string, msgs ...*Message) error {
+	path := m.sessionPath(key)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	for _, msg := range msgs {
 		if err := enc.Encode(msg); err != nil {
 			return err
 		}

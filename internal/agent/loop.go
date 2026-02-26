@@ -476,9 +476,11 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 		finalContent = "Processing complete."
 	}
 
-	sess.AddMessage("user", msg.Content)
-	sess.AddMessage("assistant", finalContent)
-	l.sessions.Save(sess)
+	userMsg := sess.AddMessage("user", msg.Content)
+	asstMsg := sess.AddMessage("assistant", finalContent)
+	if err := l.sessions.Append(sess.Key, userMsg, asstMsg); err != nil {
+		slog.Warn("failed to append session messages", "error", err)
+	}
 
 	return &bus.OutboundMessage{
 		Channel:   msg.Channel,
