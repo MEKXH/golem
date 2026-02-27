@@ -12,6 +12,7 @@ import (
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/cron"
 	"github.com/MEKXH/golem/internal/provider"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -129,32 +130,107 @@ func runCronList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("  %-10s %-20s %-25s %-22s %s\n", "ID", "NAME", "SCHEDULE", "NEXT RUN", "STATUS")
-	fmt.Printf("  %-10s %-20s %-25s %-22s %s\n",
-		strings.Repeat("-", 10),
-		strings.Repeat("-", 20),
-		strings.Repeat("-", 25),
-		strings.Repeat("-", 22),
-		strings.Repeat("-", 10),
+	// Styles matching status.go
+	var (
+		headerStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#FAFAFA")).
+				Background(lipgloss.Color("#8E4EC6")). // Purple
+				Padding(0, 1).
+				MarginBottom(1)
+
+		// Column Widths
+		wID       = 10
+		wName     = 20
+		wSchedule = 25
+		wNextRun  = 22
+		wStatus   = 10
+
+		colHeaderStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#8E4EC6")).
+				Bold(true).
+				MarginRight(1)
+
+		// Cell Styles (with fixed widths for alignment)
+		idStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("245")).
+			Width(wID).
+			MarginRight(1)
+
+		nameStyleBase = lipgloss.NewStyle().
+				Width(wName).
+				MarginRight(1)
+
+		scheduleStyle = lipgloss.NewStyle().
+				Width(wSchedule).
+				MarginRight(1)
+
+		nextRunStyle = lipgloss.NewStyle().
+				Width(wNextRun).
+				MarginRight(1)
+
+		statusStyleBase = lipgloss.NewStyle().
+				Width(wStatus).
+				MarginRight(1)
+
+		enabledColor  = lipgloss.Color("#2E8B57") // SeaGreen
+		disabledColor = lipgloss.Color("241")     // Dark Gray
 	)
+
+	fmt.Println(headerStyle.Render("Scheduled Jobs"))
+
+	// Render Headers
+	headers := lipgloss.JoinHorizontal(lipgloss.Top,
+		colHeaderStyle.Width(wID).Render("ID"),
+		colHeaderStyle.Width(wName).Render("NAME"),
+		colHeaderStyle.Width(wSchedule).Render("SCHEDULE"),
+		colHeaderStyle.Width(wNextRun).Render("NEXT RUN"),
+		colHeaderStyle.Width(wStatus).Render("STATUS"),
+	)
+	fmt.Printf("  %s\n", headers)
+
+	// Render Separator
+	// Note: We use the same widths and margins to ensure alignment
+	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).MarginRight(1)
+	separator := lipgloss.JoinHorizontal(lipgloss.Top,
+		sepStyle.Render(strings.Repeat("─", wID)),
+		sepStyle.Render(strings.Repeat("─", wName)),
+		sepStyle.Render(strings.Repeat("─", wSchedule)),
+		sepStyle.Render(strings.Repeat("─", wNextRun)),
+		sepStyle.Render(strings.Repeat("─", wStatus)),
+	)
+	fmt.Printf("  %s\n", separator)
 
 	for _, j := range jobs {
 		nextRun := "-"
 		if j.State.NextRunAtMS != nil {
 			nextRun = time.UnixMilli(*j.State.NextRunAtMS).Format("2006-01-02 15:04:05")
 		}
-		status := "enabled"
+
+		// Determine colors
+		sColor := enabledColor
+		nStyle := nameStyleBase
+		statusText := "enabled"
+
 		if !j.Enabled {
-			status = "disabled"
+			sColor = disabledColor
+			nStyle = nStyle.Foreground(disabledColor)
+			statusText = "disabled"
 		}
-		fmt.Printf("  %-10s %-20s %-25s %-22s %s\n",
-			j.ShortID(),
-			truncate(j.Name, 20),
-			truncate(j.ScheduleDescription(), 25),
-			nextRun,
-			status,
+
+		// Render Row
+		row := lipgloss.JoinHorizontal(lipgloss.Top,
+			idStyle.Render(j.ShortID()),
+			nStyle.Render(truncate(j.Name, wName)),
+			scheduleStyle.Render(truncate(j.ScheduleDescription(), wSchedule)),
+			nextRunStyle.Render(nextRun),
+			statusStyleBase.Foreground(sColor).Render(statusText),
 		)
+
+		fmt.Printf("  %s\n", row)
 	}
+
+	fmt.Println() // Bottom spacing
 
 	return nil
 }
