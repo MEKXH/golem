@@ -113,3 +113,23 @@ func TestRenderMessage_ToolIcons(t *testing.T) {
 		t.Error("expected output to contain ANSI escape codes")
 	}
 }
+
+func TestRenderMessage_ErrorState(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	m := model{width: 100}
+
+	msg := &ChatMessage{
+		Role:    "golem",
+		Content: "error occurred",
+		IsError: true,
+	}
+
+	output := m.renderMessage(msg)
+
+	if !strings.Contains(output, "ERROR") {
+		t.Error("expected output to contain ERROR label")
+	}
+	if strings.Contains(output, "GOLEM") {
+		t.Error("expected output not to contain GOLEM label for error messages")
+	}
+}
