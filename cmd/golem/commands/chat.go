@@ -305,7 +305,17 @@ func (m model) renderMessage(msg *ChatMessage) string {
 
 	case "golem":
 		// Golem Header
-		header := golemHeaderStyle.Render("GOLEM")
+		headerStyle := golemHeaderStyle
+		bodyStyle := golemBodyStyle
+		headerLabel := "GOLEM"
+
+		if msg.IsError {
+			headerStyle = headerStyle.Copy().Background(lipgloss.Color("#FF0000"))
+			bodyStyle = bodyStyle.Copy().BorderForeground(lipgloss.Color("#FF0000"))
+			headerLabel = "ERROR"
+		}
+
+		header := headerStyle.Render(headerLabel)
 
 		var contentBuilder strings.Builder
 		contentBuilder.WriteString(header + "\n")
@@ -364,7 +374,7 @@ func (m model) renderMessage(msg *ChatMessage) string {
 		// Trim trailing newlines to prevent extra bottom padding in the bubble
 		finalContent := strings.TrimRight(contentBuilder.String(), "\n")
 
-		body := golemBodyStyle.
+		body := bodyStyle.
 			Width(contentWidth).
 			Render(finalContent)
 
