@@ -9,3 +9,7 @@
 ## 2026-02-23 - Selective Cache Invalidation
 **Learning:** The previous caching mechanism invalidated the entire system prompt cache whenever *any* file was modified by the agent. This was inefficient for long coding sessions where the agent primarily modifies source code, which doesn't affect the static system prompt.
 **Action:** Refined the cache invalidation logic in `ContextBuilder` to check the path of the modified file. The cache is now only cleared if the modified file is one of the base context files (e.g., IDENTITY.md) or resides in the `skills/` directory. This significantly reduces I/O overhead during development tasks.
+
+## 2026-03-09 - Session Manager Lock Contention
+**Learning:** The `SessionManager.GetOrCreate` method was acquiring a full write lock (`m.mu.Lock()`) on the entire `Manager` even for retrieving existing sessions. In a multi-channel/server environment where the agent processes messages concurrently, this causes significant lock contention because the vast majority of calls hit existing sessions.
+**Action:** Implemented a double-checked locking pattern using a fast-path read lock (`m.mu.RLock()`). The write lock is now only acquired when an actual cache miss occurs (i.e., when creating a new session from disk or memory).
