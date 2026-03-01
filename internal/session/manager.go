@@ -78,9 +78,17 @@ func NewManager(baseDir string) *Manager {
 
 // GetOrCreate gets or creates a session
 func (m *Manager) GetOrCreate(key string) *Session {
+	m.mu.RLock()
+	if sess, ok := m.sessions[key]; ok {
+		m.mu.RUnlock()
+		return sess
+	}
+	m.mu.RUnlock()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Double check after acquiring write lock
 	if sess, ok := m.sessions[key]; ok {
 		return sess
 	}
