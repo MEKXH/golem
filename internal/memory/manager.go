@@ -70,11 +70,11 @@ func (m *Manager) Ensure() error {
 }
 
 func (m *Manager) ReadLongTerm() (string, error) {
-	if err := m.Ensure(); err != nil {
-		return "", err
-	}
 	data, err := os.ReadFile(m.memoryFile)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
 		return "", err
 	}
 	return strings.TrimSpace(string(data)), nil
@@ -131,9 +131,6 @@ func (m *Manager) ReadRecentDiaries(limit int) ([]DiaryEntry, error) {
 	if limit <= 0 {
 		limit = 3
 	}
-	if err := m.Ensure(); err != nil {
-		return nil, err
-	}
 	diaries, err := m.collectDiaryFiles()
 	if err != nil {
 		return nil, err
@@ -175,9 +172,6 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 	}
 	if keywordLimit <= 0 {
 		keywordLimit = 3
-	}
-	if err := m.Ensure(); err != nil {
-		return RecallResult{}, err
 	}
 
 	result := RecallResult{
@@ -234,14 +228,17 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 	if err != nil {
 		return RecallResult{}, err
 	}
-	if strings.TrimSpace(longTerm) != "" && containsAnyKeyword(longTerm, keywords) {
-		result.SourceHits["long_term"]++
-		result.Items = append(result.Items, RecallItem{
-			Source:  "long_term",
-			Date:    "",
-			Path:    m.memoryFile,
-			Excerpt: extractKeywordExcerpt(longTerm, keywords, 380),
-		})
+	if longTerm != "" {
+		longTermLower := strings.ToLower(longTerm)
+		if containsAnyKeyword(longTermLower, keywords) {
+			result.SourceHits["long_term"]++
+			result.Items = append(result.Items, RecallItem{
+				Source:  "long_term",
+				Date:    "",
+				Path:    m.memoryFile,
+				Excerpt: extractKeywordExcerpt(longTerm, longTermLower, keywords, 380),
+			})
+		}
 	}
 
 	// 4. Process keyword search on remaining diaries
@@ -261,7 +258,11 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 			continue
 		}
 		content := strings.TrimSpace(string(contentRaw))
-		if content == "" || !containsAnyKeyword(content, keywords) {
+		if content == "" {
+			continue
+		}
+		contentLower := strings.ToLower(content)
+		if !containsAnyKeyword(contentLower, keywords) {
 			continue
 		}
 
@@ -272,7 +273,7 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 			Source:  "diary_keyword",
 			Date:    d.date,
 			Path:    d.path,
-			Excerpt: extractKeywordExcerpt(content, keywords, 300),
+			Excerpt: extractKeywordExcerpt(content, contentLower, keywords, 300),
 		})
 	}
 
@@ -283,6 +284,9 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 func (m *Manager) collectDiaryFiles() ([]diaryFile, error) {
 	entries, err := os.ReadDir(m.memoryDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -332,8 +336,7 @@ func extractRecallKeywords(query string) []string {
 	return keywords
 }
 
-func containsAnyKeyword(content string, keywords []string) bool {
-	contentLower := strings.ToLower(content)
+func containsAnyKeyword(contentLower string, keywords []string) bool {
 	for _, keyword := range keywords {
 		if strings.Contains(contentLower, keyword) {
 			return true
@@ -342,16 +345,14 @@ func containsAnyKeyword(content string, keywords []string) bool {
 	return false
 }
 
-func extractKeywordExcerpt(content string, keywords []string, maxLen int) string {
+func extractKeywordExcerpt(content, contentLower string, keywords []string, maxLen int) string {
 	if maxLen <= 0 {
 		maxLen = 280
 	}
-	content = strings.TrimSpace(content)
 	if content == "" {
 		return ""
 	}
 
-	contentLower := strings.ToLower(content)
 	matchIndex := -1
 	for _, keyword := range keywords {
 		idx := strings.Index(contentLower, keyword)

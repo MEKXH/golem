@@ -13,3 +13,7 @@
 ## 2026-03-09 - Session Manager Lock Contention
 **Learning:** The `SessionManager.GetOrCreate` method was acquiring a full write lock (`m.mu.Lock()`) on the entire `Manager` even for retrieving existing sessions. In a multi-channel/server environment where the agent processes messages concurrently, this causes significant lock contention because the vast majority of calls hit existing sessions.
 **Action:** Implemented a double-checked locking pattern using a fast-path read lock (`m.mu.RLock()`). The write lock is now only acquired when an actual cache miss occurs (i.e., when creating a new session from disk or memory).
+
+## 2026-03-09 - Memory Context Recall Loop
+**Learning:** The memory context recall function `RecallContext` iterated through diary items and called functions that executed `strings.ToLower(content)` inside loops over keywords. For large files or large amounts of memory, this caused many unnecessary lowercasing allocations which hindered performance.
+**Action:** Lifted `strings.ToLower()` calls outside of `containsAnyKeyword` and `extractKeywordExcerpt` loops in `RecallContext`. This computes the lowercased strings once per log content and eliminates nested lowercasing calls.
