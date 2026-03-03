@@ -1,3 +1,4 @@
+// Package dingtalk 实现钉钉机器人的接入，采用钉钉侧流式 (Stream Mode) 协议进行消息推送。
 package dingtalk
 
 import (
@@ -15,19 +16,19 @@ import (
 	"github.com/open-dingtalk/dingtalk-stream-sdk-go/client"
 )
 
-// Channel implements DingTalk channel via Stream Mode.
+// Channel 表示钉钉消息通道。
 type Channel struct {
 	channel.BaseChannel
 	cfg          *config.DingTalkConfig
-	streamClient *client.StreamClient
+	streamClient *client.StreamClient // 钉钉流式客户端
 
 	mu              sync.RWMutex
 	running         bool
-	cancel          context.CancelFunc
-	sessionWebhooks sync.Map
+	cancel          context.CancelFunc // 用于取消服务上下文
+	sessionWebhooks sync.Map           // 缓存各会话的 Webhook 地址，用于回复消息
 }
 
-// New creates a DingTalk channel.
+// New 创建并返回一个新的钉钉通道实例。
 func New(cfg *config.DingTalkConfig, msgBus *bus.MessageBus) *Channel {
 	allowList := make(map[string]bool)
 	for _, id := range cfg.AllowFrom {
@@ -39,8 +40,10 @@ func New(cfg *config.DingTalkConfig, msgBus *bus.MessageBus) *Channel {
 	}
 }
 
+// Name 返回通道名称。
 func (c *Channel) Name() string { return "dingtalk" }
 
+// Start 建立钉钉流式长连接并注册回调。
 func (c *Channel) Start(ctx context.Context) error {
 	if c.cfg == nil {
 		return fmt.Errorf("missing dingtalk config")
@@ -76,6 +79,7 @@ func (c *Channel) Start(ctx context.Context) error {
 	return nil
 }
 
+// Stop 关闭钉钉流式客户端。
 func (c *Channel) Stop(ctx context.Context) error {
 	c.mu.Lock()
 	if c.cancel != nil {
@@ -93,6 +97,7 @@ func (c *Channel) Stop(ctx context.Context) error {
 	return nil
 }
 
+// Send 向钉钉发送响应消息（基于 Markdown 格式）。
 func (c *Channel) Send(ctx context.Context, msg *bus.OutboundMessage) error {
 	c.mu.RLock()
 	running := c.running
@@ -101,6 +106,7 @@ func (c *Channel) Send(ctx context.Context, msg *bus.OutboundMessage) error {
 		return fmt.Errorf("dingtalk channel not running")
 	}
 
+	// 钉钉 Stream 模式需要通过接收消息时附带的 Webhook 地址进行回复
 	rawWebhook, ok := c.sessionWebhooks.Load(msg.ChatID)
 	if !ok {
 		return fmt.Errorf("no dingtalk session_webhook for chat %s", msg.ChatID)
@@ -140,6 +146,7 @@ func (c *Channel) onChatBotMessageReceived(ctx context.Context, data *chatbot.Bo
 	if senderID == "" {
 		return nil, nil
 	}
+	// 权限检查
 	if !c.IsAllowed(senderID) {
 		return nil, nil
 	}
@@ -148,6 +155,7 @@ func (c *Channel) onChatBotMessageReceived(ctx context.Context, data *chatbot.Bo
 	if data.ConversationType != "1" && data.ConversationId != "" {
 		chatID = data.ConversationId
 	}
+	// 存储 Webhook 以便后续 Send 方法使用
 	if data.SessionWebhook != "" {
 		c.sessionWebhooks.Store(chatID, data.SessionWebhook)
 	}

@@ -15,6 +15,7 @@ var (
 	authLoginDeviceCode = auth.LoginDeviceCode
 )
 
+// NewAuthCmd 创建身份认证管理命令。
 func NewAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",

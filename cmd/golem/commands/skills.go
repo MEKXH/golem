@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewSkillsCmd 创建技能管理子命令。
 func NewSkillsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "skills",

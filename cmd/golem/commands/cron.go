@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewCronCmd 创建定时任务管理命令。
 func NewCronCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cron",
@@ -130,16 +131,15 @@ func runCronList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Styles matching status.go
+	// 定义显示样式
 	var (
 		headerStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("#FAFAFA")).
-				Background(lipgloss.Color("#8E4EC6")). // Purple
+				Background(lipgloss.Color("#8E4EC6")). // 紫色
 				Padding(0, 1).
 				MarginBottom(1)
 
-		// Column Widths
 		wID       = 10
 		wName     = 20
 		wSchedule = 25
@@ -151,7 +151,6 @@ func runCronList(cmd *cobra.Command, args []string) error {
 				Bold(true).
 				MarginRight(1)
 
-		// Cell Styles (with fixed widths for alignment)
 		idStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245")).
 			Width(wID).
@@ -173,13 +172,13 @@ func runCronList(cmd *cobra.Command, args []string) error {
 				Width(wStatus).
 				MarginRight(1)
 
-		enabledColor  = lipgloss.Color("#2E8B57") // SeaGreen
-		disabledColor = lipgloss.Color("241")     // Dark Gray
+		enabledColor  = lipgloss.Color("#2E8B57") // 海洋绿
+		disabledColor = lipgloss.Color("241")     // 深灰
 	)
 
 	fmt.Println(headerStyle.Render("Scheduled Jobs"))
 
-	// Render Headers
+	// 渲染表头
 	headers := lipgloss.JoinHorizontal(lipgloss.Top,
 		colHeaderStyle.Width(wID).Render("ID"),
 		colHeaderStyle.Width(wName).Render("NAME"),
@@ -189,8 +188,7 @@ func runCronList(cmd *cobra.Command, args []string) error {
 	)
 	fmt.Printf("  %s\n", headers)
 
-	// Render Separator
-	// Note: We use the same widths and margins to ensure alignment
+	// 渲染分隔符
 	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).MarginRight(1)
 	separator := lipgloss.JoinHorizontal(lipgloss.Top,
 		sepStyle.Render(strings.Repeat("─", wID)),
@@ -207,7 +205,6 @@ func runCronList(cmd *cobra.Command, args []string) error {
 			nextRun = time.UnixMilli(*j.State.NextRunAtMS).Format("2006-01-02 15:04:05")
 		}
 
-		// Determine colors
 		sColor := enabledColor
 		nStyle := nameStyleBase
 		statusText := "enabled"
@@ -218,7 +215,6 @@ func runCronList(cmd *cobra.Command, args []string) error {
 			statusText = "disabled"
 		}
 
-		// Render Row
 		row := lipgloss.JoinHorizontal(lipgloss.Top,
 			idStyle.Render(j.ShortID()),
 			nStyle.Render(truncate(j.Name, wName)),
@@ -230,7 +226,7 @@ func runCronList(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  %s\n", row)
 	}
 
-	fmt.Println() // Bottom spacing
+	fmt.Println()
 
 	return nil
 }

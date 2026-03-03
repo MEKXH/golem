@@ -12,10 +12,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const mcpProbeTimeout = 8 * time.Second
+const mcpProbeTimeout = 8 * time.Second // MCP 服务器探测超时时间
 
 var mcpProbeServer = probeMCPServer
 
+// NewMCPCmd 创建 MCP 服务器管理命令。
 func NewMCPCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",

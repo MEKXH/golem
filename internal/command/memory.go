@@ -8,13 +8,19 @@ import (
 	"github.com/MEKXH/golem/internal/memory"
 )
 
-// MemoryCommand 实现 /memory — 读取长期记忆和日记条目。
-// 子命令: (none)|read, diary [date|recent]
+// MemoryCommand 实现 /memory 命令 — 用于读取长期记忆 (MEMORY.md) 或查询日记条目。
+// 使用方式:
+//   /memory [read] - 读取长期记忆内容
+//   /memory diary [date|recent] - 读取指定日期或最近的日记分录
 type MemoryCommand struct{}
 
-func (c *MemoryCommand) Name() string        { return "memory" }
+// Name 返回命令名称。
+func (c *MemoryCommand) Name() string { return "memory" }
+
+// Description 返回命令描述。
 func (c *MemoryCommand) Description() string { return "Read memory (long-term or diary)" }
 
+// Execute 执行记忆查询逻辑。
 func (c *MemoryCommand) Execute(_ context.Context, args string, env Env) Result {
 	sub, rest, _ := strings.Cut(args, " ")
 	sub = strings.ToLower(strings.TrimSpace(sub))

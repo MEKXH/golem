@@ -1,3 +1,4 @@
+// Package heartbeat 实现定期心跳服务，用于监控系统状态并向用户发送活跃提醒。
 package heartbeat
 
 import (
@@ -13,21 +14,21 @@ import (
 )
 
 const (
-	defaultInterval = 30 * time.Minute
-	defaultMaxIdle  = 12 * time.Hour
+	defaultInterval = 30 * time.Minute // 默认心跳间隔
+	defaultMaxIdle  = 12 * time.Hour   // 默认最大空闲时间
 )
 
-// ProbeFunc runs a heartbeat probe and returns a short summary.
+// ProbeFunc 定义了心跳探测函数的原型，返回简短的状态摘要。
 type ProbeFunc func(ctx context.Context) (string, error)
 
-// DispatchFunc sends heartbeat output to a target session.
+// DispatchFunc 定义了将心跳内容发送到目标会话的函数原型。
 type DispatchFunc func(ctx context.Context, channel, chatID, content, requestID string) error
 
-// Config controls heartbeat runtime behavior.
+// Config 控制心跳服务的运行时行为。
 type Config struct {
-	Enabled  bool
-	Interval time.Duration
-	MaxIdle  time.Duration
+	Enabled  bool          // 是否启用心跳
+	Interval time.Duration // 心跳探测间隔
+	MaxIdle  time.Duration // 会话最大允许空闲时间（超过后停止发送心跳）
 }
 
 type activeSession struct {
@@ -36,12 +37,12 @@ type activeSession struct {
 	seenAt  time.Time
 }
 
-// Service periodically probes runtime health and sends output to the most recently active session.
+// Service 负责定期执行健康探测，并将结果分发到最近活跃的会话中。
 type Service struct {
 	cfg      Config
-	probe    ProbeFunc
-	dispatch DispatchFunc
-	state    *appstate.Manager
+	probe    ProbeFunc        // 健康探测逻辑
+	dispatch DispatchFunc     // 消息分发逻辑
+	state    *appstate.Manager // 状态管理器，用于持久化活跃信息
 
 	now func() time.Time
 
@@ -52,7 +53,7 @@ type Service struct {
 	running bool
 }
 
-// NewService creates a heartbeat service.
+// NewService 创建并初始化一个新的心跳服务。
 func NewService(cfg Config, probe ProbeFunc, dispatch DispatchFunc, stateMgr *appstate.Manager) *Service {
 	if cfg.Interval <= 0 {
 		cfg.Interval = defaultInterval
@@ -67,11 +68,12 @@ func NewService(cfg Config, probe ProbeFunc, dispatch DispatchFunc, stateMgr *ap
 		state:    stateMgr,
 		now:      time.Now,
 	}
+	// 从持久化存储中恢复上一次的活跃会话信息
 	svc.hydratePersistedState()
 	return svc
 }
 
-// TrackActivity marks a channel/chat as the newest active session for heartbeat delivery.
+// TrackActivity 更新并持久化最近活跃的通道与聊天 ID，用于确定心跳发送目标。
 func (s *Service) TrackActivity(channel, chatID string) {
 	channel = strings.TrimSpace(channel)
 	chatID = strings.TrimSpace(chatID)
@@ -100,14 +102,14 @@ func (s *Service) TrackActivity(channel, chatID string) {
 	}
 }
 
-// IsRunning returns true when the service loop is active.
+// IsRunning 返回服务循环当前是否处于活跃状态。
 func (s *Service) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.running
 }
 
-// Start launches the periodic heartbeat loop.
+// Start 启动心跳服务的周期性循环。
 func (s *Service) Start() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -129,7 +131,7 @@ func (s *Service) Start() error {
 	return nil
 }
 
-// Stop halts the periodic heartbeat loop.
+// Stop 停止心跳服务的周期性循环。
 func (s *Service) Stop() {
 	s.mu.Lock()
 	if !s.running {
@@ -166,7 +168,7 @@ func (s *Service) loop(stopCh <-chan struct{}, stopped chan<- struct{}) {
 	}
 }
 
-// RunOnce runs a single heartbeat probe and dispatches the result to the latest active session.
+// RunOnce 执行单次心跳探测并分发结果。
 func (s *Service) RunOnce(ctx context.Context) error {
 	if !s.cfg.Enabled {
 		return nil
@@ -177,6 +179,7 @@ func (s *Service) RunOnce(ctx context.Context) error {
 		return nil
 	}
 
+	// 检查会话是否已长时间处于非活跃状态
 	if s.cfg.MaxIdle > 0 && s.now().Sub(target.seenAt) > s.cfg.MaxIdle {
 		slog.Debug("heartbeat skipped stale session", "channel", target.channel, "chat_id", target.chatID, "max_idle", s.cfg.MaxIdle.String())
 		return nil

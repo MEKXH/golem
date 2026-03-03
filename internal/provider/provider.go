@@ -1,3 +1,4 @@
+// Package provider 负责 LLM 供应商的适配、认证及聊天模型 (ChatModel) 的实例化。
 package provider
 
 import (
@@ -25,6 +26,7 @@ const (
 	providerOllama     providerName = "ollama"
 )
 
+// refreshProviderCredential 定义了刷新特定供应商凭据的回调函数。
 var refreshProviderCredential = func(name providerName, cred *auth.Credential) (*auth.Credential, error) {
 	switch name {
 	case providerOpenAI:
@@ -34,7 +36,7 @@ var refreshProviderCredential = func(name providerName, cred *auth.Credential) (
 	}
 }
 
-// NewChatModel 根据配置创建 ChatModel
+// NewChatModel 根据全局配置自动解析并创建一个合适的聊天模型实例。
 func NewChatModel(ctx context.Context, cfg *config.Config) (model.ChatModel, error) {
 	selected, pcfg, err := resolveProvider(cfg)
 	if err != nil {
@@ -66,9 +68,11 @@ func NewChatModel(ctx context.Context, cfg *config.Config) (model.ChatModel, err
 	}
 }
 
+// resolveProvider 确定最终使用的供应商及其配置。优先基于模型名称匹配，其次按优先级回退。
 func resolveProvider(cfg *config.Config) (providerName, config.ProviderConfig, error) {
 	p := cfg.Providers
 
+	// 1. 尝试从指定的模型 ID 中推导供应商 (如 "anthropic/..." 推导为 Claude)
 	if byModel := providerFromModel(cfg.Agents.Defaults.Model); byModel != "" {
 		if pcfg, ok := providerConfigByName(p, byModel); ok && providerIsConfigured(byModel, pcfg) {
 			pcfg = withResolvedProviderToken(byModel, pcfg)
@@ -76,6 +80,7 @@ func resolveProvider(cfg *config.Config) (providerName, config.ProviderConfig, e
 		}
 	}
 
+	// 2. 按默认顺序回退到第一个已配置的供应商
 	fallbackOrder := []providerName{
 		providerOpenRouter,
 		providerClaude,
@@ -196,6 +201,7 @@ func lookupCredential(name providerName) *auth.Credential {
 	for _, key := range keys {
 		cred, err := auth.GetCredential(key)
 		if err == nil && cred != nil && strings.TrimSpace(cred.AccessToken) != "" {
+			// 如果是 OAuth 凭据且即将过期，则尝试自动刷新
 			if cred.AuthMethod == "oauth" && cred.NeedsRefresh() && strings.TrimSpace(cred.RefreshToken) != "" {
 				if refreshed, err := refreshProviderCredential(name, cred); err == nil && refreshed != nil && strings.TrimSpace(refreshed.AccessToken) != "" {
 					refreshed.Provider = key

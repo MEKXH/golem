@@ -8,13 +8,19 @@ import (
 	"github.com/MEKXH/golem/internal/skills"
 )
 
-// SkillsCommand 实现 /skills — 列出和查看已安装的技能。
-// 子命令: list, show <name>
+// SkillsCommand 实现 /skills 命令 — 用于查看已安装技能及其详细信息。
+// 使用方式:
+//   /skills [list] - 列出所有已发现的技能
+//   /skills show <name> - 显示指定技能的完整 Markdown 内容
 type SkillsCommand struct{}
 
-func (c *SkillsCommand) Name() string        { return "skills" }
+// Name 返回命令名称。
+func (c *SkillsCommand) Name() string { return "skills" }
+
+// Description 返回命令描述。
 func (c *SkillsCommand) Description() string { return "Manage skills (list|show <name>)" }
 
+// Execute 执行技能管理逻辑。
 func (c *SkillsCommand) Execute(_ context.Context, args string, env Env) Result {
 	sub, rest, _ := strings.Cut(args, " ")
 	sub = strings.ToLower(strings.TrimSpace(sub))

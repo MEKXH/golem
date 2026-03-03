@@ -1,3 +1,4 @@
+// Package telegram 实现 Telegram 机器人的接入，支持文本消息及语音转录交互。
 package telegram
 
 import (
@@ -27,21 +28,21 @@ var (
 
 const (
 	defaultTranscriptionTimeout = 30 * time.Second
-	maxAudioBytes               = 25 * 1024 * 1024
+	maxAudioBytes               = 25 * 1024 * 1024 // 允许处理的最大音频文件大小 (25MB)
 )
 
-// Channel implements Telegram bot
+// Channel 表示 Telegram 消息通道。
 type Channel struct {
 	channel.BaseChannel
 	cfg                  *config.TelegramConfig
 	bot                  *tgbotapi.BotAPI
-	transcriber          voice.Transcriber
-	downloadVoice        func(ctx context.Context, fileID, fileName, mimeType string) (voice.Input, error)
+	transcriber          voice.Transcriber                                                      // 语音转文本服务
+	downloadVoice        func(ctx context.Context, fileID, fileName, mimeType string) (voice.Input, error) // 下载语音回调
 	httpClient           *http.Client
 	transcriptionTimeout time.Duration
 }
 
-// New creates a Telegram channel
+// New 创建并返回一个新的 Telegram 通道实例。
 func New(cfg *config.TelegramConfig, msgBus *bus.MessageBus, transcriber voice.Transcriber) *Channel {
 	allowList := make(map[string]bool)
 	for _, id := range cfg.AllowFrom {
@@ -61,8 +62,10 @@ func New(cfg *config.TelegramConfig, msgBus *bus.MessageBus, transcriber voice.T
 	return ch
 }
 
+// Name 返回通道名称。
 func (c *Channel) Name() string { return "telegram" }
 
+// Start 启动机器人 Long Polling 循环以接收更新。
 func (c *Channel) Start(ctx context.Context) error {
 	bot, err := tgbotapi.NewBotAPI(c.cfg.Token)
 	if err != nil {
@@ -98,6 +101,7 @@ func (c *Channel) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 	}
 	senderID := fmt.Sprintf("%d", msg.From.ID)
 
+	// 权限检查
 	if !c.IsAllowed(senderID) {
 		slog.Debug("unauthorized sender", "id", senderID)
 		return
@@ -113,6 +117,7 @@ func (c *Channel) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 		"username":   msg.From.UserName,
 	}
 
+	// 尝试处理语音消息转录
 	transcribed, hasAudio, err := c.tryTranscribeAudio(ctx, msg)
 	if err != nil {
 		slog.Warn("telegram transcription failed", "error", err, "chat_id", msg.Chat.ID, "message_id", msg.MessageID)
@@ -142,6 +147,7 @@ func (c *Channel) handleMessage(ctx context.Context, msg *tgbotapi.Message) {
 	})
 }
 
+// Send 向 Telegram 聊天发送出站消息。支持 HTML 渲染和思考过程展示。
 func (c *Channel) Send(ctx context.Context, msg *bus.OutboundMessage) error {
 	if c.bot == nil {
 		return fmt.Errorf("bot not initialized")
@@ -158,6 +164,7 @@ func (c *Channel) Send(ctx context.Context, msg *bus.OutboundMessage) error {
 
 	_, err = c.bot.Send(tgMsg)
 	if err != nil {
+		// 回退：如果 HTML 发送失败（可能是格式错误），则尝试以纯文本发送
 		tgMsg.ParseMode = ""
 		tgMsg.Text = msg.Content
 		_, err = c.bot.Send(tgMsg)
@@ -165,6 +172,7 @@ func (c *Channel) Send(ctx context.Context, msg *bus.OutboundMessage) error {
 	return err
 }
 
+// Stop 停止接收更新并关闭通道。
 func (c *Channel) Stop(ctx context.Context) error {
 	if c.bot != nil {
 		c.bot.StopReceivingUpdates()
