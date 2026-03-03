@@ -328,18 +328,20 @@ func (m model) renderMessage(msg *ChatMessage) string {
 				contentBuilder.WriteString(toolLogStyle.Render(fmt.Sprintf("➢ %s", t.Name)))
 
 				if t.Err != nil {
-					// Error (Red X)
-					contentBuilder.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(" ✖ "))
-					contentBuilder.WriteString(toolLogStyle.Render(fmt.Sprintf("%v", t.Err)))
+					// Error (Red X and Message)
+					errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
+					contentBuilder.WriteString(errStyle.Render(" ✖ "))
+					contentBuilder.WriteString(errStyle.Italic(true).Render(fmt.Sprintf("%v", t.Err)))
 				} else {
 					res := t.Result
 					// Show more context for tool output (200 chars)
 					if len(res) > 200 {
 						res = res[:200] + "..."
 					}
-					// Success (Green Check)
-					contentBuilder.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#2E8B57")).Render(" ✔ "))
-					contentBuilder.WriteString(toolLogStyle.Render(res))
+					// Success (Green Check and Message)
+					successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#2E8B57"))
+					contentBuilder.WriteString(successStyle.Render(" ✔ "))
+					contentBuilder.WriteString(successStyle.Italic(true).Render(res))
 				}
 				contentBuilder.WriteString("\n")
 			}
