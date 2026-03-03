@@ -17,3 +17,7 @@
 ## 2026-03-09 - Memory Context Recall Loop
 **Learning:** The memory context recall function `RecallContext` iterated through diary items and called functions that executed `strings.ToLower(content)` inside loops over keywords. For large files or large amounts of memory, this caused many unnecessary lowercasing allocations which hindered performance.
 **Action:** Lifted `strings.ToLower()` calls outside of `containsAnyKeyword` and `extractKeywordExcerpt` loops in `RecallContext`. This computes the lowercased strings once per log content and eliminates nested lowercasing calls.
+
+## 2026-03-10 - Buffered Disk I/O for Session Appends
+**Learning:** The `SessionManager.Append` method was executing unbuffered JSON encoding directly to a file descriptor. When writing multiple messages in one go (such as user input, tool responses, and agent output), this caused a burst of disk I/O syscalls proportional to the number of objects, severely impacting throughput and generating unnecessary CPU wakeups.
+**Action:** Always wrap unbuffered file descriptors with `bufio.NewWriter` before passing them to `json.NewEncoder` (or similar serializers), followed by an explicit `Flush()`. This batches writes into a single syscall, drastically improving performance for multiple small appends.
