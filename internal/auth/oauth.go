@@ -1,3 +1,4 @@
+// Package auth 处理 Golem 的身份验证逻辑，支持 OAuth 2.0 流程及凭据持久化。
 package auth
 
 import (
@@ -17,15 +18,15 @@ import (
 	"time"
 )
 
-// OAuthProviderConfig defines OAuth metadata for one provider.
+// OAuthProviderConfig 定义了单个 OAuth 供应商的元数据。
 type OAuthProviderConfig struct {
-	Issuer   string
-	ClientID string
-	Scopes   string
-	Port     int
+	Issuer   string // 供应商的发行者 URL
+	ClientID string // OAuth 客户端 ID
+	Scopes   string // 请求的权限范围
+	Port     int    // 本地回调服务器监听的端口
 }
 
-// OpenAIOAuthConfig returns OpenAI OAuth defaults.
+// OpenAIOAuthConfig 返回 OpenAI OAuth 的默认配置。
 func OpenAIOAuthConfig() OAuthProviderConfig {
 	return OAuthProviderConfig{
 		Issuer:   "https://auth.openai.com",
@@ -48,7 +49,7 @@ type callbackResult struct {
 	err  error
 }
 
-// LoginBrowser completes OAuth login via local callback HTTP server.
+// LoginBrowser 通过启动本地临时 HTTP 服务器并在浏览器中打开授权页面来完成 OAuth 登录。
 func LoginBrowser(cfg OAuthProviderConfig) (*Credential, error) {
 	pkce, err := GeneratePKCE()
 	if err != nil {
@@ -76,7 +77,7 @@ func LoginBrowser(cfg OAuthProviderConfig) (*Credential, error) {
 			http.Error(w, "no code received", http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte("<html><body><h3>Login successful. You can close this tab.</h3></body></html>"))
 		resultCh <- callbackResult{code: code}
 	})

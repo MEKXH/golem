@@ -1,3 +1,4 @@
+// Package config 处理 Golem 的全局配置加载、验证与持久化。
 package config
 
 import (
@@ -13,17 +14,17 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config 根配置
+// Config 是 Golem 的根配置结构体，包含所有模块的设置。
 type Config struct {
-	Agents    AgentsConfig    `mapstructure:"agents"`
-	Channels  ChannelsConfig  `mapstructure:"channels"`
-	Providers ProvidersConfig `mapstructure:"providers"`
-	Gateway   GatewayConfig   `mapstructure:"gateway"`
-	Log       LogConfig       `mapstructure:"log"`
-	Policy    PolicyConfig    `mapstructure:"policy"`
-	MCP       MCPConfig       `mapstructure:"mcp"`
-	Tools     ToolsConfig     `mapstructure:"tools"`
-	Heartbeat HeartbeatConfig `mapstructure:"heartbeat"`
+	Agents    AgentsConfig    `mapstructure:"agents"`    // Agent 相关配置
+	Channels  ChannelsConfig  `mapstructure:"channels"`  // 消息通道配置
+	Providers ProvidersConfig `mapstructure:"providers"` // LLM 供应商配置
+	Gateway   GatewayConfig   `mapstructure:"gateway"`   // 网关服务器配置
+	Log       LogConfig       `mapstructure:"log"`       // 日志配置
+	Policy    PolicyConfig    `mapstructure:"policy"`    // 运行时策略配置
+	MCP       MCPConfig       `mapstructure:"mcp"`       // MCP 服务器配置
+	Tools     ToolsConfig     `mapstructure:"tools"`     // 工具相关配置
+	Heartbeat HeartbeatConfig `mapstructure:"heartbeat"` // 心跳服务配置
 }
 
 // PolicyConfig 运行时策略设置。

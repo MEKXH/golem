@@ -1,3 +1,4 @@
+// Package commands 提供 Golem CLI 的各个子命令实现。
 package commands
 
 import (
@@ -7,9 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// logLevelOverride 用于存储通过命令行标志覆盖的日志级别。
 var logLevelOverride string
 
-// NewRootCmd 创建根命令
+// NewRootCmd 创建并配置 Golem 的根命令行对象。
 func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "golem",
@@ -29,6 +31,7 @@ func NewRootCmd() *cobra.Command {
 
 	cmd.PersistentFlags().StringVar(&logLevelOverride, "log-level", "", "Override log level (debug|info|warn|error)")
 
+	// 注册所有子命令
 	cmd.AddCommand(
 		NewInitCmd(),
 		NewChatCmd(),
@@ -47,6 +50,7 @@ func NewRootCmd() *cobra.Command {
 	return cmd
 }
 
+// shouldUseDefaultLogger 判断当前执行的命令是否应当使用默认日志配置（如初始化或认证相关命令）。
 func shouldUseDefaultLogger(cmd *cobra.Command) bool {
 	if cmd == nil {
 		return false

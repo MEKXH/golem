@@ -15,24 +15,24 @@ import (
 const defaultSkillsIndexURL = "https://raw.githubusercontent.com/MEKXH/golem-skills/main/skills.json"
 const defaultGitHubRawBaseURL = "https://raw.githubusercontent.com"
 
-// AvailableSkill 是远程技能索引的条目。
+// AvailableSkill 表示远程技能索引中的一个可用技能条目。
 type AvailableSkill struct {
-	Name        string   `json:"name"`
-	Repository  string   `json:"repository"`
-	Description string   `json:"description"`
-	Author      string   `json:"author"`
-	Tags        []string `json:"tags"`
+	Name        string   `json:"name"`        // 技能名称
+	Repository  string   `json:"repository"`  // 仓库地址 (owner/repo)
+	Description string   `json:"description"` // 技能描述
+	Author      string   `json:"author"`      // 作者
+	Tags        []string `json:"tags"`        // 标签列表
 }
 
-// Installer 管理技能的安装和卸载。
+// Installer 负责从远程仓库安装或卸载技能。
 type Installer struct {
-	skillsDir      string // workspace/skills/
-	httpClient     *http.Client
-	skillsIndexURL string
-	githubRawBase  string
+	skillsDir      string       // 本地技能存储目录
+	httpClient     *http.Client // 用于下载的 HTTP 客户端
+	skillsIndexURL string       // 技能索引 JSON 的 URL
+	githubRawBase  string       // GitHub Raw 内容的基准 URL
 }
 
-// NewInstaller 创建针对给定工作区的安装器。
+// NewInstaller 为指定的工作区创建一个新的技能安装器。
 func NewInstaller(workspacePath string) *Installer {
 	return &Installer{
 		skillsDir: filepath.Join(workspacePath, "skills"),
@@ -44,16 +44,15 @@ func NewInstaller(workspacePath string) *Installer {
 	}
 }
 
-// Install 从 GitHub 仓库下载 SKILL.md。
-// repo 格式: "owner/repo" 或 "owner/repo/path/to/SKILL.md"
-// 技能名称默认从仓库名称派生。
+// Install 从指定的 GitHub 仓库下载并安装技能 (SKILL.md)。
+// 仓库参数格式支持: "owner/repo" 或完整的 GitHub URL。
 func (i *Installer) Install(ctx context.Context, repo string) error {
 	repo = strings.TrimSpace(repo)
 	if repo == "" {
 		return fmt.Errorf("repo is required")
 	}
 
-	// Remove github.com prefix if present.
+	// 预处理仓库地址，移除前缀
 	repo = strings.TrimPrefix(repo, "https://github.com/")
 	repo = strings.TrimPrefix(repo, "http://github.com/")
 	repo = strings.TrimPrefix(repo, "github.com/")
@@ -71,10 +70,10 @@ func (i *Installer) Install(ctx context.Context, repo string) error {
 		filePath = parts[2]
 	}
 
-	// Strip GitHub web UI path segments: tree/<branch>/ or blob/<branch>/
+	// 移除 GitHub 网页链接中的 tree/<branch>/ 或 blob/<branch>/ 路径段
 	filePath = stripGitHubBranchPrefix(filePath)
 
-	// If filePath doesn't point to a .md file, treat it as a directory.
+	// 如果未指定具体文件，则默认寻找目录下的 SKILL.md
 	if !strings.HasSuffix(strings.ToLower(filePath), ".md") {
 		filePath = strings.TrimSuffix(filePath, "/")
 		if filePath == "" {
@@ -84,7 +83,7 @@ func (i *Installer) Install(ctx context.Context, repo string) error {
 		}
 	}
 
-	// Derive skill name from repo or directory name.
+	// 从路径或仓库名推导技能名称
 	skillName := repoName
 	dir := filepath.Dir(filePath)
 	if dir != "." && dir != "" {
@@ -108,7 +107,7 @@ func (i *Installer) Install(ctx context.Context, repo string) error {
 		return fmt.Errorf("fetch skill failed: HTTP %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024)) // 限制最大 1MB
 	if err != nil {
 		return fmt.Errorf("read skill content: %w", err)
 	}
@@ -126,7 +125,7 @@ func (i *Installer) Install(ctx context.Context, repo string) error {
 	return nil
 }
 
-// Uninstall 按名称删除技能。
+// Uninstall 根据技能名称从本地工作区移除已安装的技能。
 func (i *Installer) Uninstall(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -141,7 +140,7 @@ func (i *Installer) Uninstall(name string) error {
 	return os.RemoveAll(skillDir)
 }
 
-// Search 从配置的索引 URL 返回可用技能。
+// Search 从配置的索引地址获取所有可用的远程技能列表。
 func (i *Installer) Search(ctx context.Context) ([]AvailableSkill, error) {
 	if strings.TrimSpace(i.skillsIndexURL) == "" {
 		return nil, fmt.Errorf("skills index URL is empty")
@@ -174,17 +173,14 @@ func (i *Installer) Search(ctx context.Context) ([]AvailableSkill, error) {
 	return list, nil
 }
 
-// stripGitHubBranchPrefix 从 GitHub 网页 URL 复制的路径中移除 "tree/<branch>/" 或 "blob/<branch>/"。
-// 例如: "tree/main/skills/find-skills" → "skills/find-skills"
+// stripGitHubBranchPrefix 移除从 GitHub 网页 URL 中携带的目录前缀（如 "tree/main/"）。
 func stripGitHubBranchPrefix(path string) string {
 	for _, prefix := range []string{"tree/", "blob/"} {
 		if strings.HasPrefix(path, prefix) {
-			// Remove "tree/" or "blob/", then strip the branch name segment.
 			rest := strings.TrimPrefix(path, prefix)
 			if idx := strings.Index(rest, "/"); idx >= 0 {
 				return rest[idx+1:]
 			}
-			// Only "tree/<branch>" with no trailing path — nothing left.
 			return ""
 		}
 	}

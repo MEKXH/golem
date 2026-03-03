@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// storeData is the on-disk format for cron jobs.
+// storeData 是定时任务在磁盘上的存储格式。
 type storeData struct {
 	Version int    `json:"version"`
 	Jobs    []*Job `json:"jobs"`
@@ -122,7 +122,7 @@ func (s *Store) All() []*Job {
 	return result
 }
 
-// copyJob returns a deep copy of a Job, including all pointer fields.
+// CopyJob 返回一个 Job 的深拷贝，包括所有指针字段。
 func copyJob(j *Job) *Job {
 	cp := *j
 	if j.Schedule.AtMS != nil {

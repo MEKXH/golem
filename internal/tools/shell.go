@@ -26,8 +26,8 @@ type ExecOutput struct {
 	ExitCode int    `json:"exit_code"`
 }
 
-// dangerousPatterns are regex patterns that match dangerous commands.
-// These are compiled once at init time for efficiency.
+// dangerousPatterns 是用于匹配危险命令的正则表达式模式。
+// 这些模式在 init 时编译一次以提高效率。
 var dangerousPatterns = []*regexp.Regexp{
 	// rm with force/recursive targeting root or home
 	regexp.MustCompile(`(?i)\brm\s+(-[a-z]*r[a-z]*\s+-[a-z]*f[a-z]*|-[a-z]*f[a-z]*\s+-[a-z]*r[a-z]*|-[a-z]*rf[a-z]*|-[a-z]*fr[a-z]*)\s+/\s*$`),
@@ -46,7 +46,7 @@ var dangerousPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\bdel\s+/[a-z]\s+/[a-z]\s+/[a-z]`),
 }
 
-// isDangerous checks whether a command matches any dangerous command pattern.
+// isDangerous 检查命令是否匹配任何危险命令模式。
 func isDangerous(cmd string) (bool, string) {
 	for _, pat := range dangerousPatterns {
 		if pat.MatchString(cmd) {

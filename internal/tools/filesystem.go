@@ -11,8 +11,8 @@ import (
 	"github.com/cloudwego/eino/components/tool/utils"
 )
 
-// validatePath checks that the given path is within the workspace boundary.
-// If workspacePath is empty, validation is skipped (backward compatibility).
+// validatePath 验证给定路径是否在允许的工作区范围内，防止路径穿越攻击。
+// 如果 workspacePath 为空，则跳过验证（仅用于向后兼容）。
 func validatePath(path, workspacePath string) error {
 	if workspacePath == "" {
 		return nil
@@ -54,8 +54,8 @@ func isWithinWorkspace(target, workspace string) bool {
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
-// resolvePathBestEffort resolves symlinks for the longest existing prefix of the path.
-// This protects write targets where the final path may not exist yet.
+// resolvePathBestEffort 尽力解析路径中已存在部分的符号链接。
+// 对于尚不存在的写入目标，它会解析最长存在的父目录前缀。
 func resolvePathBestEffort(path string) (string, error) {
 	path = filepath.Clean(path)
 
@@ -91,17 +91,17 @@ func resolvePathBestEffort(path string) (string, error) {
 	}
 }
 
-// ReadFileInput parameters for read_file tool
+// ReadFileInput 定义了 read_file 工具的输入参数。
 type ReadFileInput struct {
 	Path   string `json:"path" jsonschema:"required,description=Absolute path to the file"`
 	Offset int    `json:"offset" jsonschema:"description=Starting line number (0-based)"`
 	Limit  int    `json:"limit" jsonschema:"description=Maximum number of lines to read"`
 }
 
-// ReadFileOutput result of read_file tool
+// ReadFileOutput 定义了 read_file 工具的执行结果。
 type ReadFileOutput struct {
-	Content    string `json:"content"`
-	TotalLines int    `json:"total_lines"`
+	Content    string `json:"content"`     // 文件内容
+	TotalLines int    `json:"total_lines"` // 文件总行数
 }
 
 type readFileToolImpl struct {
@@ -140,13 +140,13 @@ func (t *readFileToolImpl) execute(ctx context.Context, input *ReadFileInput) (*
 	}, nil
 }
 
-// NewReadFileTool creates the read_file tool
+// NewReadFileTool 创建 read_file 工具实例，用于读取工作区内的文件内容。
 func NewReadFileTool(workspacePath string) (tool.InvokableTool, error) {
 	impl := &readFileToolImpl{workspacePath: workspacePath}
 	return utils.InferTool("read_file", "Read the contents of a file", impl.execute)
 }
 
-// WriteFileInput parameters for write_file tool
+// WriteFileInput 定义了 write_file 工具的输入参数。
 type WriteFileInput struct {
 	Path    string `json:"path" jsonschema:"required,description=Absolute path to the file"`
 	Content string `json:"content" jsonschema:"required,description=Content to write"`
@@ -168,13 +168,13 @@ func (t *writeFileToolImpl) execute(ctx context.Context, input *WriteFileInput) 
 	return "File written successfully", nil
 }
 
-// NewWriteFileTool creates the write_file tool
+// NewWriteFileTool 创建 write_file 工具实例，用于在工作区内写入新文件或覆盖已有文件。
 func NewWriteFileTool(workspacePath string) (tool.InvokableTool, error) {
 	impl := &writeFileToolImpl{workspacePath: workspacePath}
 	return utils.InferTool("write_file", "Write content to a file", impl.execute)
 }
 
-// ListDirInput parameters for list_dir tool
+// ListDirInput 定义了 list_dir 工具的输入参数。
 type ListDirInput struct {
 	Path string `json:"path" jsonschema:"required,description=Directory path to list"`
 }
@@ -204,7 +204,7 @@ func (t *listDirToolImpl) execute(ctx context.Context, input *ListDirInput) ([]s
 	return result, nil
 }
 
-// NewListDirTool creates the list_dir tool
+// NewListDirTool 创建 list_dir 工具实例，用于列出目录下的所有文件和文件夹。
 func NewListDirTool(workspacePath string) (tool.InvokableTool, error) {
 	impl := &listDirToolImpl{workspacePath: workspacePath}
 	return utils.InferTool("list_dir", "List contents of a directory", impl.execute)

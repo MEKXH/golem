@@ -8,20 +8,21 @@ import (
 	"time"
 )
 
-// Credential stores auth tokens for one provider.
+// Credential 存储单个供应商的身份验证凭据（如访问令牌、刷新令牌等）。
 type Credential struct {
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token,omitempty"`
-	Provider     string    `json:"provider"`
-	AuthMethod   string    `json:"auth_method"`
-	ExpiresAt    time.Time `json:"expires_at,omitempty"`
+	AccessToken  string    `json:"access_token"`           // 访问令牌
+	RefreshToken string    `json:"refresh_token,omitempty"` // 刷新令牌（可选）
+	Provider     string    `json:"provider"`               // 供应商名称（如 "openai"）
+	AuthMethod   string    `json:"auth_method"`            // 认证方法（如 "oauth"）
+	ExpiresAt    time.Time `json:"expires_at,omitempty"`    // 令牌过期时间
 }
 
-// Store is the on-disk auth container.
+// Store 是身份验证凭据的磁盘存储容器。
 type Store struct {
-	Credentials map[string]*Credential `json:"credentials"`
+	Credentials map[string]*Credential `json:"credentials"` // 供应商名称到凭据的映射
 }
 
+// IsExpired 检查当前凭据是否已过期。
 func (c *Credential) IsExpired() bool {
 	if c == nil || c.ExpiresAt.IsZero() {
 		return false
@@ -29,6 +30,7 @@ func (c *Credential) IsExpired() bool {
 	return time.Now().After(c.ExpiresAt)
 }
 
+// NeedsRefresh 检查凭据是否即将过期（5分钟内），需要刷新。
 func (c *Credential) NeedsRefresh() bool {
 	if c == nil || c.ExpiresAt.IsZero() {
 		return false
@@ -36,13 +38,13 @@ func (c *Credential) NeedsRefresh() bool {
 	return time.Now().Add(5 * time.Minute).After(c.ExpiresAt)
 }
 
-// FilePath returns ~/.golem/auth.json.
+// FilePath 返回身份验证凭据存储文件的路径 (~/.golem/auth.json)。
 func FilePath() string {
 	homeDir, _ := os.UserHomeDir()
 	return filepath.Join(homeDir, ".golem", "auth.json")
 }
 
-// LoadStore loads auth store from disk.
+// LoadStore 从磁盘加载身份验证存储。如果文件不存在，则返回一个空的存储实例。
 func LoadStore() (*Store, error) {
 	path := FilePath()
 	data, err := os.ReadFile(path)
@@ -63,7 +65,7 @@ func LoadStore() (*Store, error) {
 	return &store, nil
 }
 
-// SaveStore persists auth store to disk.
+// SaveStore 将身份验证存储持久化到磁盘。
 func SaveStore(store *Store) error {
 	if store == nil {
 		store = &Store{Credentials: map[string]*Credential{}}
@@ -88,7 +90,7 @@ func normalizeProvider(provider string) string {
 	return strings.ToLower(strings.TrimSpace(provider))
 }
 
-// GetCredential retrieves one provider credential.
+// GetCredential 获取指定供应商的身份验证凭据。
 func GetCredential(provider string) (*Credential, error) {
 	store, err := LoadStore()
 	if err != nil {
@@ -97,7 +99,7 @@ func GetCredential(provider string) (*Credential, error) {
 	return store.Credentials[normalizeProvider(provider)], nil
 }
 
-// SetCredential saves one provider credential.
+// SetCredential 保存指定供应商的身份验证凭据到存储中。
 func SetCredential(provider string, cred *Credential) error {
 	store, err := LoadStore()
 	if err != nil {
@@ -112,7 +114,7 @@ func SetCredential(provider string, cred *Credential) error {
 	return SaveStore(store)
 }
 
-// DeleteCredential removes one provider credential.
+// DeleteCredential 从存储中删除指定供应商的身份验证凭据。
 func DeleteCredential(provider string) error {
 	store, err := LoadStore()
 	if err != nil {
@@ -122,7 +124,7 @@ func DeleteCredential(provider string) error {
 	return SaveStore(store)
 }
 
-// DeleteAllCredentials clears auth store.
+// DeleteAllCredentials 清空整个身份验证存储并删除相关文件。
 func DeleteAllCredentials() error {
 	path := FilePath()
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {

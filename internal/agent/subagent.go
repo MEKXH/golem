@@ -30,7 +30,7 @@ type SubagentManagerOptions struct {
 	MaxConcurrency int
 }
 
-// subagentProcessor is the minimal processing contract used by subagents.
+// SubagentProcessor 是子代理使用的最小处理契约接口。
 type subagentProcessor interface {
 	ProcessForChannelWithSession(ctx context.Context, channel, chatID, senderID, sessionID, content string) (string, error)
 }

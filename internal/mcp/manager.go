@@ -1,3 +1,5 @@
+// Package mcp 实现模型上下文协议 (Model Context Protocol) 的客户端管理。
+// 它负责连接远程 MCP 服务器，发现并注册其提供的工具，并处理工具调用请求。
 package mcp
 
 import (
@@ -13,25 +15,25 @@ import (
 )
 
 const (
-	reconnectMaxAttempts = 3
-	reconnectBaseBackoff = 250 * time.Millisecond
+	reconnectMaxAttempts = 3                // 最大重连尝试次数
+	reconnectBaseBackoff = 250 * time.Millisecond // 基础重连退避时间
 )
 
 type serverState struct {
-	cfg    config.MCPServerConfig
-	client Client
-	tools  []ToolDefinition
-	status ServerStatus
+	cfg    config.MCPServerConfig // 服务器配置
+	client Client                  // MCP 客户端实例
+	tools  []ToolDefinition       // 从服务器发现的工具定义列表
+	status ServerStatus           // 服务器当前运行状态
 }
 
-// Manager 管理已配置的 MCP 服务器和动态工具注册。
+// Manager 统一管理所有已配置的 MCP 服务器及其动态工具。
 type Manager struct {
 	mu         sync.RWMutex
-	connectors Connectors
-	servers    map[string]*serverState
+	connectors Connectors           // 支持的传输协议连接器集合
+	servers    map[string]*serverState // 管理的服务器状态映射
 }
 
-// NewManager 从 config.MCP.Servers 构建管理器。
+// NewManager 根据配置和连接器集合创建一个新的 MCP 管理器。
 func NewManager(servers map[string]config.MCPServerConfig, connectors Connectors) *Manager {
 	state := make(map[string]*serverState, len(servers))
 	for name, cfg := range servers {

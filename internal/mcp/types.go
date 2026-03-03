@@ -7,39 +7,42 @@ import (
 )
 
 const (
-	TransportStdio   = "stdio"
-	TransportHTTPSSE = "http_sse"
+	TransportStdio   = "stdio"    // 标准输入输出传输协议
+	TransportHTTPSSE = "http_sse" // HTTP SSE 传输协议
 )
 
-// ToolDefinition 描述从 MCP 服务器发现的工具。
+// ToolDefinition 描述从 MCP 服务器发现的工具元数据。
 type ToolDefinition struct {
-	Name        string
-	Description string
+	Name        string // 工具名称
+	Description string // 工具功能描述
 }
 
-// Client 是管理器使用的 MCP 客户端抽象。
+// Client 定义了与 MCP 服务器交互的客户端接口。
 type Client interface {
+	// ListTools 获取服务器提供的所有工具列表。
 	ListTools(ctx context.Context) ([]ToolDefinition, error)
+	// CallTool 调用指定的工具并返回结果。
 	CallTool(ctx context.Context, toolName, argsJSON string) (any, error)
 }
 
-// Connector 拨打服务器并返回客户端实现。
+// Connector 定义了建立 MCP 连接并返回客户端实例的接口。
 type Connector interface {
+	// Connect 根据配置连接到指定的 MCP 服务器。
 	Connect(ctx context.Context, serverName string, cfg config.MCPServerConfig) (Client, error)
 }
 
-// Connectors 组合支持的传输连接器。
+// Connectors 包含了支持的所有传输协议的连接器实现。
 type Connectors struct {
-	Stdio   Connector
-	HTTPSSE Connector
+	Stdio   Connector // stdio 传输连接器
+	HTTPSSE Connector // http_sse 传输连接器
 }
 
-// ServerStatus 表示一个已配置服务器的当前管理器状态。
+// ServerStatus 表示 MCP 服务器在管理器中的当前运行状态。
 type ServerStatus struct {
-	Name      string
-	Transport string
-	Connected bool
-	Degraded  bool
-	ToolCount int
-	Message   string
+	Name      string // 服务器名称
+	Transport string // 使用的传输协议
+	Connected bool   // 是否已成功连接
+	Degraded  bool   // 是否处于降级（异常）状态
+	ToolCount int    // 发现的工具数量
+	Message   string // 状态描述消息或错误信息
 }

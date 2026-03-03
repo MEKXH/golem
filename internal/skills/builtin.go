@@ -76,8 +76,8 @@ When defining a skill:
 	}
 }
 
-// EnsureBuiltinSkills writes default builtin skills into <configDir>/builtin-skills
-// when they do not already exist.
+// EnsureBuiltinSkills 将默认的内置技能写入 <configDir>/builtin-skills 目录。
+// 仅当技能不存在时写入。
 func EnsureBuiltinSkills(configDir string) error {
 	builtinRoot := filepath.Join(configDir, "builtin-skills")
 	if err := os.MkdirAll(builtinRoot, 0755); err != nil {
