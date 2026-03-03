@@ -21,7 +21,7 @@ type DiaryEntry struct {
 	Content string
 }
 
-// RecallItem is one recalled memory fragment with source attribution.
+// RecallItem 是带有来源归属的单个回忆片段。
 type RecallItem struct {
 	Source  string
 	Date    string
@@ -29,7 +29,7 @@ type RecallItem struct {
 	Excerpt string
 }
 
-// RecallResult summarizes context recall quality and provenance.
+// RecallResult 总结上下文回忆的质量和来源。
 type RecallResult struct {
 	Query       string
 	RecallCount int
@@ -165,7 +165,7 @@ func (m *Manager) ReadRecentDiaries(limit int) ([]DiaryEntry, error) {
 	return out, nil
 }
 
-// RecallContext selects context fragments using recent-first + keyword-hit strategy.
+// RecallContext 使用最近优先 + 关键词命中策略选择上下文片段。
 func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (RecallResult, error) {
 	if recentLimit <= 0 {
 		recentLimit = 3

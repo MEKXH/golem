@@ -20,14 +20,14 @@ const (
 	maxInputBytes  = 25 * 1024 * 1024
 )
 
-// Input is one audio payload to transcribe.
+// Input 是一个要转录的音频负载。
 type Input struct {
 	FileName string
 	MIMEType string
 	Data     []byte
 }
 
-// Transcriber converts audio bytes to text.
+// Transcriber 将音频转换为文本。
 type Transcriber interface {
 	Transcribe(ctx context.Context, input Input) (string, error)
 }
@@ -39,7 +39,7 @@ type openAITranscriber struct {
 	client   *http.Client
 }
 
-// NewOpenAITranscriber builds an OpenAI-compatible audio transcription client.
+// NewOpenAITranscriber 构建一个 OpenAI 兼容的音频转录客户端。
 func NewOpenAITranscriber(apiKey, baseURL, model string, timeout time.Duration) (Transcriber, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {

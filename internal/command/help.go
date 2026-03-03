@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// HelpCommand implements /help — lists all available slash commands.
+// HelpCommand 实现 /help — 列出所有可用的斜杠命令。
 type HelpCommand struct{}
 
 func (c *HelpCommand) Name() string        { return "help" }

@@ -9,7 +9,7 @@ import (
 	"github.com/cloudwego/eino/components/tool/utils"
 )
 
-// WorkflowRequest describes a structured subagent workflow run.
+// WorkflowRequest 描述结构化的子代理工作流运行。
 type WorkflowRequest struct {
 	Goal           string
 	Mode           string
@@ -21,7 +21,7 @@ type WorkflowRequest struct {
 	RequestID      string
 }
 
-// WorkflowExecutor executes delegated subagent workflows.
+// WorkflowExecutor 执行委托的子代理工作流。
 type WorkflowExecutor interface {
 	RunWorkflow(ctx context.Context, req WorkflowRequest) (string, error)
 }
@@ -91,7 +91,7 @@ func buildWorkflowRequest(ctx context.Context, input *WorkflowInput) (WorkflowRe
 	}, nil
 }
 
-// NewWorkflowTool creates a workflow orchestration tool.
+// NewWorkflowTool 创建一个工作流编排工具。
 func NewWorkflowTool(executor WorkflowExecutor) (tool.InvokableTool, error) {
 	impl := &workflowToolImpl{executor: executor}
 	return utils.InferTool(

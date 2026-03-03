@@ -11,7 +11,7 @@ import (
 	"github.com/MEKXH/golem/internal/session"
 )
 
-// Env carries per-invocation context for a slash command.
+// Env 携带斜杠命令的每次调用上下文。
 type Env struct {
 	Channel       string
 	ChatID        string
@@ -24,12 +24,12 @@ type Env struct {
 	ListCommands  func() []Command // for /help
 }
 
-// Result is the output of a slash command execution.
+// Result 是斜杠命令执行的输出。
 type Result struct {
 	Content string
 }
 
-// Command is the interface every slash command must implement.
+// Command 是每个斜杠命令必须实现的接口。
 type Command interface {
 	// Name returns the command trigger without the leading slash (e.g. "new").
 	Name() string
@@ -39,18 +39,18 @@ type Command interface {
 	Execute(ctx context.Context, args string, env Env) Result
 }
 
-// Registry holds registered slash commands and dispatches them.
+// Registry 存储已注册的斜杠命令并分发执行。
 type Registry struct {
 	mu   sync.RWMutex
 	cmds map[string]Command
 }
 
-// NewRegistry creates an empty command registry.
+// NewRegistry 创建一个空的命令注册表。
 func NewRegistry() *Registry {
 	return &Registry{cmds: make(map[string]Command)}
 }
 
-// Register adds a command. Panics on duplicate names.
+// Register 添加一个命令。重复名称时 panic。
 func (r *Registry) Register(cmd Command) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -61,8 +61,8 @@ func (r *Registry) Register(cmd Command) {
 	r.cmds[name] = cmd
 }
 
-// Lookup parses raw user input. If it starts with "/" and matches a registered
-// command, it returns the command, the remaining args, and true.
+// Lookup 解析原始用户输入。如果以 "/" 开头且匹配已注册的命令，
+// 则返回命令、剩余参数和 true。
 func (r *Registry) Lookup(content string) (Command, string, bool) {
 	content = strings.TrimSpace(content)
 	if !strings.HasPrefix(content, "/") {
@@ -84,7 +84,7 @@ func (r *Registry) Lookup(content string) (Command, string, bool) {
 	return cmd, strings.TrimSpace(args), true
 }
 
-// List returns all registered commands sorted by name.
+// List 返回按名称排序的所有已注册命令。
 func (r *Registry) List() []Command {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

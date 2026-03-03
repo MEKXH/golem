@@ -135,7 +135,7 @@ func (t *cronToolImpl) enable(input *CronToolInput, enabled bool) (string, error
 	return fmt.Sprintf("Job %s (%s) %s.", job.ShortID(), job.Name, state), nil
 }
 
-// NewCronTool creates an agent tool for managing cron jobs.
+// NewCronTool 创建一个用于管理定时任务的 Agent 工具。
 func NewCronTool(service *cron.Service) (tool.InvokableTool, error) {
 	impl := &cronToolImpl{service: service}
 	return utils.InferTool(

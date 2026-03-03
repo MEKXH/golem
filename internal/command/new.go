@@ -5,7 +5,7 @@ import (
 	"log/slog"
 )
 
-// NewSessionCommand implements /new — resets the current conversation session.
+// NewSessionCommand 实现 /new — 重置当前会话。
 type NewSessionCommand struct{}
 
 func (c *NewSessionCommand) Name() string        { return "new" }

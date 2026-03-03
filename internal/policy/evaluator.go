@@ -2,13 +2,13 @@ package policy
 
 import "strings"
 
-// Evaluator performs pure policy decisions.
+// Evaluator 执行纯策略决策。
 type Evaluator struct {
 	mode            Mode
 	requireApproval map[string]struct{}
 }
 
-// NewEvaluator builds a deterministic, side-effect free evaluator.
+// NewEvaluator 构建一个确定性的、无副作用的评估器。
 func NewEvaluator(cfg Config) Evaluator {
 	requireApproval := make(map[string]struct{}, len(cfg.RequireApproval))
 	for _, toolName := range cfg.RequireApproval {
@@ -25,7 +25,7 @@ func NewEvaluator(cfg Config) Evaluator {
 	}
 }
 
-// Evaluate returns a deterministic decision for the given input.
+// Evaluate 对给定的输入返回确定性的决策。
 func (e Evaluator) Evaluate(input Input) Decision {
 	toolName := normalizeToolName(input.ToolName)
 

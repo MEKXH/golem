@@ -24,14 +24,14 @@ type serverState struct {
 	status ServerStatus
 }
 
-// Manager owns configured MCP servers and dynamic tool registration.
+// Manager 管理已配置的 MCP 服务器和动态工具注册。
 type Manager struct {
 	mu         sync.RWMutex
 	connectors Connectors
 	servers    map[string]*serverState
 }
 
-// NewManager constructs a manager from config.MCP.Servers.
+// NewManager 从 config.MCP.Servers 构建管理器。
 func NewManager(servers map[string]config.MCPServerConfig, connectors Connectors) *Manager {
 	state := make(map[string]*serverState, len(servers))
 	for name, cfg := range servers {
@@ -55,7 +55,7 @@ func NewManager(servers map[string]config.MCPServerConfig, connectors Connectors
 	}
 }
 
-// DefaultConnectors returns production connectors for stdio and HTTP/SSE transports.
+// DefaultConnectors 返回用于 stdio 和 HTTP/SSE 传输的生产连接器。
 func DefaultConnectors() Connectors {
 	return Connectors{
 		Stdio:   newStdioConnector(),
@@ -63,8 +63,8 @@ func DefaultConnectors() Connectors {
 	}
 }
 
-// Connect discovers tools from each configured server.
-// Failures are tracked as degraded states and do not fail the entire manager.
+// Connect 从每个已配置的服务器发现工具。
+// 失败被跟踪为降级状态，不会导致整个管理器失败。
 func (m *Manager) Connect(ctx context.Context) error {
 	names := m.serverNames()
 	for _, name := range names {
@@ -89,7 +89,7 @@ func (m *Manager) Connect(ctx context.Context) error {
 	return nil
 }
 
-// RegisterTools registers discovered MCP tools into the given registry.
+// RegisterTools 将发现的 MCP 工具注册到给定的注册表中。
 func (m *Manager) RegisterTools(reg *tools.Registry) error {
 	if reg == nil {
 		return fmt.Errorf("registry is required")
@@ -104,8 +104,8 @@ func (m *Manager) RegisterTools(reg *tools.Registry) error {
 	return nil
 }
 
-// CallTool routes a raw tool call to the selected MCP server client.
-// When the server is degraded or a tool call fails, CallTool attempts bounded reconnect with backoff.
+// CallTool 将原始工具调用路由到选定的 MCP 服务器客户端。
+// 当服务器降级或工具调用失败时，CallTool 会尝试带退避的有界重连。
 func (m *Manager) CallTool(ctx context.Context, serverName, toolName, argsJSON string) (string, error) {
 	client, err := m.ensureConnectedClient(ctx, serverName)
 	if err != nil {
@@ -134,7 +134,7 @@ func (m *Manager) CallTool(ctx context.Context, serverName, toolName, argsJSON s
 	return normalizeToolResult(result), nil
 }
 
-// Statuses returns per-server connection/discovery status.
+// Statuses 返回每个服务器的连接/发现状态。
 func (m *Manager) Statuses() []ServerStatus {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

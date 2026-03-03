@@ -11,30 +11,30 @@ const (
 	TransportHTTPSSE = "http_sse"
 )
 
-// ToolDefinition describes a tool discovered from an MCP server.
+// ToolDefinition 描述从 MCP 服务器发现的工具。
 type ToolDefinition struct {
 	Name        string
 	Description string
 }
 
-// Client is the MCP client abstraction used by the manager.
+// Client 是管理器使用的 MCP 客户端抽象。
 type Client interface {
 	ListTools(ctx context.Context) ([]ToolDefinition, error)
 	CallTool(ctx context.Context, toolName, argsJSON string) (any, error)
 }
 
-// Connector dials a server and returns a client implementation.
+// Connector 拨打服务器并返回客户端实现。
 type Connector interface {
 	Connect(ctx context.Context, serverName string, cfg config.MCPServerConfig) (Client, error)
 }
 
-// Connectors groups supported transport connectors.
+// Connectors 组合支持的传输连接器。
 type Connectors struct {
 	Stdio   Connector
 	HTTPSSE Connector
 }
 
-// ServerStatus represents current manager state for one configured server.
+// ServerStatus 表示一个已配置服务器的当前管理器状态。
 type ServerStatus struct {
 	Name      string
 	Transport string

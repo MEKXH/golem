@@ -8,8 +8,8 @@ import (
 	"github.com/MEKXH/golem/internal/skills"
 )
 
-// SkillsCommand implements /skills — list and inspect installed skills.
-// Subcommands: list, show <name>
+// SkillsCommand 实现 /skills — 列出和查看已安装的技能。
+// 子命令: list, show <name>
 type SkillsCommand struct{}
 
 func (c *SkillsCommand) Name() string        { return "skills" }

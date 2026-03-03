@@ -10,7 +10,7 @@ import (
 	"github.com/cloudwego/eino/components/tool/utils"
 )
 
-// EditFileInput parameters for edit_file tool.
+// EditFileInput edit_file 工具的参数。
 type EditFileInput struct {
 	Path    string `json:"path" jsonschema:"required,description=Absolute path to the file"`
 	OldText string `json:"old_text" jsonschema:"required,description=Exact existing text to replace"`
@@ -49,13 +49,13 @@ func (t *editFileToolImpl) execute(ctx context.Context, input *EditFileInput) (s
 	return "File edited successfully", nil
 }
 
-// NewEditFileTool creates the edit_file tool.
+// NewEditFileTool 创建 edit_file 工具。
 func NewEditFileTool(workspacePath string) (tool.InvokableTool, error) {
 	impl := &editFileToolImpl{workspacePath: workspacePath}
 	return utils.InferTool("edit_file", "Edit one exact snippet in a file via old_text -> new_text replacement", impl.execute)
 }
 
-// AppendFileInput parameters for append_file tool.
+// AppendFileInput append_file 工具的参数。
 type AppendFileInput struct {
 	Path    string `json:"path" jsonschema:"required,description=Absolute path to the file"`
 	Content string `json:"content" jsonschema:"required,description=Content to append to file end"`
@@ -85,7 +85,7 @@ func (t *appendFileToolImpl) execute(ctx context.Context, input *AppendFileInput
 	return "File appended successfully", nil
 }
 
-// NewAppendFileTool creates the append_file tool.
+// NewAppendFileTool 创建 append_file 工具。
 func NewAppendFileTool(workspacePath string) (tool.InvokableTool, error) {
 	impl := &appendFileToolImpl{workspacePath: workspacePath}
 	return utils.InferTool("append_file", "Append content to a file", impl.execute)

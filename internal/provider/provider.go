@@ -34,7 +34,7 @@ var refreshProviderCredential = func(name providerName, cred *auth.Credential) (
 	}
 }
 
-// NewChatModel creates a ChatModel based on configuration
+// NewChatModel 根据配置创建 ChatModel
 func NewChatModel(ctx context.Context, cfg *config.Config) (model.ChatModel, error) {
 	selected, pcfg, err := resolveProvider(cfg)
 	if err != nil {

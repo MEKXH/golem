@@ -25,19 +25,19 @@ type GuardResult struct {
 
 type GuardFunc func(ctx context.Context, name, argsJSON string) (GuardResult, error)
 
-// Registry manages tools by name
+// Registry 按名称管理工具
 type Registry struct {
 	mu    sync.RWMutex
 	tools map[string]tool.InvokableTool
 	guard GuardFunc
 }
 
-// NewRegistry creates a new registry
+// NewRegistry 创建一个新的注册表
 func NewRegistry() *Registry {
 	return &Registry{tools: make(map[string]tool.InvokableTool)}
 }
 
-// Register adds a tool to registry
+// Register 向注册表添加工具
 func (r *Registry) Register(t tool.InvokableTool) error {
 	info, err := t.Info(context.Background())
 	if err != nil {
@@ -57,7 +57,7 @@ func (r *Registry) Register(t tool.InvokableTool) error {
 	return nil
 }
 
-// Get retrieves a tool by name
+// Get 按名称获取工具
 func (r *Registry) Get(name string) (tool.InvokableTool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -66,7 +66,7 @@ func (r *Registry) Get(name string) (tool.InvokableTool, bool) {
 	return tool, ok
 }
 
-// SetGuard sets a pre-execution guard for tool execution.
+// SetGuard 设置工具执行前的守卫函数。
 func (r *Registry) SetGuard(fn GuardFunc) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -79,7 +79,7 @@ func (r *Registry) getGuard() GuardFunc {
 	return r.guard
 }
 
-// GetToolInfos returns all tool schemas for ChatModel binding
+// GetToolInfos 返回所有工具的 Schema，用于 ChatModel 绑定
 func (r *Registry) GetToolInfos(ctx context.Context) ([]*schema.ToolInfo, error) {
 	r.mu.RLock()
 	toolsList := make([]tool.InvokableTool, 0, len(r.tools))
@@ -99,7 +99,7 @@ func (r *Registry) GetToolInfos(ctx context.Context) ([]*schema.ToolInfo, error)
 	return infos, nil
 }
 
-// Execute runs a tool by name
+// Execute 按名称运行工具
 func (r *Registry) Execute(ctx context.Context, name string, argsJSON string) (string, error) {
 	t, ok := r.Get(name)
 	if !ok {
@@ -135,7 +135,7 @@ func (r *Registry) Execute(ctx context.Context, name string, argsJSON string) (s
 	return t.InvokableRun(ctx, argsJSON)
 }
 
-// Names returns all registered tool names
+// Names 返回所有已注册的工具名称
 func (r *Registry) Names() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -147,7 +147,7 @@ func (r *Registry) Names() []string {
 	return names
 }
 
-// List returns all tools
+// List 返回所有工具
 func (r *Registry) List() []tool.InvokableTool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

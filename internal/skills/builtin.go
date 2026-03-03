@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-// DefaultBuiltinSkills returns the built-in skills shipped with golem.
+// DefaultBuiltinSkills 返回随 golem 一起发布的内置技能。
 func DefaultBuiltinSkills() map[string]string {
 	return map[string]string{
 		"weather": `---

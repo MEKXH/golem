@@ -8,7 +8,7 @@ import (
 	"github.com/MEKXH/golem/internal/version"
 )
 
-// VersionCommand implements /version — shows build version info.
+// VersionCommand 实现 /version — 显示构建版本信息。
 type VersionCommand struct{}
 
 func (c *VersionCommand) Name() string        { return "version" }

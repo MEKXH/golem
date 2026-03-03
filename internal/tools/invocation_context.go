@@ -7,7 +7,7 @@ import (
 
 type invocationContextKey struct{}
 
-// InvocationContext carries caller metadata for tool execution.
+// InvocationContext 携带工具执行的调用者元数据。
 type InvocationContext struct {
 	Channel   string
 	ChatID    string
@@ -16,12 +16,12 @@ type InvocationContext struct {
 	SessionID string
 }
 
-// WithInvocationContext stores invocation metadata in context for tools.
+// WithInvocationContext 将调用元数据存储到上下文中供工具使用。
 func WithInvocationContext(ctx context.Context, meta InvocationContext) context.Context {
 	return context.WithValue(ctx, invocationContextKey{}, meta)
 }
 
-// InvocationFromContext reads invocation metadata from context.
+// InvocationFromContext 从上下文中读取调用元数据。
 func InvocationFromContext(ctx context.Context) InvocationContext {
 	v := ctx.Value(invocationContextKey{})
 	meta, ok := v.(InvocationContext)

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// SkillInfo describes a loaded skill.
+// SkillInfo 描述已加载的技能。
 type SkillInfo struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -16,14 +16,14 @@ type SkillInfo struct {
 	Source      string `json:"source"` // "workspace" | "global" | "builtin"
 }
 
-// Loader discovers and loads skill files.
+// Loader 发现并加载技能文件。
 type Loader struct {
 	workspaceSkills string // workspace/skills/
 	globalSkills    string // ~/.golem/skills/
 	builtinSkills   string // builtin skills shipped with golem
 }
 
-// NewLoader creates a skill loader for the given workspace.
+// NewLoader 为给定工作区创建技能加载器。
 func NewLoader(workspacePath string) *Loader {
 	homeDir, _ := os.UserHomeDir()
 	return &Loader{
@@ -33,7 +33,7 @@ func NewLoader(workspacePath string) *Loader {
 	}
 }
 
-// ListSkills returns all discovered skills (workspace > global > builtin).
+// ListSkills 返回所有已发现的技能（工作区 > 全局 > 内置）。
 func (l *Loader) ListSkills() []SkillInfo {
 	seen := make(map[string]bool)
 	var skills []SkillInfo
@@ -62,7 +62,7 @@ func (l *Loader) ListSkills() []SkillInfo {
 	return skills
 }
 
-// LoadSkill reads the content of a skill by name.
+// LoadSkill 按名称读取技能内容。
 func (l *Loader) LoadSkill(name string) (string, error) {
 	// Search workspace first, then global, then builtin.
 	for _, dir := range []string{l.workspaceSkills, l.globalSkills, l.builtinSkills} {
@@ -75,7 +75,7 @@ func (l *Loader) LoadSkill(name string) (string, error) {
 	return "", fmt.Errorf("skill not found: %s", name)
 }
 
-// BuildSkillsSummary returns a formatted summary of all skills for system prompt injection.
+// BuildSkillsSummary 返回所有技能的格式化摘要，用于系统提示词注入。
 func (l *Loader) BuildSkillsSummary() string {
 	skills := l.ListSkills()
 	if len(skills) == 0 {

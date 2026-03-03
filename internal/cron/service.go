@@ -10,10 +10,10 @@ import (
 	"github.com/adhocore/gronx"
 )
 
-// JobHandler is called when a job fires.
+// JobHandler 在任务触发时调用。
 type JobHandler func(*Job) error
 
-// Service manages scheduled jobs with a ticker-based polling loop.
+// Service 使用基于 ticker 的轮询循环管理定时任务。
 type Service struct {
 	store    *Store
 	onJob    JobHandler
@@ -23,7 +23,7 @@ type Service struct {
 	running  bool
 }
 
-// NewService creates a cron service backed by the given store path.
+// NewService 创建一个由给定存储路径支持的定时任务服务。
 func NewService(storePath string, handler JobHandler) *Service {
 	return &Service{
 		store: NewStore(storePath),
@@ -31,7 +31,7 @@ func NewService(storePath string, handler JobHandler) *Service {
 	}
 }
 
-// Start loads jobs from disk and begins the polling loop.
+// Start 从磁盘加载任务并开始轮询循环。
 func (s *Service) Start() error {
 	if err := s.store.Load(); err != nil {
 		return fmt.Errorf("cron service start: %w", err)
@@ -60,7 +60,7 @@ func (s *Service) Start() error {
 	return nil
 }
 
-// Stop gracefully shuts down the polling loop.
+// Stop 优雅地关闭轮询循环。
 func (s *Service) Stop() {
 	s.mu.Lock()
 	if !s.running {
@@ -155,8 +155,8 @@ func (s *Service) executeJob(job *Job) {
 	}
 }
 
-// RunJob executes a single job immediately by ID, regardless of next-run timing.
-// It reuses the same execution semantics as scheduled runs.
+// RunJob 根据 ID 立即执行单个任务，忽略下次运行时间。
+// 它重用与计划运行相同的执行语义。
 func (s *Service) RunJob(id string) (*Job, error) {
 	job, ok := s.store.Get(id)
 	if !ok {
@@ -200,7 +200,7 @@ func (s *Service) computeNextRun(job *Job) {
 	}
 }
 
-// AddJob creates and persists a new job.
+// AddJob 创建并持久化一个新任务。
 func (s *Service) AddJob(name, message string, schedule Schedule, channel, chatID string, deliver bool) (*Job, error) {
 	payload := Payload{
 		Kind:    "agent_turn",
@@ -227,7 +227,7 @@ func (s *Service) AddJob(name, message string, schedule Schedule, channel, chatI
 	return job, nil
 }
 
-// RemoveJob deletes a job by ID.
+// RemoveJob 按 ID 删除任务。
 func (s *Service) RemoveJob(id string) error {
 	if !s.store.Delete(id) {
 		return fmt.Errorf("job not found: %s", id)
@@ -238,7 +238,7 @@ func (s *Service) RemoveJob(id string) error {
 	return nil
 }
 
-// EnableJob sets a job's enabled state.
+// EnableJob 设置任务的启用状态。
 func (s *Service) EnableJob(id string, enabled bool) (*Job, error) {
 	job, ok := s.store.Get(id)
 	if !ok {
@@ -258,7 +258,7 @@ func (s *Service) EnableJob(id string, enabled bool) (*Job, error) {
 	return job, nil
 }
 
-// ListJobs returns all jobs, optionally including disabled ones.
+// ListJobs 返回所有任务，可选择包含禁用的任务。
 func (s *Service) ListJobs(includeDisabled bool) []*Job {
 	all := s.store.All()
 	if includeDisabled {
@@ -275,12 +275,12 @@ func (s *Service) ListJobs(includeDisabled bool) []*Job {
 	return result
 }
 
-// GetJob retrieves a single job by ID.
+// GetJob 按 ID 获取单个任务。
 func (s *Service) GetJob(id string) (*Job, bool) {
 	return s.store.Get(id)
 }
 
-// Status returns a summary of the cron service.
+// Status 返回定时任务服务的摘要。
 func (s *Service) Status() map[string]any {
 	all := s.store.All()
 	enabled := 0

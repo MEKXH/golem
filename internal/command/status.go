@@ -14,7 +14,7 @@ import (
 	"github.com/MEKXH/golem/internal/skills"
 )
 
-// StatusCommand implements /status — shows runtime status summary.
+// StatusCommand 实现 /status — 显示运行时状态摘要。
 type StatusCommand struct{}
 
 func (c *StatusCommand) Name() string        { return "status" }

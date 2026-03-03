@@ -15,7 +15,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-// ContextBuilder builds LLM context
+// ContextBuilder 构建 LLM 上下文
 var watchedBaseFiles = []string{
 	"IDENTITY.md", "SOUL.md", "USER.md", "TOOLS.md", "AGENTS.md",
 }
@@ -27,18 +27,18 @@ type ContextBuilder struct {
 	cachedBaseParts []string
 }
 
-// NewContextBuilder creates a context builder
+// NewContextBuilder 创建上下文构建器
 func NewContextBuilder(workspacePath string) *ContextBuilder {
 	return &ContextBuilder{workspacePath: workspacePath}
 }
 
-// SetRuntimeMetrics attaches a runtime metrics recorder
+// SetRuntimeMetrics 附加运行时指标记录器
 func (c *ContextBuilder) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
 	c.runtimeMetrics = recorder
 }
 
-// InvalidateCache clears the cached system prompt parts if the changed path is relevant.
-// If changedPath is empty, it forces invalidation.
+// InvalidateCache 清除缓存的系统提示部分（如果更改的路径相关）。
+// 如果 changedPath 为空，则强制使缓存失效。
 func (c *ContextBuilder) InvalidateCache(changedPath string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -82,7 +82,7 @@ func (c *ContextBuilder) InvalidateCache(changedPath string) {
 	}
 }
 
-// BuildSystemPrompt assembles the system prompt
+// BuildSystemPrompt 组装系统提示词
 func (c *ContextBuilder) BuildSystemPrompt() string {
 	parts := c.buildBaseSystemPromptParts()
 
@@ -224,7 +224,7 @@ func formatSourceHits(sourceHits map[string]int) string {
 	return strings.Join(parts, ", ")
 }
 
-// BuildMessages constructs the full message list
+// BuildMessages 构建完整的消息列表
 func (c *ContextBuilder) BuildMessages(history []*session.Message, current string, media []string) []*schema.Message {
 	messages := make([]*schema.Message, 0, len(history)+2)
 	currentContent := strings.TrimSpace(current)

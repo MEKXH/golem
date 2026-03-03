@@ -9,7 +9,7 @@ import (
 
 var logLevelOverride string
 
-// NewRootCmd creates the root command
+// NewRootCmd 创建根命令
 func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "golem",

@@ -1,6 +1,6 @@
 package policy
 
-// Action is the policy decision for a tool execution request.
+// Action 是工具执行请求的策略决策。
 type Action string
 
 const (
@@ -9,7 +9,7 @@ const (
 	ActionRequireApproval Action = "require_approval"
 )
 
-// Mode controls evaluator behavior.
+// Mode 控制评估器的行为。
 type Mode string
 
 const (
@@ -18,18 +18,18 @@ const (
 	ModeOff     Mode = "off"
 )
 
-// Config contains policy settings required by the evaluator.
+// Config 包含评估器所需的策略设置。
 type Config struct {
 	Mode            Mode
 	RequireApproval []string
 }
 
-// Input is the minimum evaluation context.
+// Input 是最小的评估上下文。
 type Input struct {
 	ToolName string
 }
 
-// Decision is the deterministic policy result.
+// Decision 是确定性的策略结果。
 type Decision struct {
 	Action Action
 	Reason string

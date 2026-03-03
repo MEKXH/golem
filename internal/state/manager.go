@@ -11,28 +11,28 @@ import (
 
 const heartbeatStateFileMode = 0600
 
-// HeartbeatState stores the latest active chat target for heartbeat delivery.
+// HeartbeatState 存储最新的活跃聊天目标，用于心跳传递。
 type HeartbeatState struct {
 	LastChannel string    `json:"last_channel"`
 	LastChatID  string    `json:"last_chat_id"`
 	SeenAt      time.Time `json:"seen_at,omitempty"`
 }
 
-// Manager persists lightweight runtime state.
+// Manager 持久化轻量级运行时状态。
 type Manager struct {
 	heartbeatPath string
 	mu            sync.Mutex
 }
 
-// NewManager creates a state manager under <baseDir>/state.
+// NewManager 在 <baseDir>/state 下创建状态管理器。
 func NewManager(baseDir string) *Manager {
 	return &Manager{
 		heartbeatPath: filepath.Join(baseDir, "state", "heartbeat.json"),
 	}
 }
 
-// LoadHeartbeatState reads heartbeat state from disk.
-// Missing or malformed files are treated as empty state.
+// LoadHeartbeatState 从磁盘读取心跳状态。
+// 缺失或格式错误的文件将视为空状态。
 func (m *Manager) LoadHeartbeatState() (HeartbeatState, error) {
 	data, err := os.ReadFile(m.heartbeatPath)
 	if err != nil {
@@ -54,7 +54,7 @@ func (m *Manager) LoadHeartbeatState() (HeartbeatState, error) {
 	return st, nil
 }
 
-// SaveHeartbeatState writes heartbeat state to disk.
+// SaveHeartbeatState 将心跳状态写入磁盘。
 func (m *Manager) SaveHeartbeatState(st HeartbeatState) error {
 	st.LastChannel = strings.TrimSpace(st.LastChannel)
 	st.LastChatID = strings.TrimSpace(st.LastChatID)

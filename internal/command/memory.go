@@ -8,8 +8,8 @@ import (
 	"github.com/MEKXH/golem/internal/memory"
 )
 
-// MemoryCommand implements /memory — read long-term memory and diary entries.
-// Subcommands: (none)|read, diary [date|recent]
+// MemoryCommand 实现 /memory — 读取长期记忆和日记条目。
+// 子命令: (none)|read, diary [date|recent]
 type MemoryCommand struct{}
 
 func (c *MemoryCommand) Name() string        { return "memory" }

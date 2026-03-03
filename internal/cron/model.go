@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Schedule defines when a job should run.
+// Schedule 定义任务何时运行。
 type Schedule struct {
 	Kind    string `json:"kind"`               // "at" | "every" | "cron"
 	AtMS    *int64 `json:"at_ms,omitempty"`    // one-shot timestamp (milliseconds)
@@ -14,7 +14,7 @@ type Schedule struct {
 	Expr    string `json:"expr,omitempty"`     // cron expression (5-field)
 }
 
-// Payload defines what a job does when triggered.
+// Payload 定义任务触发时执行的操作。
 type Payload struct {
 	Kind    string `json:"kind"`    // "agent_turn"
 	Message string `json:"message"` // message sent to agent
@@ -23,7 +23,7 @@ type Payload struct {
 	Deliver bool   `json:"deliver"` // true=deliver directly, false=agent processes
 }
 
-// JobState holds runtime state for a job.
+// JobState 保存任务的运行时状态。
 type JobState struct {
 	NextRunAtMS *int64 `json:"next_run_at_ms,omitempty"`
 	LastRunAtMS *int64 `json:"last_run_at_ms,omitempty"`
@@ -31,7 +31,7 @@ type JobState struct {
 	LastError   string `json:"last_error,omitempty"`
 }
 
-// Job represents a scheduled task.
+// Job 表示一个定时任务。
 type Job struct {
 	ID             string   `json:"id"`
 	Name           string   `json:"name"`
@@ -44,7 +44,7 @@ type Job struct {
 	DeleteAfterRun bool     `json:"delete_after_run,omitempty"`
 }
 
-// NewJob creates a new job with a generated ID and timestamps.
+// NewJob 创建一个带有生成 ID 和时间戳的新任务。
 func NewJob(name string, schedule Schedule, payload Payload) *Job {
 	now := time.Now().UnixMilli()
 	return &Job{
@@ -58,7 +58,7 @@ func NewJob(name string, schedule Schedule, payload Payload) *Job {
 	}
 }
 
-// ShortID returns a truncated ID for display.
+// ShortID 返回用于显示的截断 ID。
 func (j *Job) ShortID() string {
 	if len(j.ID) > 8 {
 		return j.ID[:8]
@@ -66,7 +66,7 @@ func (j *Job) ShortID() string {
 	return j.ID
 }
 
-// ScheduleDescription returns a human-readable schedule summary.
+// ScheduleDescription 返回人类可读的调度摘要。
 func (j *Job) ScheduleDescription() string {
 	switch j.Schedule.Kind {
 	case "at":

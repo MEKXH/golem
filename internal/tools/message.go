@@ -62,7 +62,7 @@ func (t *messageToolImpl) execute(ctx context.Context, input *MessageInput) (str
 	return fmt.Sprintf("Message sent to %s:%s", channel, chatID), nil
 }
 
-// NewMessageTool creates a tool that sends a message through the message bus.
+// NewMessageTool 创建一个通过消息总线发送消息的工具。
 func NewMessageTool(publisher interface {
 	PublishOutbound(msg *bus.OutboundMessage)
 }) (tool.InvokableTool, error) {

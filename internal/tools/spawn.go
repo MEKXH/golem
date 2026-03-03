@@ -9,7 +9,7 @@ import (
 	"github.com/cloudwego/eino/components/tool/utils"
 )
 
-// SubagentRequest is the normalized execution request for subagent tools.
+// SubagentRequest 是子代理工具的规范化执行请求。
 type SubagentRequest struct {
 	Task           string
 	Label          string
@@ -19,7 +19,7 @@ type SubagentRequest struct {
 	RequestID      string
 }
 
-// SubagentExecutor executes delegated subagent tasks.
+// SubagentExecutor 执行委托的子代理任务。
 type SubagentExecutor interface {
 	Spawn(ctx context.Context, req SubagentRequest) (string, error)
 	RunSync(ctx context.Context, req SubagentRequest) (string, error)
@@ -111,7 +111,7 @@ func buildSubagentRequest(ctx context.Context, task, label, channel, chatID stri
 	}, nil
 }
 
-// NewSpawnTool creates an async subagent delegation tool.
+// NewSpawnTool 创建一个异步子代理委托工具。
 func NewSpawnTool(executor SubagentExecutor) (tool.InvokableTool, error) {
 	impl := &spawnToolImpl{executor: executor}
 	return utils.InferTool(
@@ -121,7 +121,7 @@ func NewSpawnTool(executor SubagentExecutor) (tool.InvokableTool, error) {
 	)
 }
 
-// NewSubagentTool creates a sync subagent delegation tool.
+// NewSubagentTool 创建一个同步子代理委托工具。
 func NewSubagentTool(executor SubagentExecutor) (tool.InvokableTool, error) {
 	impl := &subagentToolImpl{executor: executor}
 	return utils.InferTool(
