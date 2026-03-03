@@ -16,12 +16,13 @@ import (
 	"github.com/MEKXH/golem/internal/tools"
 )
 
+// runtimeGuard 负责管理 Agent 运行时的安全策略执行、审批流程和审计日志。
 type runtimeGuard struct {
-	baseMode        policy.Mode
-	requireApproval []string
-	offUntil        time.Time
-	approvalService *approval.Service
-	auditWriter     *audit.Writer
+	baseMode        policy.Mode       // 基础运行模式（strict, relaxed, off）
+	requireApproval []string          // 需要审批的工具列表
+	offUntil        time.Time         // 策略关闭的截止时间（用于 TTL 自动恢复）
+	approvalService *approval.Service // 审批服务
+	auditWriter     *audit.Writer     // 审计日志写入器
 }
 
 func (l *Loop) configureRuntimeGuard(cfg *config.Config) error {
@@ -49,7 +50,7 @@ func (l *Loop) configureRuntimeGuard(cfg *config.Config) error {
 	return nil
 }
 
-// AuditRuntimePolicyStartup writes startup policy audit events.
+// AuditRuntimePolicyStartup 记录 Agent 启动时的策略审计事件。
 func (l *Loop) AuditRuntimePolicyStartup(ctx context.Context, cfg *config.Config) {
 	if cfg == nil {
 		return
@@ -85,6 +86,7 @@ func (l *Loop) AuditRuntimePolicyStartup(ctx context.Context, cfg *config.Config
 	}
 }
 
+// evaluateToolGuard 是工具执行前的守卫函数，负责根据策略进行拦截、放行或发起审批。
 func (l *Loop) evaluateToolGuard(ctx context.Context, name, argsJSON string) (tools.GuardResult, error) {
 	guard := l.runtimeGuard
 	if guard == nil {
@@ -111,11 +113,13 @@ func (l *Loop) evaluateToolGuard(ctx context.Context, name, argsJSON string) (to
 		l.appendAuditEvent(ctx, "policy_deny", "", name, msg)
 		return tools.GuardResult{Action: tools.GuardDeny, Message: msg}, nil
 	case policy.ActionRequireApproval:
+		// 清理已过期的待审批请求
 		if _, err := guard.approvalService.ExpirePending(); err != nil {
 			return tools.GuardResult{}, err
 		}
 
 		normalizedArgs := normalizeArgsJSON(argsJSON)
+		// 查找是否有匹配的已审批请求或已存在的待审批请求
 		approvedReq, pendingReq, err := guard.findMatchingRequests(name, normalizedArgs)
 		if err != nil {
 			return tools.GuardResult{}, err
@@ -135,6 +139,7 @@ func (l *Loop) evaluateToolGuard(ctx context.Context, name, argsJSON string) (to
 			reason = "policy off_ttl expired; strict mode restored"
 		}
 
+		// 创建新的审批请求
 		req, err := guard.approvalService.Create(approval.CreateInput{
 			ToolName: strings.TrimSpace(name),
 			ArgsJSON: normalizedArgs,

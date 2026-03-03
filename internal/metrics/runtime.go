@@ -1,3 +1,4 @@
+// Package metrics 实现 Golem 的运行时指标监控，支持工具执行、通道发送及记忆召回的可观察性统计。
 package metrics
 
 import (
@@ -14,30 +15,31 @@ import (
 
 const runtimeMetricsFileName = "runtime_metrics.json"
 
+// latencyBucketUpperBoundsMs 定义了用于 P95 等分位数统计的延迟桶上限（毫秒）。
 var latencyBucketUpperBoundsMs = []int64{
 	10, 25, 50, 100, 250, 500, 1000, 2000, 5000, 10000, 30000,
 }
 
-// RuntimeSnapshot contains aggregated runtime metrics for tools and channel sends.
+// RuntimeSnapshot 包含工具、通道及记忆模块的聚合运行时指标快照。
 type RuntimeSnapshot struct {
-	UpdatedAt time.Time    `json:"updated_at"`
-	Tool      ToolStats    `json:"tool"`
-	Channel   ChannelStats `json:"channel"`
-	Memory    MemoryStats  `json:"memory"`
+	UpdatedAt time.Time    `json:"updated_at"` // 指标最后更新时间
+	Tool      ToolStats    `json:"tool"`       // 工具执行统计
+	Channel   ChannelStats `json:"channel"`    // 消息通道发送统计
+	Memory    MemoryStats  `json:"memory"`     // 记忆召回统计
 }
 
-// ToolStats tracks tool execution metrics.
+// ToolStats 跟踪工具执行的各项关键指标。
 type ToolStats struct {
-	Total             int64 `json:"total"`
-	Errors            int64 `json:"errors"`
-	Timeouts          int64 `json:"timeouts"`
-	TotalLatencyMs    int64 `json:"total_latency_ms"`
-	MaxLatencyMs      int64 `json:"max_latency_ms"`
-	LastLatencyMs     int64 `json:"last_latency_ms"`
-	P95ProxyLatencyMs int64 `json:"p95_proxy_latency_ms"`
+	Total             int64 `json:"total"`                // 总调用次数
+	Errors            int64 `json:"errors"`               // 失败次数
+	Timeouts          int64 `json:"timeouts"`             // 超时次数
+	TotalLatencyMs    int64 `json:"total_latency_ms"`     // 累计延迟（毫秒）
+	MaxLatencyMs      int64 `json:"max_latency_ms"`       // 最大延迟（毫秒）
+	LastLatencyMs     int64 `json:"last_latency_ms"`      // 最近一次执行延迟
+	P95ProxyLatencyMs int64 `json:"p95_proxy_latency_ms"` // P95 近似延迟（毫秒）
 }
 
-// ErrorRatio returns errors/total in [0,1].
+// ErrorRatio 返回工具执行的错误率，范围为 [0, 1]。
 func (t ToolStats) ErrorRatio() float64 {
 	if t.Total <= 0 {
 		return 0
@@ -45,7 +47,7 @@ func (t ToolStats) ErrorRatio() float64 {
 	return float64(t.Errors) / float64(t.Total)
 }
 
-// TimeoutRatio returns timeouts/total in [0,1].
+// TimeoutRatio 返回工具执行的超时率，范围为 [0, 1]。
 func (t ToolStats) TimeoutRatio() float64 {
 	if t.Total <= 0 {
 		return 0
@@ -53,7 +55,7 @@ func (t ToolStats) TimeoutRatio() float64 {
 	return float64(t.Timeouts) / float64(t.Total)
 }
 
-// AvgLatencyMs returns average latency in milliseconds.
+// AvgLatencyMs 返回工具执行的平均延迟（毫秒）。
 func (t ToolStats) AvgLatencyMs() float64 {
 	if t.Total <= 0 {
 		return 0
@@ -61,24 +63,24 @@ func (t ToolStats) AvgLatencyMs() float64 {
 	return float64(t.TotalLatencyMs) / float64(t.Total)
 }
 
-// ChannelStats tracks outbound channel send metrics.
+// ChannelStats 跟踪出站消息通道的发送指标。
 type ChannelStats struct {
-	SendAttempts int64 `json:"send_attempts"`
-	SendFailures int64 `json:"send_failures"`
+	SendAttempts int64 `json:"send_attempts"` // 发送尝试总数
+	SendFailures int64 `json:"send_failures"` // 发送失败总数
 }
 
-// MemoryStats tracks memory recall observability.
+// MemoryStats 跟踪记忆召回系统的可观察性指标。
 type MemoryStats struct {
-	Recalls          int64 `json:"recalls"`
-	TotalItems       int64 `json:"total_items"`
-	LastItems        int64 `json:"last_items"`
-	EmptyRecalls     int64 `json:"empty_recalls"`
-	LongTermHits     int64 `json:"long_term_hits"`
-	DiaryRecentHits  int64 `json:"diary_recent_hits"`
-	DiaryKeywordHits int64 `json:"diary_keyword_hits"`
+	Recalls          int64 `json:"recalls"`            // 召回请求总数
+	TotalItems       int64 `json:"total_items"`        // 累计召回的片段总数
+	LastItems        int64 `json:"last_items"`         // 最近一次召回的片段数
+	EmptyRecalls     int64 `json:"empty_recalls"`      // 空召回（未找到相关记忆）次数
+	LongTermHits     int64 `json:"long_term_hits"`     // 命中长期记忆的次数
+	DiaryRecentHits  int64 `json:"diary_recent_hits"`  // 命中最近日记的次数
+	DiaryKeywordHits int64 `json:"diary_keyword_hits"` // 通过关键词命中日记的次数
 }
 
-// FailureRatio returns failures/attempts in [0,1].
+// FailureRatio 返回通道发送的失败率，范围为 [0, 1]。
 func (c ChannelStats) FailureRatio() float64 {
 	if c.SendAttempts <= 0 {
 		return 0
@@ -86,25 +88,25 @@ func (c ChannelStats) FailureRatio() float64 {
 	return float64(c.SendFailures) / float64(c.SendAttempts)
 }
 
-// HasData reports whether any runtime metrics were recorded.
+// HasData 报告快照中是否包含任何已记录的数据。
 func (s RuntimeSnapshot) HasData() bool {
 	return s.Tool.Total > 0 || s.Channel.SendAttempts > 0
 }
 
-// RuntimeMetrics records and persists runtime metrics.
+// RuntimeMetrics 负责在内存中记录并定期持久化运行时指标。
 type RuntimeMetrics struct {
-	path string
+	path string // 持久化文件路径
 
 	mu      sync.Mutex
-	snap    RuntimeSnapshot
-	buckets []int64
+	snap    RuntimeSnapshot // 内存中的当前快照
+	buckets []int64         // 延迟分布桶
 
-	dirty    bool
-	stopChan chan struct{}
+	dirty    bool          // 标记是否有未保存的修改
+	stopChan chan struct{} // 用于停止刷新协程
 	wg       sync.WaitGroup
 }
 
-// NewRuntimeMetrics creates a metrics recorder rooted at <workspace>/state/runtime_metrics.json.
+// NewRuntimeMetrics 为指定的工作区创建一个指标记录器，并启动自动持久化协程。
 func NewRuntimeMetrics(workspacePath string) *RuntimeMetrics {
 	m := &RuntimeMetrics{
 		path:     runtimeMetricsPath(workspacePath),
@@ -116,7 +118,7 @@ func NewRuntimeMetrics(workspacePath string) *RuntimeMetrics {
 	return m
 }
 
-// runFlusher periodically persists metrics if they are dirty.
+// runFlusher 是后台运行的刷新协程，定期将修改后的指标同步到磁盘。
 func (m *RuntimeMetrics) runFlusher() {
 	defer m.wg.Done()
 	ticker := time.NewTicker(5 * time.Second)
@@ -133,14 +135,14 @@ func (m *RuntimeMetrics) runFlusher() {
 	}
 }
 
-// Flush forces persistence of the snapshot if dirty.
+// Flush 强制将当前内存中的指标快照持久化到磁盘（如果存在修改）。
 func (m *RuntimeMetrics) Flush() {
 	m.mu.Lock()
 	if !m.dirty {
 		m.mu.Unlock()
 		return
 	}
-	// Copy snapshot to release lock during I/O
+	// 在执行 I/O 操作前释放锁
 	snap := m.snap
 	m.dirty = false
 	m.mu.Unlock()
@@ -148,7 +150,7 @@ func (m *RuntimeMetrics) Flush() {
 	_ = persistRuntimeSnapshot(m.path, snap)
 }
 
-// Close stops the flusher and ensures final persistence.
+// Close 优雅地停止刷新器，并确保最后一次指标修改被持久化。
 func (m *RuntimeMetrics) Close() error {
 	if m == nil {
 		return nil
@@ -158,7 +160,7 @@ func (m *RuntimeMetrics) Close() error {
 	return nil
 }
 
-// Snapshot returns the latest in-memory snapshot.
+// Snapshot 返回当前内存中最新的指标快照副本。
 func (m *RuntimeMetrics) Snapshot() RuntimeSnapshot {
 	if m == nil {
 		return RuntimeSnapshot{}
@@ -168,7 +170,7 @@ func (m *RuntimeMetrics) Snapshot() RuntimeSnapshot {
 	return m.snap
 }
 
-// RecordToolExecution updates tool metrics and marks for persistence.
+// RecordToolExecution 记录一次工具执行的耗时与结果，并更新统计指标。
 func (m *RuntimeMetrics) RecordToolExecution(duration time.Duration, result string, runErr error) (RuntimeSnapshot, error) {
 	if m == nil {
 		return RuntimeSnapshot{}, nil
@@ -204,7 +206,7 @@ func (m *RuntimeMetrics) RecordToolExecution(duration time.Duration, result stri
 	return m.snap, nil
 }
 
-// RecordChannelSend updates outbound channel send metrics and marks for persistence.
+// RecordChannelSend 记录一次出站通道发送尝试的结果。
 func (m *RuntimeMetrics) RecordChannelSend(success bool) (RuntimeSnapshot, error) {
 	if m == nil {
 		return RuntimeSnapshot{}, nil
@@ -225,7 +227,7 @@ func (m *RuntimeMetrics) RecordChannelSend(success bool) (RuntimeSnapshot, error
 	return m.snap, nil
 }
 
-// RecordMemoryRecall records memory recall count and hit-source breakdown.
+// RecordMemoryRecall 记录一次记忆召回操作的数量和来源分布。
 func (m *RuntimeMetrics) RecordMemoryRecall(itemCount int, sourceHits map[string]int) (RuntimeSnapshot, error) {
 	if m == nil {
 		return RuntimeSnapshot{}, nil
@@ -253,8 +255,7 @@ func (m *RuntimeMetrics) RecordMemoryRecall(itemCount int, sourceHits map[string
 	return m.snap, nil
 }
 
-// ReadRuntimeSnapshot reads the persisted snapshot from workspace state.
-// If no file exists yet, it returns a zero-value snapshot and nil error.
+// ReadRuntimeSnapshot 从磁盘文件中读取已持久化的运行时指标快照。
 func ReadRuntimeSnapshot(workspacePath string) (RuntimeSnapshot, error) {
 	path := runtimeMetricsPath(workspacePath)
 	raw, err := os.ReadFile(path)

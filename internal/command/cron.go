@@ -10,8 +10,8 @@ import (
 	"github.com/MEKXH/golem/internal/cron"
 )
 
-// CronCommand implements /cron — manage scheduled jobs.
-// Subcommands: list, remove <id>, enable <id>, disable <id>, run <id>
+// CronCommand 实现 /cron — 管理定时任务。
+// 子命令: list, remove <id>, enable <id>, disable <id>, run <id>
 type CronCommand struct{}
 
 func (c *CronCommand) Name() string { return "cron" }

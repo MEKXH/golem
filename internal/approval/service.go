@@ -1,3 +1,4 @@
+// Package approval 实现 Golem 的人工审批流程，用于对敏感工具执行进行准入控制。
 package approval
 
 import (
@@ -8,17 +9,17 @@ import (
 	"time"
 )
 
-const defaultTTL = 15 * time.Minute
+const defaultTTL = 15 * time.Minute // 默认审批请求有效期
 
-// Service orchestrates approval lifecycle operations.
+// Service 负责管理审批请求的整个生命周期，包括创建、查询、决策及过期处理。
 type Service struct {
-	store      *Store
-	defaultTTL time.Duration
+	store      *Store        // 数据持久化存储
+	defaultTTL time.Duration // 默认有效期
 	now        func() time.Time
 	mu         sync.Mutex
 }
 
-// NewService creates a service backed by <workspace>/state/approvals.json.
+// NewService 在指定的 <workspace>/state/approvals.json 路径下创建一个审批服务。
 func NewService(workspace string) *Service {
 	return &Service{
 		store:      NewStore(workspace),
@@ -27,7 +28,7 @@ func NewService(workspace string) *Service {
 	}
 }
 
-// Create inserts a new pending approval request.
+// Create 插入一个新的待审批请求。
 func (s *Service) Create(input CreateInput) (Request, error) {
 	toolName := strings.TrimSpace(input.ToolName)
 	if toolName == "" {
@@ -69,17 +70,17 @@ func (s *Service) Create(input CreateInput) (Request, error) {
 	return request, nil
 }
 
-// Approve marks a pending request as approved.
+// Approve 将一个待审批请求标记为已通过。
 func (s *Service) Approve(id string, decision DecisionInput) (Request, error) {
 	return s.decide(id, StatusApproved, decision, "approved")
 }
 
-// Reject marks a pending request as rejected.
+// Reject 将一个待审批请求标记为已拒绝。
 func (s *Service) Reject(id string, decision DecisionInput) (Request, error) {
 	return s.decide(id, StatusRejected, decision, "rejected")
 }
 
-// List returns requests filtered by query values.
+// List 根据查询条件（如 ID、状态、工具名）过滤并返回请求列表。
 func (s *Service) List(query Query) ([]Request, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -109,7 +110,7 @@ func (s *Service) List(query Query) ([]Request, error) {
 	return result, nil
 }
 
-// ExpirePending marks pending requests as expired when TTL has elapsed.
+// ExpirePending 检查并标记所有超出有效期 (TTL) 的待审批请求为已过期。
 func (s *Service) ExpirePending() ([]Request, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

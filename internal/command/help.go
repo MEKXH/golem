@@ -6,12 +6,16 @@ import (
 	"strings"
 )
 
-// HelpCommand implements /help — lists all available slash commands.
+// HelpCommand 实现 /help 命令 — 用于列出当前所有已注册且可用的斜杠命令。
 type HelpCommand struct{}
 
-func (c *HelpCommand) Name() string        { return "help" }
+// Name 返回命令名称。
+func (c *HelpCommand) Name() string { return "help" }
+
+// Description 返回命令描述。
 func (c *HelpCommand) Description() string { return "List available slash commands" }
 
+// Execute 执行列出命令的逻辑。
 func (c *HelpCommand) Execute(_ context.Context, _ string, env Env) Result {
 	cmds := env.ListCommands()
 	var sb strings.Builder

@@ -14,23 +14,27 @@ import (
 	"github.com/MEKXH/golem/internal/skills"
 )
 
-// StatusCommand implements /status — shows runtime status summary.
+// StatusCommand 实现 /status 命令 — 用于显示 Agent 当前的运行时状态、配置概览及性能指标。
 type StatusCommand struct{}
 
-func (c *StatusCommand) Name() string        { return "status" }
+// Name 返回命令名称。
+func (c *StatusCommand) Name() string { return "status" }
+
+// Description 返回命令描述。
 func (c *StatusCommand) Description() string { return "Show runtime status" }
 
+// Execute 执行显示状态摘要的逻辑。
 func (c *StatusCommand) Execute(_ context.Context, _ string, env Env) Result {
 	var sb strings.Builder
 	sb.WriteString("**Golem Status**\n\n")
 
-	// Model & Workspace
+	// 1. 模型与工作区信息
 	if env.Config != nil {
 		sb.WriteString(fmt.Sprintf("- **Model:** `%s`\n", env.Config.Agents.Defaults.Model))
 	}
 	sb.WriteString(fmt.Sprintf("- **Workspace:** `%s`\n", env.WorkspacePath))
 
-	// Providers
+	// 2. LLM 供应商配置状态
 	if env.Config != nil {
 		sb.WriteString("\n**Providers:**\n\n")
 		for name, key := range map[string]string{
@@ -49,7 +53,7 @@ func (c *StatusCommand) Execute(_ context.Context, _ string, env Env) Result {
 		}
 	}
 
-	// Runtime metrics
+	// 3. 运行时性能指标 (Metrics)
 	sb.WriteString("\n**Metrics:**\n\n")
 	if env.Metrics != nil {
 		snap := env.Metrics.Snapshot()
@@ -74,7 +78,7 @@ func (c *StatusCommand) Execute(_ context.Context, _ string, env Env) Result {
 		sb.WriteString("- Unavailable\n")
 	}
 
-	// Cron
+	// 4. Cron 定时任务统计
 	cronStorePath := filepath.Join(env.WorkspacePath, "cron", "jobs.json")
 	cronSvc := cron.NewService(cronStorePath, nil)
 	if err := cronSvc.Start(); err == nil {
@@ -89,12 +93,12 @@ func (c *StatusCommand) Execute(_ context.Context, _ string, env Env) Result {
 		cronSvc.Stop()
 	}
 
-	// Skills
+	// 5. 已安装技能统计
 	loader := skills.NewLoader(env.WorkspacePath)
 	skillList := loader.ListSkills()
 	sb.WriteString(fmt.Sprintf("- **Skills:** %d installed\n", len(skillList)))
 
-	// Config path
+	// 6. 配置文件路径
 	configStatus := ""
 	if _, err := os.Stat(config.ConfigPath()); err != nil {
 		configStatus = " (not found)"

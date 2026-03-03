@@ -13,40 +13,40 @@ import (
 	"github.com/MEKXH/golem/internal/tools"
 )
 
-// SubagentTaskRequest defines a delegated subagent run request.
+// SubagentTaskRequest 定义了委派给子代理的任务运行请求。
 type SubagentTaskRequest struct {
-	Task           string
-	Label          string
-	OriginChannel  string
-	OriginChatID   string
-	OriginSenderID string
-	RequestID      string
+	Task           string // 任务描述或指令
+	Label          string // 任务标签
+	OriginChannel  string // 原始请求通道
+	OriginChatID   string // 原始请求聊天 ID
+	OriginSenderID string // 原始发送者 ID
+	RequestID      string // 请求追踪 ID
 }
 
-// SubagentManagerOptions configures timeout/retry/concurrency for delegated tasks.
+// SubagentManagerOptions 配置委派任务的超时、重试和并发限制。
 type SubagentManagerOptions struct {
-	Timeout        time.Duration
-	Retry          int
-	MaxConcurrency int
+	Timeout        time.Duration // 任务执行超时
+	Retry          int           // 失败重试次数
+	MaxConcurrency int           // 最大并发子任务数
 }
 
-// subagentProcessor is the minimal processing contract used by subagents.
+// subagentProcessor 是子代理使用的最小处理契约接口。
 type subagentProcessor interface {
 	ProcessForChannelWithSession(ctx context.Context, channel, chatID, senderID, sessionID, content string) (string, error)
 }
 
-// SubagentManager executes delegated tasks in background or synchronously.
+// SubagentManager 负责在后台或同步执行委派的子代理任务。
 type SubagentManager struct {
-	msgBus    *bus.MessageBus
-	processor subagentProcessor
-	timeout   time.Duration
-	retry     int
-	nextID    uint64
-	semaphore chan struct{}
+	msgBus    *bus.MessageBus   // 消息总线，用于发布执行结果
+	processor subagentProcessor // 执行任务的处理引擎
+	timeout   time.Duration     // 默认超时时间
+	retry     int               // 默认重试次数
+	nextID    uint64            // 用于生成唯一的任务 ID
+	semaphore chan struct{}     // 信号量，用于并发控制
 	mu        sync.RWMutex
 }
 
-// NewSubagentManager creates a subagent manager.
+// NewSubagentManager 创建一个新的子代理管理器。
 func NewSubagentManager(msgBus *bus.MessageBus, processor subagentProcessor, timeout time.Duration) *SubagentManager {
 	return NewSubagentManagerWithOptions(msgBus, processor, SubagentManagerOptions{
 		Timeout:        timeout,
@@ -55,7 +55,7 @@ func NewSubagentManager(msgBus *bus.MessageBus, processor subagentProcessor, tim
 	})
 }
 
-// NewSubagentManagerWithOptions creates a subagent manager with orchestration options.
+// NewSubagentManagerWithOptions 根据自定义选项创建一个子代理管理器。
 func NewSubagentManagerWithOptions(msgBus *bus.MessageBus, processor subagentProcessor, options SubagentManagerOptions) *SubagentManager {
 	timeout := options.Timeout
 	if timeout <= 0 {
@@ -78,7 +78,7 @@ func NewSubagentManagerWithOptions(msgBus *bus.MessageBus, processor subagentPro
 	}
 }
 
-// Spawn starts a subagent task asynchronously.
+// Spawn 异步启动一个子代理任务。
 func (m *SubagentManager) Spawn(ctx context.Context, req tools.SubagentRequest) (string, error) {
 	normalized, err := m.normalize(req)
 	if err != nil {
@@ -89,7 +89,7 @@ func (m *SubagentManager) Spawn(ctx context.Context, req tools.SubagentRequest) 
 	return taskID, nil
 }
 
-// RunSync executes a subagent task synchronously and returns its result.
+// RunSync 同步执行一个子代理任务并返回其最终执行结果。
 func (m *SubagentManager) RunSync(ctx context.Context, req tools.SubagentRequest) (string, error) {
 	normalized, err := m.normalize(req)
 	if err != nil {
@@ -101,7 +101,7 @@ func (m *SubagentManager) RunSync(ctx context.Context, req tools.SubagentRequest
 	return m.executeWithRetry(runCtx, taskID, normalized)
 }
 
-// RunWorkflow executes a subagent workflow in sequential or parallel mode and returns an aggregated summary.
+// RunWorkflow 以顺序或并行模式执行子代理工作流，并返回汇总摘要。
 func (m *SubagentManager) RunWorkflow(ctx context.Context, req tools.WorkflowRequest) (string, error) {
 	normalized, err := m.normalizeWorkflow(req)
 	if err != nil {

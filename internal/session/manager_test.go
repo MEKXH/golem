@@ -112,3 +112,42 @@ func TestSession_SaveAndLoad_LongMessage(t *testing.T) {
 		t.Fatalf("expected long message content round-trip, got length %d", len(history[0].Content))
 	}
 }
+
+func TestSession_AppendAndLoad(t *testing.T) {
+	baseDir := t.TempDir()
+	mgr1 := NewManager(baseDir)
+	sess := mgr1.GetOrCreate("append-test")
+
+	// Initial save with one message
+	msg1 := sess.AddMessage("user", "Hello")
+	mgr1.Save(sess)
+	// Just to use msg1
+	if msg1.Content != "Hello" {
+		t.Errorf("msg1 content mismatch")
+	}
+
+	// Append two more messages
+	msg2 := sess.AddMessage("assistant", "Hi")
+	msg3 := sess.AddMessage("user", "How are you?")
+	if err := mgr1.Append(sess.Key, msg2, msg3); err != nil {
+		t.Fatalf("Append error: %v", err)
+	}
+
+	// Load in a new manager
+	mgr2 := NewManager(baseDir)
+	loaded := mgr2.GetOrCreate("append-test")
+	history := loaded.GetHistory(0)
+
+	if len(history) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(history))
+	}
+	if history[0].Content != "Hello" {
+		t.Errorf("msg 0 content mismatch")
+	}
+	if history[1].Content != "Hi" {
+		t.Errorf("msg 1 content mismatch")
+	}
+	if history[2].Content != "How are you?" {
+		t.Errorf("msg 2 content mismatch")
+	}
+}

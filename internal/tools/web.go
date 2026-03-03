@@ -33,17 +33,20 @@ var (
 	ddgResultLinkRe = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
 )
 
+// WebSearchInput 定义了 web_search 工具的输入参数。
 type WebSearchInput struct {
 	Query      string `json:"query" jsonschema:"required,description=The search query"`
 	MaxResults int    `json:"max_results" jsonschema:"description=Optional per-request result limit"`
 }
 
+// WebSearchResult 表示单条搜索结果。
 type WebSearchResult struct {
 	Title       string `json:"title"`
 	URL         string `json:"url"`
 	Description string `json:"description"`
 }
 
+// WebSearchOutput 定义了 web_search 工具的执行结果。
 type WebSearchOutput struct {
 	Query   string            `json:"query"`
 	Results []WebSearchResult `json:"results"`
@@ -66,6 +69,7 @@ func (w *webSearchToolImpl) execute(ctx context.Context, input *WebSearchInput) 
 	limit := resolveWebSearchLimit(input.MaxResults, w.maxResults)
 	apiKey := strings.TrimSpace(w.apiKey)
 
+	// 优先尝试 Brave Search API（如果已配置 API Key）
 	if apiKey != "" {
 		out, err := w.searchWithBrave(ctx, query, limit)
 		if err == nil {
@@ -73,6 +77,7 @@ func (w *webSearchToolImpl) execute(ctx context.Context, input *WebSearchInput) 
 		}
 	}
 
+	// 回退到 DuckDuckGo HTML 搜索
 	return w.searchWithDuckDuckGo(ctx, query, limit)
 }
 
@@ -223,6 +228,7 @@ func decodeDuckRedirect(rawURL string, base *url.URL) string {
 	return rawURL
 }
 
+// NewWebSearchTool 创建 web_search 工具实例，用于在互联网上搜索最新信息。
 func NewWebSearchTool(apiKey string, maxResults int) (tool.InvokableTool, error) {
 	if maxResults <= 0 {
 		maxResults = 5
@@ -239,11 +245,13 @@ func NewWebSearchTool(apiKey string, maxResults int) (tool.InvokableTool, error)
 	return utils.InferTool("web_search", "Search the web for up-to-date information", impl.execute)
 }
 
+// WebFetchInput 定义了 web_fetch 工具的输入参数。
 type WebFetchInput struct {
 	URL      string `json:"url" jsonschema:"required,description=The target URL to fetch"`
 	MaxBytes int    `json:"max_bytes" jsonschema:"description=Optional maximum response bytes to keep"`
 }
 
+// WebFetchOutput 定义了 web_fetch 工具的执行结果。
 type WebFetchOutput struct {
 	URL         string `json:"url"`
 	Status      int    `json:"status"`
@@ -307,6 +315,7 @@ func (w *webFetchToolImpl) execute(ctx context.Context, input *WebFetchInput) (*
 
 	contentType := strings.ToLower(resp.Header.Get("Content-Type"))
 	content := string(body)
+	// 如果是 HTML 页面，则尝试剥离标签提取纯文本
 	if strings.Contains(contentType, "text/html") {
 		content = htmlToText(content)
 	}
@@ -325,6 +334,7 @@ func (w *webFetchToolImpl) execute(ctx context.Context, input *WebFetchInput) (*
 	return out, nil
 }
 
+// NewWebFetchTool 创建 web_fetch 工具实例，用于抓取并提取指定 URL 的文本内容。
 func NewWebFetchTool() (tool.InvokableTool, error) {
 	impl := &webFetchToolImpl{
 		client: &http.Client{

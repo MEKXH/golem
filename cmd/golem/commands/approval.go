@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewApprovalCmd 创建审批管理命令。
 func NewApprovalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "approval",

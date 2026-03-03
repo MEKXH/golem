@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/MEKXH/golem/internal/config"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -69,11 +70,69 @@ func runChannelsList(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("Channels:")
-	fmt.Printf("  %-12s %-10s %s\n", "NAME", "STATUS", "NOTE")
-	fmt.Printf("  %-12s %-10s %s\n", strings.Repeat("-", 12), strings.Repeat("-", 10), strings.Repeat("-", 20))
+
+	var (
+		wName   = 12
+		wStatus = 10
+		wNote   = 30
+
+		colHeaderStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#8E4EC6")). // Purple
+				Bold(true).
+				MarginRight(1)
+
+		nameStyleBase = lipgloss.NewStyle().
+				Width(wName).
+				MarginRight(1)
+
+		statusStyleBase = lipgloss.NewStyle().
+				Width(wStatus).
+				MarginRight(1)
+
+		noteStyleBase = lipgloss.NewStyle().
+				Width(wNote).
+				MarginRight(1)
+
+		okColor       = lipgloss.Color("#2E8B57") // SeaGreen
+		errorColor    = lipgloss.Color("#FF0000") // Red
+		disabledColor = lipgloss.Color("241")     // Dark Gray
+	)
+
+	// Render Headers
+	headers := lipgloss.JoinHorizontal(lipgloss.Top,
+		colHeaderStyle.Width(wName).Render("NAME"),
+		colHeaderStyle.Width(wStatus).Render("STATUS"),
+		colHeaderStyle.Width(wNote).Render("NOTE"),
+	)
+	fmt.Printf("  %s\n", headers)
+
+	// Render Separator
+	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).MarginRight(1)
+	separator := lipgloss.JoinHorizontal(lipgloss.Top,
+		sepStyle.Render(strings.Repeat("─", wName)),
+		sepStyle.Render(strings.Repeat("─", wStatus)),
+		sepStyle.Render(strings.Repeat("─", wNote)),
+	)
+	fmt.Printf("  %s\n", separator)
 
 	for _, state := range channelStates(cfg) {
-		fmt.Printf("  %-12s %-10s %s\n", state.Name, state.Status(), state.Note())
+		sColor := okColor
+		nColor := okColor
+
+		if !state.Enabled {
+			sColor = disabledColor
+			nColor = disabledColor
+		} else if !state.Ready {
+			nColor = errorColor
+		}
+
+		row := lipgloss.JoinHorizontal(lipgloss.Top,
+			nameStyleBase.Render(state.Name),
+			statusStyleBase.Foreground(sColor).Render(state.Status()),
+			noteStyleBase.Foreground(nColor).Render(state.Note()),
+		)
+
+		fmt.Printf("  %s\n", row)
 	}
 
 	return nil

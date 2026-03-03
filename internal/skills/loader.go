@@ -1,3 +1,4 @@
+// Package skills 实现 Golem 的增强技能系统，允许通过外部 Markdown 文件定义复杂指令与工作流。
 package skills
 
 import (
@@ -8,22 +9,22 @@ import (
 	"strings"
 )
 
-// SkillInfo describes a loaded skill.
+// SkillInfo 描述已加载技能的元数据。
 type SkillInfo struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Path        string `json:"path"`
-	Source      string `json:"source"` // "workspace" | "global" | "builtin"
+	Name        string `json:"name"`        // 技能名称
+	Description string `json:"description"` // 技能功能描述
+	Path        string `json:"path"`        // 技能文件 (SKILL.md) 的绝对路径
+	Source      string `json:"source"`      // 来源："workspace" | "global" | "builtin"
 }
 
-// Loader discovers and loads skill files.
+// Loader 负责发现、扫描并加载不同来源的技能文件。
 type Loader struct {
-	workspaceSkills string // workspace/skills/
-	globalSkills    string // ~/.golem/skills/
-	builtinSkills   string // builtin skills shipped with golem
+	workspaceSkills string // 工作区技能目录: <workspace>/skills/
+	globalSkills    string // 全局用户技能目录: ~/.golem/skills/
+	builtinSkills   string // 随 Golem 发行的内置技能目录
 }
 
-// NewLoader creates a skill loader for the given workspace.
+// NewLoader 为指定的工作区路径创建一个新的技能加载器。
 func NewLoader(workspacePath string) *Loader {
 	homeDir, _ := os.UserHomeDir()
 	return &Loader{
@@ -33,18 +34,18 @@ func NewLoader(workspacePath string) *Loader {
 	}
 }
 
-// ListSkills returns all discovered skills (workspace > global > builtin).
+// ListSkills 扫描并返回所有已发现的技能，按优先级排序（工作区 > 全局 > 内置）。
 func (l *Loader) ListSkills() []SkillInfo {
 	seen := make(map[string]bool)
 	var skills []SkillInfo
 
-	// Workspace skills (highest priority)
+	// 工作区技能 (最高优先级)
 	for _, s := range l.scanDir(l.workspaceSkills, "workspace") {
 		seen[s.Name] = true
 		skills = append(skills, s)
 	}
 
-	// Global skills
+	// 全局用户技能
 	for _, s := range l.scanDir(l.globalSkills, "global") {
 		if !seen[s.Name] {
 			seen[s.Name] = true
@@ -52,7 +53,7 @@ func (l *Loader) ListSkills() []SkillInfo {
 		}
 	}
 
-	// Builtin skills
+	// 内置技能
 	for _, s := range l.scanDir(l.builtinSkills, "builtin") {
 		if !seen[s.Name] {
 			skills = append(skills, s)
@@ -62,9 +63,10 @@ func (l *Loader) ListSkills() []SkillInfo {
 	return skills
 }
 
-// LoadSkill reads the content of a skill by name.
+// LoadSkill 根据技能名称读取并返回其 Markdown 内容。
+// 它会按优先级顺序在各个技能目录中搜索。
 func (l *Loader) LoadSkill(name string) (string, error) {
-	// Search workspace first, then global, then builtin.
+	// 依次搜索工作区、全局和内置目录
 	for _, dir := range []string{l.workspaceSkills, l.globalSkills, l.builtinSkills} {
 		path := filepath.Join(dir, name, "SKILL.md")
 		data, err := os.ReadFile(path)
@@ -75,7 +77,7 @@ func (l *Loader) LoadSkill(name string) (string, error) {
 	return "", fmt.Errorf("skill not found: %s", name)
 }
 
-// BuildSkillsSummary returns a formatted summary of all skills for system prompt injection.
+// BuildSkillsSummary 生成所有已安装技能的格式化摘要字符串，通常用于注入到系统提示词 (System Prompt) 中。
 func (l *Loader) BuildSkillsSummary() string {
 	skills := l.ListSkills()
 	if len(skills) == 0 {
@@ -118,13 +120,7 @@ func (l *Loader) scanDir(dir, source string) []SkillInfo {
 	return skills
 }
 
-// parseSkillFrontmatter extracts name and description from YAML frontmatter.
-// Expected format:
-//
-//	---
-//	name: weather
-//	description: "Query weather info"
-//	---
+// parseSkillFrontmatter 从技能 Markdown 文件的 YAML frontmatter 中提取名称和描述。
 func parseSkillFrontmatter(dirName, content string) (name, description string) {
 	name = dirName
 	description = "(no description)"
@@ -169,7 +165,7 @@ func resolveBuiltinSkillsDir(homeDir string) string {
 		candidates = append(candidates, filepath.Join(filepath.Dir(exePath), "skills"))
 	}
 
-	// Source checkout fallback for local development.
+	// 源码环境回退（用于开发环境）
 	if _, thisFile, _, ok := runtime.Caller(0); ok {
 		candidates = append(candidates, filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", "..", "skills")))
 	}

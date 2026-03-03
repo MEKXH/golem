@@ -1,3 +1,4 @@
+// Package cron 实现 Golem 的定时任务 (Cron Jobs) 调度系统。
 package cron
 
 import (
@@ -10,20 +11,20 @@ import (
 	"github.com/adhocore/gronx"
 )
 
-// JobHandler is called when a job fires.
+// JobHandler 定义了定时任务触发时的处理函数。
 type JobHandler func(*Job) error
 
-// Service manages scheduled jobs with a ticker-based polling loop.
+// Service 负责管理定时任务的生命周期，并使用轮询循环 (Ticker) 进行调度执行。
 type Service struct {
-	store    *Store
-	onJob    JobHandler
+	store    *Store     // 任务持久化存储
+	onJob    JobHandler // 任务触发时的回调
 	mu       sync.RWMutex
 	stopChan chan struct{}
 	stopped  chan struct{}
 	running  bool
 }
 
-// NewService creates a cron service backed by the given store path.
+// NewService 创建并返回一个由指定文件路径支持的定时任务服务。
 func NewService(storePath string, handler JobHandler) *Service {
 	return &Service{
 		store: NewStore(storePath),
@@ -31,13 +32,13 @@ func NewService(storePath string, handler JobHandler) *Service {
 	}
 }
 
-// Start loads jobs from disk and begins the polling loop.
+// Start 从磁盘加载任务并启动调度轮询循环。
 func (s *Service) Start() error {
 	if err := s.store.Load(); err != nil {
 		return fmt.Errorf("cron service start: %w", err)
 	}
 
-	// Compute initial NextRunAtMS for jobs that need it.
+	// 为所有已启用但未计算下次运行时间的任务初始化运行时间
 	for _, job := range s.store.All() {
 		if job.Enabled && job.State.NextRunAtMS == nil {
 			s.computeNextRun(job)
@@ -60,7 +61,7 @@ func (s *Service) Start() error {
 	return nil
 }
 
-// Stop gracefully shuts down the polling loop.
+// Stop 停止调度循环并优雅退出。
 func (s *Service) Stop() {
 	s.mu.Lock()
 	if !s.running {
@@ -78,6 +79,7 @@ func (s *Service) Stop() {
 func (s *Service) loop() {
 	defer close(s.stopped)
 
+	// 每秒检查一次是否有任务到期
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -103,14 +105,16 @@ func (s *Service) tick() {
 		if j.State.NextRunAtMS == nil {
 			continue
 		}
+		// 检查任务是否已到期
 		if *j.State.NextRunAtMS <= now {
-			// Clear NextRunAtMS to prevent re-firing.
+			// 清除下次运行时间以防重复触发（随后会在执行后重新计算）
 			j.State.NextRunAtMS = nil
 			s.store.Put(j)
 			due = append(due, j)
 		}
 	}
 
+	// 执行到期的任务
 	for _, j := range due {
 		s.executeJob(j)
 	}
@@ -137,8 +141,10 @@ func (s *Service) executeJob(job *Job) {
 
 	job.UpdatedAtMS = now
 
+	// 根据调度类型处理后续状态
 	switch job.Schedule.Kind {
 	case "at":
+		// 单次任务执行后删除或禁用
 		if job.DeleteAfterRun {
 			s.store.Delete(job.ID)
 		} else {
@@ -146,6 +152,7 @@ func (s *Service) executeJob(job *Job) {
 			s.store.Put(job)
 		}
 	default:
+		// 周期性任务计算下次运行时间
 		s.computeNextRun(job)
 		s.store.Put(job)
 	}
@@ -155,8 +162,7 @@ func (s *Service) executeJob(job *Job) {
 	}
 }
 
-// RunJob executes a single job immediately by ID, regardless of next-run timing.
-// It reuses the same execution semantics as scheduled runs.
+// RunJob 立即运行指定的任务（忽略其预定的运行时间）。
 func (s *Service) RunJob(id string) (*Job, error) {
 	job, ok := s.store.Get(id)
 	if !ok {
@@ -169,7 +175,6 @@ func (s *Service) RunJob(id string) (*Job, error) {
 	if ok {
 		return updated, nil
 	}
-	// For one-shot jobs with DeleteAfterRun=true, the job is expected to be deleted.
 	return nil, nil
 }
 
@@ -200,7 +205,7 @@ func (s *Service) computeNextRun(job *Job) {
 	}
 }
 
-// AddJob creates and persists a new job.
+// AddJob 创建并持久化一个新的定时任务。
 func (s *Service) AddJob(name, message string, schedule Schedule, channel, chatID string, deliver bool) (*Job, error) {
 	payload := Payload{
 		Kind:    "agent_turn",
@@ -227,7 +232,7 @@ func (s *Service) AddJob(name, message string, schedule Schedule, channel, chatI
 	return job, nil
 }
 
-// RemoveJob deletes a job by ID.
+// RemoveJob 按 ID 删除指定的任务。
 func (s *Service) RemoveJob(id string) error {
 	if !s.store.Delete(id) {
 		return fmt.Errorf("job not found: %s", id)
@@ -238,7 +243,7 @@ func (s *Service) RemoveJob(id string) error {
 	return nil
 }
 
-// EnableJob sets a job's enabled state.
+// EnableJob 启用或禁用指定的任务。
 func (s *Service) EnableJob(id string, enabled bool) (*Job, error) {
 	job, ok := s.store.Get(id)
 	if !ok {
@@ -258,7 +263,7 @@ func (s *Service) EnableJob(id string, enabled bool) (*Job, error) {
 	return job, nil
 }
 
-// ListJobs returns all jobs, optionally including disabled ones.
+// ListJobs 返回所有任务列表，可按创建时间排序。
 func (s *Service) ListJobs(includeDisabled bool) []*Job {
 	all := s.store.All()
 	if includeDisabled {
@@ -275,12 +280,12 @@ func (s *Service) ListJobs(includeDisabled bool) []*Job {
 	return result
 }
 
-// GetJob retrieves a single job by ID.
+// GetJob 按 ID 获取任务详情。
 func (s *Service) GetJob(id string) (*Job, bool) {
 	return s.store.Get(id)
 }
 
-// Status returns a summary of the cron service.
+// Status 返回定时任务服务的运行摘要状态。
 func (s *Service) Status() map[string]any {
 	all := s.store.All()
 	enabled := 0

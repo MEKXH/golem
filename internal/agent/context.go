@@ -15,30 +15,31 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-// ContextBuilder builds LLM context
+// watchedBaseFiles 定义了 ContextBuilder 监控的工作区基础 Markdown 文件列表。
 var watchedBaseFiles = []string{
 	"IDENTITY.md", "SOUL.md", "USER.md", "TOOLS.md", "AGENTS.md",
 }
 
+// ContextBuilder 负责根据配置、历史记录和外部文件构建 LLM 的 Prompt 上下文。
 type ContextBuilder struct {
-	workspacePath   string
-	runtimeMetrics  *metrics.RuntimeMetrics
+	workspacePath   string                  // 工作区根路径
+	runtimeMetrics  *metrics.RuntimeMetrics // 运行时指标记录器
 	mu              sync.RWMutex
-	cachedBaseParts []string
+	cachedBaseParts []string // 缓存的基础 Prompt 片段
 }
 
-// NewContextBuilder creates a context builder
+// NewContextBuilder 创建并返回一个新的上下文构建器。
 func NewContextBuilder(workspacePath string) *ContextBuilder {
 	return &ContextBuilder{workspacePath: workspacePath}
 }
 
-// SetRuntimeMetrics attaches a runtime metrics recorder
+// SetRuntimeMetrics 为构建器关联一个运行时指标记录器。
 func (c *ContextBuilder) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
 	c.runtimeMetrics = recorder
 }
 
-// InvalidateCache clears the cached system prompt parts if the changed path is relevant.
-// If changedPath is empty, it forces invalidation.
+// InvalidateCache 根据发生变化的文件路径使缓存失效。
+// 如果 changedPath 为空，则强制使所有基础缓存失效。
 func (c *ContextBuilder) InvalidateCache(changedPath string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -48,22 +49,19 @@ func (c *ContextBuilder) InvalidateCache(changedPath string) {
 		return
 	}
 
-	// Resolve workspace absolute path
 	workspaceAbs, err := filepath.Abs(c.workspacePath)
 	if err != nil {
-		// Fallback: if we can't resolve workspace, play it safe and invalidate
 		c.cachedBaseParts = nil
 		return
 	}
 
-	// Resolve changed path absolute
 	changedAbs, err := filepath.Abs(changedPath)
 	if err != nil {
 		c.cachedBaseParts = nil
 		return
 	}
 
-	// Check against base files
+	// 检查是否属于基础监控文件
 	for _, name := range watchedBaseFiles {
 		if changedAbs == filepath.Join(workspaceAbs, name) {
 			c.cachedBaseParts = nil
@@ -71,10 +69,8 @@ func (c *ContextBuilder) InvalidateCache(changedPath string) {
 		}
 	}
 
-	// Check against skills directory
+	// 检查是否属于技能目录下的文件
 	skillsDir := filepath.Join(workspaceAbs, "skills")
-	// Check if changedAbs is inside skillsDir
-	// We use HasPrefix with separator check to ensure correct directory matching
 	rel, err := filepath.Rel(skillsDir, changedAbs)
 	if err == nil && !strings.HasPrefix(rel, "..") {
 		c.cachedBaseParts = nil
@@ -82,14 +78,16 @@ func (c *ContextBuilder) InvalidateCache(changedPath string) {
 	}
 }
 
-// BuildSystemPrompt assembles the system prompt
+// BuildSystemPrompt 组装完整的系统提示词 (System Prompt)。
 func (c *ContextBuilder) BuildSystemPrompt() string {
 	parts := c.buildBaseSystemPromptParts()
 
+	// 注入长期记忆
 	if mem := c.readWorkspaceFile(filepath.Join("memory", "MEMORY.md")); mem != "" {
 		parts = append(parts, "## Long-term Memory\n"+mem)
 	}
 
+	// 注入最近的日记
 	if diary := c.buildRecentDiarySection(); diary != "" {
 		parts = append(parts, diary)
 	}
@@ -109,7 +107,6 @@ func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
 	c.mu.RLock()
 	if c.cachedBaseParts != nil {
 		defer c.mu.RUnlock()
-		// Return a copy to avoid modification by caller
 		result := make([]string, len(c.cachedBaseParts))
 		copy(result, c.cachedBaseParts)
 		return result
@@ -119,7 +116,6 @@ func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Double check after acquiring write lock
 	if c.cachedBaseParts != nil {
 		result := make([]string, len(c.cachedBaseParts))
 		copy(result, c.cachedBaseParts)
@@ -129,17 +125,18 @@ func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
 	parts := make([]string, 0, 8)
 	parts = append(parts, c.coreIdentity())
 
+	// 加载并添加所有监控的基础 Markdown 文件内容
 	for _, name := range watchedBaseFiles {
 		if content := c.readWorkspaceFile(name); content != "" {
 			parts = append(parts, "## "+strings.TrimSuffix(name, ".md")+"\n"+content)
 		}
 	}
 
+	// 注入技能摘要
 	if skillsSummary := skills.NewLoader(c.workspacePath).BuildSkillsSummary(); skillsSummary != "" {
 		parts = append(parts, skillsSummary)
 	}
 
-	// Store copy in cache
 	c.cachedBaseParts = make([]string, len(parts))
 	copy(c.cachedBaseParts, parts)
 
@@ -224,16 +221,18 @@ func formatSourceHits(sourceHits map[string]int) string {
 	return strings.Join(parts, ", ")
 }
 
-// BuildMessages constructs the full message list
+// BuildMessages 根据历史记录、当前输入及媒体附件构建发送给 LLM 的完整消息列表。
 func (c *ContextBuilder) BuildMessages(history []*session.Message, current string, media []string) []*schema.Message {
 	messages := make([]*schema.Message, 0, len(history)+2)
 	currentContent := strings.TrimSpace(current)
 
+	// 注入动态构建的系统提示词
 	messages = append(messages, &schema.Message{
 		Role:    schema.System,
 		Content: c.buildSystemPromptForInput(currentContent),
 	})
 
+	// 注入会话历史
 	for _, h := range history {
 		role := schema.User
 		if h.Role == "assistant" {
@@ -245,6 +244,7 @@ func (c *ContextBuilder) BuildMessages(history []*session.Message, current strin
 		})
 	}
 
+	// 注入当前用户输入及媒体信息
 	content := currentContent
 	if len(media) > 0 {
 		var mb strings.Builder

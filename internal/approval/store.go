@@ -10,30 +10,30 @@ import (
 )
 
 const (
-	storeVersion      = 1
-	approvalsFileMode = 0644
-	approvalsDirMode  = 0755
-	defaultStartingID = int64(1)
+	storeVersion      = 1        // 存储文件版本
+	approvalsFileMode = 0644     // 文件权限
+	approvalsDirMode  = 0755     // 目录权限
+	defaultStartingID = int64(1) // 默认起始 ID
 )
 
 type fileData struct {
-	Version  int       `json:"version"`
-	NextID   int64     `json:"next_id"`
-	Requests []Request `json:"requests"`
+	Version  int       `json:"version"`  // 结构版本
+	NextID   int64     `json:"next_id"`  // 下一个可用 ID
+	Requests []Request `json:"requests"` // 历史请求列表
 }
 
-// Store persists approval requests to disk.
+// Store 负责将审批请求持久化到磁盘中的 JSON 文件。
 type Store struct {
-	path string
-	mu   sync.Mutex
+	path string     // 存储文件路径
+	mu   sync.Mutex // 确保线程安全
 }
 
-// NewStore creates an approval store under <workspace>/state/approvals.json.
+// NewStore 在 <workspace>/state/approvals.json 创建一个审批存储实例。
 func NewStore(workspace string) *Store {
 	return &Store{path: filepath.Join(workspace, "state", "approvals.json")}
 }
 
-// Load reads persisted data from disk.
+// Load 从磁盘读取持久化的审批数据。
 func (s *Store) Load() (fileData, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -41,7 +41,7 @@ func (s *Store) Load() (fileData, error) {
 	return s.loadLocked()
 }
 
-// Save writes persisted data to disk.
+// Save 将审批数据写入磁盘。
 func (s *Store) Save(data fileData) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -80,6 +80,7 @@ func (s *Store) saveLocked(data fileData) error {
 	}
 
 	dir := filepath.Dir(s.path)
+	// 使用临时文件写入并重命名，以保证原子性
 	tmpFile, err := os.CreateTemp(dir, "approvals-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temp approval store: %w", err)

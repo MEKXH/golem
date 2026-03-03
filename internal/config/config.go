@@ -1,3 +1,4 @@
+// Package config 处理 Golem 的全局配置加载、验证与持久化。
 package config
 
 import (
@@ -13,20 +14,20 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config root configuration
+// Config 是 Golem 的根配置结构体，包含所有模块的设置。
 type Config struct {
-	Agents    AgentsConfig    `mapstructure:"agents"`
-	Channels  ChannelsConfig  `mapstructure:"channels"`
-	Providers ProvidersConfig `mapstructure:"providers"`
-	Gateway   GatewayConfig   `mapstructure:"gateway"`
-	Log       LogConfig       `mapstructure:"log"`
-	Policy    PolicyConfig    `mapstructure:"policy"`
-	MCP       MCPConfig       `mapstructure:"mcp"`
-	Tools     ToolsConfig     `mapstructure:"tools"`
-	Heartbeat HeartbeatConfig `mapstructure:"heartbeat"`
+	Agents    AgentsConfig    `mapstructure:"agents"`    // Agent 相关配置
+	Channels  ChannelsConfig  `mapstructure:"channels"`  // 消息通道配置
+	Providers ProvidersConfig `mapstructure:"providers"` // LLM 供应商配置
+	Gateway   GatewayConfig   `mapstructure:"gateway"`   // 网关服务器配置
+	Log       LogConfig       `mapstructure:"log"`       // 日志配置
+	Policy    PolicyConfig    `mapstructure:"policy"`    // 运行时策略配置
+	MCP       MCPConfig       `mapstructure:"mcp"`       // MCP 服务器配置
+	Tools     ToolsConfig     `mapstructure:"tools"`     // 工具相关配置
+	Heartbeat HeartbeatConfig `mapstructure:"heartbeat"` // 心跳服务配置
 }
 
-// PolicyConfig runtime policy settings.
+// PolicyConfig 运行时策略设置。
 type PolicyConfig struct {
 	Mode               string   `mapstructure:"mode"`
 	OffTTL             string   `mapstructure:"off_ttl"`
@@ -34,12 +35,12 @@ type PolicyConfig struct {
 	RequireApproval    []string `mapstructure:"require_approval"`
 }
 
-// MCPConfig MCP server settings.
+// MCPConfig MCP 服务器设置。
 type MCPConfig struct {
 	Servers map[string]MCPServerConfig `mapstructure:"servers"`
 }
 
-// MCPServerConfig MCP server transport settings.
+// MCPServerConfig MCP 服务器传输设置。
 type MCPServerConfig struct {
 	Enabled   *bool             `mapstructure:"enabled"`
 	Transport string            `mapstructure:"transport"`
@@ -50,7 +51,7 @@ type MCPServerConfig struct {
 	Headers   map[string]string `mapstructure:"headers"`
 }
 
-// IsMCPServerEnabled returns true unless the server is explicitly disabled.
+// IsMCPServerEnabled 如果服务器未被显式禁用则返回 true。
 func IsMCPServerEnabled(server MCPServerConfig) bool {
 	if server.Enabled == nil {
 		return true
@@ -58,13 +59,13 @@ func IsMCPServerEnabled(server MCPServerConfig) bool {
 	return *server.Enabled
 }
 
-// AgentsConfig agent settings
+// AgentsConfig 代理设置
 type AgentsConfig struct {
 	Defaults AgentDefaults         `mapstructure:"defaults"`
 	Subagent SubagentRuntimeConfig `mapstructure:"subagent"`
 }
 
-// AgentDefaults default agent parameters
+// AgentDefaults 默认代理参数
 type AgentDefaults struct {
 	Workspace         string  `mapstructure:"workspace"`
 	WorkspaceMode     string  `mapstructure:"workspace_mode"`
@@ -74,14 +75,14 @@ type AgentDefaults struct {
 	MaxToolIterations int     `mapstructure:"max_tool_iterations"`
 }
 
-// SubagentRuntimeConfig controls delegated subagent execution policy.
+// SubagentRuntimeConfig 控制委托子代理执行策略。
 type SubagentRuntimeConfig struct {
 	TimeoutSeconds int `mapstructure:"timeout_seconds"`
 	Retry          int `mapstructure:"retry"`
 	MaxConcurrency int `mapstructure:"max_concurrency"`
 }
 
-// ChannelsConfig channel settings
+// ChannelsConfig 通道设置
 type ChannelsConfig struct {
 	Telegram TelegramConfig        `mapstructure:"telegram"`
 	WhatsApp WhatsAppConfig        `mapstructure:"whatsapp"`
@@ -94,7 +95,7 @@ type ChannelsConfig struct {
 	Outbound ChannelOutboundConfig `mapstructure:"outbound"`
 }
 
-// ChannelOutboundConfig controls outbound reliability behavior.
+// ChannelOutboundConfig 控制出站可靠性行为。
 type ChannelOutboundConfig struct {
 	MaxConcurrentSends int `mapstructure:"max_concurrent_sends"`
 	RetryMaxAttempts   int `mapstructure:"retry_max_attempts"`
@@ -104,21 +105,21 @@ type ChannelOutboundConfig struct {
 	DedupWindowSeconds int `mapstructure:"dedup_window_seconds"`
 }
 
-// TelegramConfig telegram bot settings
+// TelegramConfig Telegram 机器人设置
 type TelegramConfig struct {
 	Enabled   bool     `mapstructure:"enabled"`
 	Token     string   `mapstructure:"token"`
 	AllowFrom []string `mapstructure:"allow_from"`
 }
 
-// WhatsAppConfig WhatsApp bridge settings
+// WhatsAppConfig WhatsApp 桥接设置
 type WhatsAppConfig struct {
 	Enabled   bool     `mapstructure:"enabled"`
 	BridgeURL string   `mapstructure:"bridge_url"`
 	AllowFrom []string `mapstructure:"allow_from"`
 }
 
-// FeishuConfig Feishu bot settings
+// FeishuConfig 飞书机器人设置
 type FeishuConfig struct {
 	Enabled           bool     `mapstructure:"enabled"`
 	AppID             string   `mapstructure:"app_id"`
@@ -128,14 +129,14 @@ type FeishuConfig struct {
 	AllowFrom         []string `mapstructure:"allow_from"`
 }
 
-// DiscordConfig Discord bot settings
+// DiscordConfig Discord 机器人设置
 type DiscordConfig struct {
 	Enabled   bool     `mapstructure:"enabled"`
 	Token     string   `mapstructure:"token"`
 	AllowFrom []string `mapstructure:"allow_from"`
 }
 
-// SlackConfig Slack bot settings
+// SlackConfig Slack 机器人设置
 type SlackConfig struct {
 	Enabled   bool     `mapstructure:"enabled"`
 	BotToken  string   `mapstructure:"bot_token"`
@@ -143,7 +144,7 @@ type SlackConfig struct {
 	AllowFrom []string `mapstructure:"allow_from"`
 }
 
-// QQConfig QQ bot settings
+// QQConfig QQ 机器人设置
 type QQConfig struct {
 	Enabled   bool     `mapstructure:"enabled"`
 	AppID     string   `mapstructure:"app_id"`

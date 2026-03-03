@@ -10,6 +10,7 @@ import (
 	"github.com/cloudwego/eino/components/tool/utils"
 )
 
+// MessageInput 定义了 message 工具的输入参数。
 type MessageInput struct {
 	Content string `json:"content" jsonschema:"required,description=Message content to send"`
 	Channel string `json:"channel,omitempty" jsonschema:"description=Target channel (optional; defaults to current channel)"`
@@ -34,6 +35,7 @@ func (t *messageToolImpl) execute(ctx context.Context, input *MessageInput) (str
 	meta := InvocationFromContext(ctx)
 	channel := strings.TrimSpace(input.Channel)
 	chatID := strings.TrimSpace(input.ChatID)
+	// 如果未指定通道或聊天 ID，则回退到当前调用的上下文
 	if channel == "" {
 		channel = meta.Channel
 	}
@@ -62,7 +64,7 @@ func (t *messageToolImpl) execute(ctx context.Context, input *MessageInput) (str
 	return fmt.Sprintf("Message sent to %s:%s", channel, chatID), nil
 }
 
-// NewMessageTool creates a tool that sends a message through the message bus.
+// NewMessageTool 创建一个允许 Agent 发送主动消息的工具实例。
 func NewMessageTool(publisher interface {
 	PublishOutbound(msg *bus.OutboundMessage)
 }) (tool.InvokableTool, error) {

@@ -1,3 +1,4 @@
+// Package feishu 实现飞书机器人的接入，支持通过 WebSocket 模式接收和发送消息。
 package feishu
 
 import (
@@ -18,19 +19,19 @@ import (
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 )
 
-// Channel implements Feishu bot channel.
+// Channel 表示飞书消息通道。
 type Channel struct {
 	channel.BaseChannel
 	cfg      *config.FeishuConfig
-	client   *lark.Client
-	wsClient *larkws.Client
+	client   *lark.Client   // 用于调用飞书 API 的客户端
+	wsClient *larkws.Client // 用于 WebSocket 长连接的客户端
 
 	mu     sync.Mutex
-	cancel context.CancelFunc
+	cancel context.CancelFunc // 用于停止 WebSocket 监听的取消函数
 	run    bool
 }
 
-// New creates a Feishu channel.
+// New 创建并返回一个新的飞书通道实例。
 func New(cfg *config.FeishuConfig, msgBus *bus.MessageBus) *Channel {
 	allowList := make(map[string]bool)
 	for _, id := range cfg.AllowFrom {
@@ -43,8 +44,10 @@ func New(cfg *config.FeishuConfig, msgBus *bus.MessageBus) *Channel {
 	}
 }
 
+// Name 返回通道名称。
 func (c *Channel) Name() string { return "feishu" }
 
+// Start 建立 WebSocket 连接并开始监听飞书事件。
 func (c *Channel) Start(ctx context.Context) error {
 	if c.cfg == nil {
 		return fmt.Errorf("missing feishu config")
@@ -53,6 +56,7 @@ func (c *Channel) Start(ctx context.Context) error {
 		return fmt.Errorf("feishu app_id/app_secret are required")
 	}
 
+	// 注册消息接收处理器
 	dispatcher := larkdispatcher.NewEventDispatcher(c.cfg.VerificationToken, c.cfg.EncryptKey).
 		OnP2MessageReceiveV1(c.handleMessageReceive)
 
@@ -79,6 +83,7 @@ func (c *Channel) Start(ctx context.Context) error {
 	return nil
 }
 
+// Stop 关闭 WebSocket 连接并停止服务。
 func (c *Channel) Stop(ctx context.Context) error {
 	c.mu.Lock()
 	if c.cancel != nil {
@@ -91,6 +96,7 @@ func (c *Channel) Stop(ctx context.Context) error {
 	return nil
 }
 
+// Send 向飞书聊天发送文本消息。
 func (c *Channel) Send(ctx context.Context, msg *bus.OutboundMessage) error {
 	c.mu.Lock()
 	running := c.run
@@ -143,6 +149,7 @@ func (c *Channel) handleMessageReceive(_ context.Context, event *larkim.P2Messag
 	if senderID == "" {
 		senderID = "unknown"
 	}
+	// 权限检查
 	if !c.IsAllowed(senderID) {
 		return nil
 	}

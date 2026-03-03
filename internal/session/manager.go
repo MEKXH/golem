@@ -1,3 +1,4 @@
+// Package session 实现会话管理功能，用于存储和检索用户与 Agent 之间的聊天历史记录。
 package session
 
 import (
@@ -12,32 +13,34 @@ import (
 	"time"
 )
 
-// Message represents a single message in session
+// Message 表示会话中的单条消息记录。
 type Message struct {
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
+	Role      string    `json:"role"`      // 角色：user 或 assistant
+	Content   string    `json:"content"`   // 消息文本内容
+	Timestamp time.Time `json:"timestamp"` // 消息产生的时间戳
 }
 
-// Session represents a conversation session
+// Session 表示一个完整的对话会话，包含唯一的标识符和消息序列。
 type Session struct {
-	Key      string
-	Messages []*Message
-	mu       sync.RWMutex
+	Key      string       // 会话的唯一键值
+	Messages []*Message   // 消息历史列表
+	mu       sync.RWMutex // 保护 Messages 列表的并发安全
 }
 
-// AddMessage adds a message to the session
-func (s *Session) AddMessage(role, content string) {
+// AddMessage 向会话中追加一条新消息。
+func (s *Session) AddMessage(role, content string) *Message {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Messages = append(s.Messages, &Message{
+	msg := &Message{
 		Role:      role,
 		Content:   content,
 		Timestamp: time.Now(),
-	})
+	}
+	s.Messages = append(s.Messages, msg)
+	return msg
 }
 
-// GetHistory returns the last n messages
+// GetHistory 返回会话中最近的 n 条消息。
 func (s *Session) GetHistory(limit int) []*Message {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -55,16 +58,16 @@ func (s *Session) GetHistory(limit int) []*Message {
 	return result
 }
 
-// Manager manages sessions
+// Manager 负责管理内存中的活跃会话，并将其持久化到磁盘。
 type Manager struct {
-	dir      string
-	sessions map[string]*Session
+	dir      string              // 会话文件存储目录
+	sessions map[string]*Session // 内存缓存的会话映射
 	mu       sync.RWMutex
 }
 
-const maxSessionLineBytes = 4 * 1024 * 1024
+const maxSessionLineBytes = 4 * 1024 * 1024 // 单行消息的最大字节数 (4MB)
 
-// NewManager creates a session manager
+// NewManager 在指定的基础目录下创建一个新的会话管理器。
 func NewManager(baseDir string) *Manager {
 	dir := filepath.Join(baseDir, "sessions")
 	os.MkdirAll(dir, 0755)
@@ -74,11 +77,19 @@ func NewManager(baseDir string) *Manager {
 	}
 }
 
-// GetOrCreate gets or creates a session
+// GetOrCreate 获取指定键值的会话实例。如果内存中不存在，则尝试从磁盘加载或创建一个新会话。
 func (m *Manager) GetOrCreate(key string) *Session {
+	m.mu.RLock()
+	if sess, ok := m.sessions[key]; ok {
+		m.mu.RUnlock()
+		return sess
+	}
+	m.mu.RUnlock()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// 双重检查锁定
 	if sess, ok := m.sessions[key]; ok {
 		return sess
 	}
@@ -91,7 +102,7 @@ func (m *Manager) GetOrCreate(key string) *Session {
 	return sess
 }
 
-// Save persists session to disk
+// Save 将指定的会话内容完整覆盖写入到磁盘文件中。
 func (m *Manager) Save(sess *Session) error {
 	sess.mu.RLock()
 	defer sess.mu.RUnlock()
@@ -109,6 +120,24 @@ func (m *Manager) Save(sess *Session) error {
 
 	enc := json.NewEncoder(f)
 	for _, msg := range sess.Messages {
+		if err := enc.Encode(msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Append 将一组新消息增量追加到指定的会话持久化文件中。
+func (m *Manager) Append(key string, msgs ...*Message) error {
+	path := m.sessionPath(key)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	for _, msg := range msgs {
 		if err := enc.Encode(msg); err != nil {
 			return err
 		}
@@ -141,7 +170,7 @@ func (m *Manager) loadFromDisk(sess *Session) error {
 	return nil
 }
 
-// Reset clears a session's history in memory and removes its file from disk.
+// Reset 清除会话在内存中的历史记录，并从磁盘中永久删除对应的会话文件。
 func (m *Manager) Reset(key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -155,6 +184,7 @@ func (m *Manager) Reset(key string) {
 }
 
 func (m *Manager) sessionPath(key string) string {
+	// 转换键值中的敏感字符以生成安全的文件名
 	safeKey := strings.NewReplacer(":", "_", "/", "_", "\\", "_").Replace(key)
 	return filepath.Join(m.dir, safeKey+".jsonl")
 }

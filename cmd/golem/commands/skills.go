@@ -8,9 +8,11 @@ import (
 
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/skills"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
+// NewSkillsCmd 创建技能管理子命令。
 func NewSkillsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "skills",
@@ -96,19 +98,34 @@ func runSkillsList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("  %-20s %-12s %s\n", "NAME", "SOURCE", "DESCRIPTION")
-	fmt.Printf("  %-20s %-12s %s\n",
-		strings.Repeat("-", 20),
-		strings.Repeat("-", 12),
-		strings.Repeat("-", 30),
+	wName := 20
+	wSource := 12
+
+	nameStyle := lipgloss.NewStyle().Width(wName).MarginRight(1)
+	sourceStyle := lipgloss.NewStyle().Width(wSource).MarginRight(1)
+	descStyle := lipgloss.NewStyle()
+
+	headers := lipgloss.JoinHorizontal(lipgloss.Top,
+		nameStyle.Render("NAME"),
+		sourceStyle.Render("SOURCE"),
+		descStyle.Render("DESCRIPTION"),
 	)
+	fmt.Printf("  %s\n", headers)
+
+	separator := lipgloss.JoinHorizontal(lipgloss.Top,
+		nameStyle.Render(strings.Repeat("-", wName)),
+		sourceStyle.Render(strings.Repeat("-", wSource)),
+		descStyle.Render(strings.Repeat("-", 30)),
+	)
+	fmt.Printf("  %s\n", separator)
 
 	for _, s := range skillList {
-		fmt.Printf("  %-20s %-12s %s\n",
-			truncate(s.Name, 20),
-			s.Source,
-			truncate(s.Description, 50),
+		row := lipgloss.JoinHorizontal(lipgloss.Top,
+			nameStyle.Render(truncate(s.Name, wName)),
+			sourceStyle.Render(s.Source),
+			descStyle.Render(truncate(s.Description, 50)),
 		)
+		fmt.Printf("  %s\n", row)
 	}
 
 	return nil
@@ -213,18 +230,34 @@ func runSkillsSearch(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("  %-20s %-32s %s\n", "NAME", "REPOSITORY", "DESCRIPTION")
-	fmt.Printf("  %-20s %-32s %s\n",
-		strings.Repeat("-", 20),
-		strings.Repeat("-", 32),
-		strings.Repeat("-", 30),
+	wName := 20
+	wRepo := 32
+
+	nameStyle := lipgloss.NewStyle().Width(wName).MarginRight(1)
+	repoStyle := lipgloss.NewStyle().Width(wRepo).MarginRight(1)
+	descStyle := lipgloss.NewStyle()
+
+	headers := lipgloss.JoinHorizontal(lipgloss.Top,
+		nameStyle.Render("NAME"),
+		repoStyle.Render("REPOSITORY"),
+		descStyle.Render("DESCRIPTION"),
 	)
+	fmt.Printf("  %s\n", headers)
+
+	separator := lipgloss.JoinHorizontal(lipgloss.Top,
+		nameStyle.Render(strings.Repeat("-", wName)),
+		repoStyle.Render(strings.Repeat("-", wRepo)),
+		descStyle.Render(strings.Repeat("-", 30)),
+	)
+	fmt.Printf("  %s\n", separator)
+
 	for _, item := range filtered {
-		fmt.Printf("  %-20s %-32s %s\n",
-			truncate(item.Name, 20),
-			truncate(item.Repository, 32),
-			truncate(item.Description, 50),
+		row := lipgloss.JoinHorizontal(lipgloss.Top,
+			nameStyle.Render(truncate(item.Name, wName)),
+			repoStyle.Render(truncate(item.Repository, wRepo)),
+			descStyle.Render(truncate(item.Description, 50)),
 		)
+		fmt.Printf("  %s\n", row)
 	}
 
 	return nil

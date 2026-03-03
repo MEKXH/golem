@@ -8,20 +8,20 @@ import (
 	"sync"
 )
 
-// storeData is the on-disk format for cron jobs.
+// storeData 是定时任务在磁盘上的存储格式。
 type storeData struct {
 	Version int    `json:"version"`
 	Jobs    []*Job `json:"jobs"`
 }
 
-// Store persists cron jobs as a JSON file.
+// Store 将定时任务持久化为 JSON 文件。
 type Store struct {
 	path string
 	mu   sync.RWMutex
 	jobs map[string]*Job
 }
 
-// NewStore creates a store backed by the given file path.
+// NewStore 创建一个由给定文件路径支持的存储。
 func NewStore(path string) *Store {
 	return &Store{
 		path: path,
@@ -29,7 +29,7 @@ func NewStore(path string) *Store {
 	}
 }
 
-// Load reads jobs from disk. If the file does not exist, the store starts empty.
+// Load 从磁盘读取任务。如果文件不存在，存储将为空。
 func (s *Store) Load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -55,8 +55,8 @@ func (s *Store) Load() error {
 	return nil
 }
 
-// Save writes all jobs to disk. Serialization happens under the read lock
-// so that concurrent mutations via Put cannot race with encoding.
+// Save 将所有任务写入磁盘。序列化在读锁下进行，
+// 以便通过 Put 的并发修改不会与编码竞争。
 func (s *Store) Save() error {
 	s.mu.RLock()
 	sd := storeData{
@@ -80,8 +80,8 @@ func (s *Store) Save() error {
 	return os.WriteFile(s.path, data, 0644)
 }
 
-// Put stores a deep copy of the job. The caller may continue to mutate the
-// original without racing with Save or other readers.
+// Put 存储任务的深拷贝。调用者可以继续修改原始任务，
+// 而不会与 Save 或其他读取者竞争。
 func (s *Store) Put(job *Job) {
 	cp := copyJob(job)
 	s.mu.Lock()
@@ -89,7 +89,7 @@ func (s *Store) Put(job *Job) {
 	s.jobs[cp.ID] = cp
 }
 
-// Get returns a deep copy of the job with the given ID.
+// Get 返回具有给定 ID 的任务的深拷贝。
 func (s *Store) Get(id string) (*Job, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -100,7 +100,7 @@ func (s *Store) Get(id string) (*Job, bool) {
 	return copyJob(j), true
 }
 
-// Delete removes a job by ID.
+// Delete 按 ID 删除任务。
 func (s *Store) Delete(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -111,7 +111,7 @@ func (s *Store) Delete(id string) bool {
 	return true
 }
 
-// All returns deep copies of all jobs.
+// All 返回所有任务的深拷贝。
 func (s *Store) All() []*Job {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -122,7 +122,7 @@ func (s *Store) All() []*Job {
 	return result
 }
 
-// copyJob returns a deep copy of a Job, including all pointer fields.
+// CopyJob 返回一个 Job 的深拷贝，包括所有指针字段。
 func copyJob(j *Job) *Job {
 	cp := *j
 	if j.Schedule.AtMS != nil {

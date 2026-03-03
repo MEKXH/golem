@@ -1,3 +1,4 @@
+// Package memory 实现 Golem 的记忆管理系统，包括长期记忆 (MEMORY.md) 和基于日记的短期记忆。
 package memory
 
 import (
@@ -11,30 +12,31 @@ import (
 )
 
 const (
-	memoryDirName  = "memory"
-	memoryFileName = "MEMORY.md"
+	memoryDirName  = "memory"    // 记忆文件存储目录名
+	memoryFileName = "MEMORY.md" // 长期记忆文件名
 )
 
+// DiaryEntry 表示单条日记分录。
 type DiaryEntry struct {
-	Date    string
-	Path    string
-	Content string
+	Date    string // 日期 (YYYY-MM-DD)
+	Path    string // 文件路径
+	Content string // 分录内容
 }
 
-// RecallItem is one recalled memory fragment with source attribution.
+// RecallItem 表示带来源归属的单条回忆片段。
 type RecallItem struct {
-	Source  string
-	Date    string
-	Path    string
-	Excerpt string
+	Source  string // 来源（如 "diary_recent", "long_term"）
+	Date    string // 关联日期（可选）
+	Path    string // 来源文件路径
+	Excerpt string // 摘录内容
 }
 
-// RecallResult summarizes context recall quality and provenance.
+// RecallResult 总结了上下文回忆的质量和来源分布。
 type RecallResult struct {
-	Query       string
-	RecallCount int
-	SourceHits  map[string]int
-	Items       []RecallItem
+	Query       string         // 原始查询
+	RecallCount int            // 召回的总片段数
+	SourceHits  map[string]int // 各来源的命中统计
+	Items       []RecallItem   // 召回的具体片段列表
 }
 
 type diaryFile struct {
@@ -42,12 +44,14 @@ type diaryFile struct {
 	path string
 }
 
+// Manager 负责管理工作区内的记忆文件读写与上下文召回。
 type Manager struct {
 	workspacePath string
 	memoryDir     string
 	memoryFile    string
 }
 
+// NewManager 为指定的工作区创建一个记忆管理器。
 func NewManager(workspacePath string) *Manager {
 	memoryDir := filepath.Join(workspacePath, memoryDirName)
 	return &Manager{
@@ -57,6 +61,7 @@ func NewManager(workspacePath string) *Manager {
 	}
 }
 
+// Ensure 确保记忆目录和长期记忆文件存在。
 func (m *Manager) Ensure() error {
 	if err := os.MkdirAll(m.memoryDir, 0755); err != nil {
 		return err
@@ -69,17 +74,19 @@ func (m *Manager) Ensure() error {
 	return nil
 }
 
+// ReadLongTerm 读取长期记忆文件的全文内容。
 func (m *Manager) ReadLongTerm() (string, error) {
-	if err := m.Ensure(); err != nil {
-		return "", err
-	}
 	data, err := os.ReadFile(m.memoryFile)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
 		return "", err
 	}
 	return strings.TrimSpace(string(data)), nil
 }
 
+// WriteLongTerm 覆盖写入长期记忆文件。
 func (m *Manager) WriteLongTerm(content string) error {
 	if err := m.Ensure(); err != nil {
 		return err
@@ -87,10 +94,12 @@ func (m *Manager) WriteLongTerm(content string) error {
 	return os.WriteFile(m.memoryFile, []byte(strings.TrimSpace(content)), 0644)
 }
 
+// AppendDiary 在当前日期的日记文件中追加一条记录。
 func (m *Manager) AppendDiary(entry string) (string, error) {
 	return m.AppendDiaryAt(time.Now(), entry)
 }
 
+// AppendDiaryAt 在指定时间的日记文件中追加一条记录。
 func (m *Manager) AppendDiaryAt(ts time.Time, entry string) (string, error) {
 	entry = strings.TrimSpace(entry)
 	if entry == "" {
@@ -114,6 +123,7 @@ func (m *Manager) AppendDiaryAt(ts time.Time, entry string) (string, error) {
 	return path, nil
 }
 
+// ReadDiary 读取指定日期的日记内容。
 func (m *Manager) ReadDiary(date string) (string, error) {
 	date = strings.TrimSpace(date)
 	if date == "" {
@@ -127,12 +137,10 @@ func (m *Manager) ReadDiary(date string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
+// ReadRecentDiaries 读取最近几天的日记分录。
 func (m *Manager) ReadRecentDiaries(limit int) ([]DiaryEntry, error) {
 	if limit <= 0 {
 		limit = 3
-	}
-	if err := m.Ensure(); err != nil {
-		return nil, err
 	}
 	diaries, err := m.collectDiaryFiles()
 	if err != nil {
@@ -168,16 +176,13 @@ func (m *Manager) ReadRecentDiaries(limit int) ([]DiaryEntry, error) {
 	return out, nil
 }
 
-// RecallContext selects context fragments using recent-first + keyword-hit strategy.
+// RecallContext 使用“最近优先 + 关键词命中”策略从记忆中检索相关的上下文片段。
 func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (RecallResult, error) {
 	if recentLimit <= 0 {
 		recentLimit = 3
 	}
 	if keywordLimit <= 0 {
 		keywordLimit = 3
-	}
-	if err := m.Ensure(); err != nil {
-		return RecallResult{}, err
 	}
 
 	result := RecallResult{
@@ -187,22 +192,40 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 	}
 	seenPaths := map[string]bool{}
 
-	recentEntries, err := m.ReadRecentDiaries(recentLimit)
+	// 1. 预先收集所有日记文件
+	diaries, err := m.collectDiaryFiles()
 	if err != nil {
 		return RecallResult{}, err
 	}
-	for _, entry := range recentEntries {
-		result.SourceHits["diary_recent"]++
-		if seenPaths[entry.Path] {
+	sort.Slice(diaries, func(i, j int) bool {
+		return diaries[i].date > diaries[j].date // 最新的在前
+	})
+
+	// 2. 优先提取最近的日记分录
+	recentCount := 0
+	for _, d := range diaries {
+		if recentCount >= recentLimit {
+			break
+		}
+
+		contentRaw, readErr := os.ReadFile(d.path)
+		if readErr != nil {
 			continue
 		}
-		seenPaths[entry.Path] = true
+		content := strings.TrimSpace(string(contentRaw))
+		if content == "" {
+			continue
+		}
+
+		result.SourceHits["diary_recent"]++
+		seenPaths[d.path] = true
 		result.Items = append(result.Items, RecallItem{
 			Source:  "diary_recent",
-			Date:    entry.Date,
-			Path:    entry.Path,
-			Excerpt: clipText(entry.Content, 320),
+			Date:    d.date,
+			Path:    d.path,
+			Excerpt: clipText(content, 320),
 		})
+		recentCount++
 	}
 
 	keywords := extractRecallKeywords(result.Query)
@@ -211,53 +234,57 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 		return result, nil
 	}
 
+	// 3. 检索长期记忆
 	longTerm, err := m.ReadLongTerm()
 	if err != nil {
 		return RecallResult{}, err
 	}
-	if strings.TrimSpace(longTerm) != "" && containsAnyKeyword(longTerm, keywords) {
-		result.SourceHits["long_term"]++
-		result.Items = append(result.Items, RecallItem{
-			Source:  "long_term",
-			Date:    "",
-			Path:    m.memoryFile,
-			Excerpt: extractKeywordExcerpt(longTerm, keywords, 380),
-		})
+	if longTerm != "" {
+		longTermLower := strings.ToLower(longTerm)
+		if containsAnyKeyword(longTermLower, keywords) {
+			result.SourceHits["long_term"]++
+			result.Items = append(result.Items, RecallItem{
+				Source:  "long_term",
+				Date:    "",
+				Path:    m.memoryFile,
+				Excerpt: extractKeywordExcerpt(longTerm, longTermLower, keywords, 380),
+			})
+		}
 	}
 
-	diaries, err := m.collectDiaryFiles()
-	if err != nil {
-		return RecallResult{}, err
-	}
-	sort.Slice(diaries, func(i, j int) bool {
-		return diaries[i].date > diaries[j].date
-	})
-
+	// 4. 对剩余日记进行关键词搜索
 	addedKeywordItems := 0
 	for _, d := range diaries {
+		if addedKeywordItems >= keywordLimit {
+			break
+		}
+
+		// 优化：跳过已作为“最近”处理过的文件
+		if seenPaths[d.path] {
+			continue
+		}
+
 		contentRaw, readErr := os.ReadFile(d.path)
 		if readErr != nil {
 			continue
 		}
 		content := strings.TrimSpace(string(contentRaw))
-		if content == "" || !containsAnyKeyword(content, keywords) {
+		if content == "" {
+			continue
+		}
+		contentLower := strings.ToLower(content)
+		if !containsAnyKeyword(contentLower, keywords) {
 			continue
 		}
 
 		result.SourceHits["diary_keyword"]++
-		if seenPaths[d.path] {
-			continue
-		}
-		if addedKeywordItems >= keywordLimit {
-			continue
-		}
 		seenPaths[d.path] = true
 		addedKeywordItems++
 		result.Items = append(result.Items, RecallItem{
 			Source:  "diary_keyword",
 			Date:    d.date,
 			Path:    d.path,
-			Excerpt: extractKeywordExcerpt(content, keywords, 300),
+			Excerpt: extractKeywordExcerpt(content, contentLower, keywords, 300),
 		})
 	}
 
@@ -268,6 +295,9 @@ func (m *Manager) RecallContext(query string, recentLimit, keywordLimit int) (Re
 func (m *Manager) collectDiaryFiles() ([]diaryFile, error) {
 	entries, err := os.ReadDir(m.memoryDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -317,8 +347,7 @@ func extractRecallKeywords(query string) []string {
 	return keywords
 }
 
-func containsAnyKeyword(content string, keywords []string) bool {
-	contentLower := strings.ToLower(content)
+func containsAnyKeyword(contentLower string, keywords []string) bool {
 	for _, keyword := range keywords {
 		if strings.Contains(contentLower, keyword) {
 			return true
@@ -327,16 +356,14 @@ func containsAnyKeyword(content string, keywords []string) bool {
 	return false
 }
 
-func extractKeywordExcerpt(content string, keywords []string, maxLen int) string {
+func extractKeywordExcerpt(content, contentLower string, keywords []string, maxLen int) string {
 	if maxLen <= 0 {
 		maxLen = 280
 	}
-	content = strings.TrimSpace(content)
 	if content == "" {
 		return ""
 	}
 
-	contentLower := strings.ToLower(content)
 	matchIndex := -1
 	for _, keyword := range keywords {
 		idx := strings.Index(contentLower, keyword)

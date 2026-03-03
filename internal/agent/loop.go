@@ -1,3 +1,4 @@
+// Package agent 实现核心 AI 助手逻辑，包括消息循环、工具调用及上下文管理。
 package agent
 
 import (
@@ -21,30 +22,33 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-// Loop is the main agent processing loop
+// Loop 负责管理 Agent 的主处理循环，包括消息处理、模型生成及工具执行。
 type Loop struct {
-	bus           *bus.MessageBus
-	model         model.ChatModel
-	tools         *tools.Registry
-	commands      *command.Registry
-	mcpManager    *mcp.Manager
-	runtimeGuard  *runtimeGuard
-	subagents     *SubagentManager
-	sessions      *session.Manager
-	context       *ContextBuilder
-	config        *config.Config
-	maxIterations int
-	workspacePath string
-	now           func() time.Time
-	runtimeMetric *metrics.RuntimeMetrics
+	bus           *bus.MessageBus         // 消息总线，用于收发通道消息
+	model         model.ChatModel         // 绑定的聊天模型实现
+	tools         *tools.Registry         // 工具注册表，管理所有可用工具
+	commands      *command.Registry       // 命令注册表，管理斜杠命令
+	mcpManager    *mcp.Manager            // MCP（Model Context Protocol）连接管理器
+	runtimeGuard  *runtimeGuard           // 运行时安全防护，用于权限控制
+	subagents     *SubagentManager        // 子 Agent 管理器，支持任务委派
+	sessions      *session.Manager        // 会话管理器，维护用户历史记录
+	context       *ContextBuilder         // 上下文构建器，准备模型所需的 Prompt
+	config        *config.Config          // 项目全局配置
+	maxIterations int                     // 单条消息允许的最大工具调用迭代次数
+	workspacePath string                  // 工作空间根目录路径
+	now           func() time.Time        // 获取当前时间的函数（方便测试）
+	runtimeMetric *metrics.RuntimeMetrics // 运行时指标收集器
 
-	OnToolStart  func(name, args string)
+	// OnToolStart 工具开始执行时的回调函数
+	OnToolStart func(name, args string)
+	// OnToolFinish 工具执行完成后的回调函数
 	OnToolFinish func(name, result string, err error)
 
+	// activityRecorder 记录最近活跃的通道与聊天 ID 的回调
 	activityRecorder func(channel, chatID string)
 }
 
-// NewLoop creates a new agent loop
+// NewLoop 根据配置、消息总线和聊天模型创建一个新的 Loop 实例。
 func NewLoop(cfg *config.Config, msgBus *bus.MessageBus, chatModel model.ChatModel) (*Loop, error) {
 	workspacePath, err := cfg.WorkspacePathChecked()
 	if err != nil {
@@ -73,17 +77,17 @@ func NewLoop(cfg *config.Config, msgBus *bus.MessageBus, chatModel model.ChatMod
 	}, nil
 }
 
-// Tools returns the tool registry.
+// Tools 返回工具注册表。
 func (l *Loop) Tools() *tools.Registry {
 	return l.tools
 }
 
-// SetActivityRecorder attaches a callback used to track the latest active channel/chat.
+// SetActivityRecorder 附加一个回调函数，用于跟踪最新活跃的通道/聊天。
 func (l *Loop) SetActivityRecorder(recorder func(channel, chatID string)) {
 	l.activityRecorder = recorder
 }
 
-// SetRuntimeMetrics attaches a runtime metrics recorder for tool execution stats.
+// SetRuntimeMetrics 附加一个运行时指标记录器，用于工具执行统计。
 func (l *Loop) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
 	l.runtimeMetric = recorder
 	if l.context != nil {
@@ -91,7 +95,7 @@ func (l *Loop) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
 	}
 }
 
-// RegisterDefaultTools registers all built-in tools
+// RegisterDefaultTools 注册所有内置工具
 func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 	toolFns := []func() (tool.InvokableTool, error){
 		func() (tool.InvokableTool, error) { return tools.NewReadFileTool(l.workspacePath) },
@@ -236,7 +240,7 @@ func (l *Loop) bindTools(ctx context.Context) error {
 	return nil
 }
 
-// Run starts the agent loop
+// Run 启动 Agent 循环
 func (l *Loop) Run(ctx context.Context) error {
 	if err := l.bindTools(ctx); err != nil {
 		return err
@@ -476,9 +480,11 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 		finalContent = "Processing complete."
 	}
 
-	sess.AddMessage("user", msg.Content)
-	sess.AddMessage("assistant", finalContent)
-	l.sessions.Save(sess)
+	userMsg := sess.AddMessage("user", msg.Content)
+	asstMsg := sess.AddMessage("assistant", finalContent)
+	if err := l.sessions.Append(sess.Key, userMsg, asstMsg); err != nil {
+		slog.Warn("failed to append session messages", "error", err)
+	}
 
 	return &bus.OutboundMessage{
 		Channel:   msg.Channel,
@@ -488,12 +494,12 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 	}, nil
 }
 
-// ProcessForChannel processes a message directly for a given channel/session.
+// ProcessForChannel 为给定的通道/会话直接处理消息。
 func (l *Loop) ProcessForChannel(ctx context.Context, channel, chatID, senderID, content string) (string, error) {
 	return l.ProcessForChannelWithSession(ctx, channel, chatID, senderID, "", content)
 }
 
-// ProcessForChannelWithSession processes a message for a channel/chat using an optional explicit session id.
+// ProcessForChannelWithSession 为通道/聊天处理消息，可选择使用显式会话 ID。
 func (l *Loop) ProcessForChannelWithSession(ctx context.Context, channel, chatID, senderID, sessionID, content string) (string, error) {
 	if err := l.bindTools(ctx); err != nil {
 		return "", err
@@ -527,7 +533,7 @@ func (l *Loop) ProcessForChannelWithSession(ctx context.Context, channel, chatID
 	return resp.Content, nil
 }
 
-// ProcessDirect processes a message directly (for CLI)
+// ProcessDirect 直接处理消息（用于 CLI）
 func (l *Loop) ProcessDirect(ctx context.Context, content string) (string, error) {
 	return l.ProcessForChannel(ctx, "cli", "direct", "user", content)
 }

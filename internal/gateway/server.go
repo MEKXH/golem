@@ -1,3 +1,4 @@
+// Package gateway 实现 Golem 的 API 网关，允许通过 HTTP 协议与 Agent 进行交互。
 package gateway
 
 import (
@@ -15,16 +16,20 @@ import (
 	"github.com/google/uuid"
 )
 
+// ChatProcessor 定义了网关处理聊天请求所需的接口。
 type ChatProcessor interface {
+	// ProcessForChannel 处理来自指定通道和聊天 ID 的消息。
 	ProcessForChannel(ctx context.Context, channel, chatID, senderID, content string) (string, error)
 }
 
+// Server 表示网关服务器实例。
 type Server struct {
-	cfg        config.GatewayConfig
-	processor  ChatProcessor
-	httpServer *http.Server
+	cfg        config.GatewayConfig // 网关配置
+	processor  ChatProcessor        // 聊天处理器
+	httpServer *http.Server         // 底层 HTTP 服务器
 }
 
+// New 创建并返回一个新的网关服务器实例。
 func New(cfg config.GatewayConfig, processor ChatProcessor) *Server {
 	host := strings.TrimSpace(cfg.Host)
 	if host == "" {
@@ -43,10 +48,12 @@ func New(cfg config.GatewayConfig, processor ChatProcessor) *Server {
 	}
 }
 
+// Addr 返回服务器监听的完整地址。
 func (s *Server) Addr() string {
 	return fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
 }
 
+// Start 启动网关服务器并开始监听请求。
 func (s *Server) Start() error {
 	mux := NewHandler(s.cfg.Token, s.processor)
 	s.httpServer = &http.Server{
@@ -61,6 +68,7 @@ func (s *Server) Start() error {
 	return nil
 }
 
+// Shutdown 优雅地关闭网关服务器。
 func (s *Server) Shutdown(ctx context.Context) error {
 	if s.httpServer == nil {
 		return nil
@@ -68,8 +76,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
 
+// NewHandler 创建并配置网关的路由处理器。
 func NewHandler(token string, processor ChatProcessor) http.Handler {
 	mux := http.NewServeMux()
+
+	// 健康检查接口
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		requestID := getRequestID(r)
 		if r.Method != http.MethodGet {
@@ -81,6 +92,8 @@ func NewHandler(token string, processor ChatProcessor) http.Handler {
 			"request_id": requestID,
 		})
 	})
+
+	// 版本查询接口
 	mux.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
 		requestID := getRequestID(r)
 		if r.Method != http.MethodGet {
@@ -92,6 +105,8 @@ func NewHandler(token string, processor ChatProcessor) http.Handler {
 			"request_id": requestID,
 		})
 	})
+
+	// 聊天交互接口
 	mux.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
 		requestID := getRequestID(r)
 		start := time.Now()
@@ -99,6 +114,7 @@ func NewHandler(token string, processor ChatProcessor) http.Handler {
 			writeError(w, requestID, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
 		}
+		// 如果配置了令牌，则校验 Bearer Token
 		if strings.TrimSpace(token) != "" && !isAuthorized(r, token) {
 			writeError(w, requestID, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
 			return

@@ -12,33 +12,33 @@ import (
 	"github.com/MEKXH/golem/internal/metrics"
 )
 
-// Manager coordinates all channels
+// Manager 统一协调管理所有消息通道及其出站发送策略。
 type Manager struct {
-	channels      map[string]Channel
-	bus           *bus.MessageBus
-	sendSem       chan struct{}
-	runtimeMetric *metrics.RuntimeMetrics
-	policy        DeliveryPolicy
+	channels      map[string]Channel      // 已注册的所有通道实例
+	bus           *bus.MessageBus         // 消息总线，用于收发出站消息
+	sendSem       chan struct{}           // 发送信号量，控制出站消息的最大并发发送数
+	runtimeMetric *metrics.RuntimeMetrics // 运行时指标收集器，用于监控发送状况
+	policy        DeliveryPolicy          // 出站投递策略（重试、退避、去重等）
 	dedupMu       sync.Mutex
-	dedupSeenAt   map[string]time.Time
+	dedupSeenAt   map[string]time.Time // 消息去重记录，防止重复发送
 	rateMu        sync.Mutex
-	lastSendAt    time.Time
+	lastSendAt    time.Time // 记录上次消息发送时间，用于速率限制
 	mu            sync.RWMutex
 }
 
 const defaultMaxConcurrentSends = 16
 
-// DeliveryPolicy defines outbound retry, backoff, rate limit and dedup behavior.
+// DeliveryPolicy 定义了出站消息的投递规则，包括重试次数、退避策略、速率限制和去重窗口。
 type DeliveryPolicy struct {
-	MaxConcurrentSends int
-	RetryMaxAttempts   int
-	RetryBaseBackoff   time.Duration
-	RetryMaxBackoff    time.Duration
-	RateLimitPerSecond int
-	DedupWindow        time.Duration
+	MaxConcurrentSends int           // 最大并发发送连接数
+	RetryMaxAttempts   int           // 发送失败后的最大重试次数
+	RetryBaseBackoff   time.Duration // 基础重试退避间隔
+	RetryMaxBackoff    time.Duration // 最大重试退避间隔
+	RateLimitPerSecond int           // 每秒允许发送的消息数上限
+	DedupWindow        time.Duration // 消息去重的时间窗口大小
 }
 
-// NewManager creates a channel manager
+// NewManager 创建一个使用推荐默认策略的消息通道管理器。
 func NewManager(msgBus *bus.MessageBus) *Manager {
 	return NewManagerWithPolicy(msgBus, DeliveryPolicy{
 		MaxConcurrentSends: defaultMaxConcurrentSends,
@@ -50,7 +50,7 @@ func NewManager(msgBus *bus.MessageBus) *Manager {
 	})
 }
 
-// NewManagerWithLimit creates a channel manager with bounded outbound send concurrency.
+// NewManagerWithLimit 创建一个可控制最大并发发送数的管理器。
 func NewManagerWithLimit(msgBus *bus.MessageBus, maxConcurrentSends int) *Manager {
 	mgr := NewManager(msgBus)
 	mgr.policy.MaxConcurrentSends = maxConcurrentSends
@@ -59,7 +59,7 @@ func NewManagerWithLimit(msgBus *bus.MessageBus, maxConcurrentSends int) *Manage
 	return mgr
 }
 
-// NewManagerWithPolicy creates a manager with custom outbound delivery policy.
+// NewManagerWithPolicy 使用自定义的出站消息投递策略创建一个管理器。
 func NewManagerWithPolicy(msgBus *bus.MessageBus, policy DeliveryPolicy) *Manager {
 	normalized := normalizeDeliveryPolicy(policy)
 	return &Manager{
@@ -71,21 +71,21 @@ func NewManagerWithPolicy(msgBus *bus.MessageBus, policy DeliveryPolicy) *Manage
 	}
 }
 
-// Register adds a channel
+// Register 将一个通道实现注册到管理器中。
 func (m *Manager) Register(ch Channel) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.channels[ch.Name()] = ch
 }
 
-// SetRuntimeMetrics attaches a recorder used for outbound send metrics.
+// SetRuntimeMetrics 附加一个运行时指标收集器，用于跟踪出站消息的统计数据。
 func (m *Manager) SetRuntimeMetrics(recorder *metrics.RuntimeMetrics) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.runtimeMetric = recorder
 }
 
-// Names returns registered channel names
+// Names 返回所有已注册通道的名称列表。
 func (m *Manager) Names() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -97,22 +97,22 @@ func (m *Manager) Names() []string {
 	return names
 }
 
-// StartAll starts all channels
+// StartAll 启动管理器下属的所有消息通道，使其开始接收外部平台的入站消息。
 func (m *Manager) StartAll(ctx context.Context) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	for name, ch := range m.channels {
 		go func(n string, c Channel) {
-			slog.Info("starting channel", "name", n)
+			slog.Info("正在启动消息通道", "name", n)
 			if err := c.Start(ctx); err != nil {
-				slog.Error("channel error", "name", n, "error", err)
+				slog.Error("消息通道运行出错", "name", n, "error", err)
 			}
 		}(name, ch)
 	}
 }
 
-// RouteOutbound sends outbound messages to appropriate channels
+// RouteOutbound 持续监控消息总线的出站队列，并将消息分发到对应的通道进行发送。
 func (m *Manager) RouteOutbound(ctx context.Context) {
 	for {
 		select {
@@ -125,7 +125,7 @@ func (m *Manager) RouteOutbound(ctx context.Context) {
 			if msg == nil {
 				continue
 			}
-			// Skip internal messages (e.g. heartbeat) — don't route to channels.
+			// 跳过内部系统消息（如心跳消息），不路由到外部聊天平台。
 			if msg.Metadata != nil {
 				if mt, ok := msg.Metadata["type"]; ok && mt == "heartbeat" {
 					continue
@@ -140,7 +140,7 @@ func (m *Manager) RouteOutbound(ctx context.Context) {
 				go func(c Channel, outbound *bus.OutboundMessage, metricRecorder *metrics.RuntimeMetrics) {
 					defer func() { <-m.sendSem }()
 					if err := m.sendWithPolicy(ctx, c, outbound, metricRecorder); err != nil {
-						slog.Error("send outbound failed", "request_id", outbound.RequestID, "channel", outbound.Channel, "chat_id", outbound.ChatID, "error", err)
+						slog.Error("消息发送失败", "request_id", outbound.RequestID, "channel", outbound.Channel, "chat_id", outbound.ChatID, "error", err)
 					}
 				}(ch, msg, recorder)
 			case <-ctx.Done():
@@ -150,7 +150,7 @@ func (m *Manager) RouteOutbound(ctx context.Context) {
 	}
 }
 
-// StopAll stops all channels
+// StopAll 停止管理器下属的所有消息通道，关闭外部平台连接。
 func (m *Manager) StopAll(ctx context.Context) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

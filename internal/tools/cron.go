@@ -12,6 +12,7 @@ import (
 	"github.com/cloudwego/eino/components/tool/utils"
 )
 
+// CronToolInput 定义了 manage_cron 工具的输入参数。
 type CronToolInput struct {
 	Action       string `json:"action" jsonschema:"required,description=Action to perform: add list remove enable disable,enum=add,enum=list,enum=remove,enum=enable,enum=disable"`
 	Name         string `json:"name,omitempty" jsonschema:"description=Job name (required for add)"`
@@ -135,7 +136,7 @@ func (t *cronToolImpl) enable(input *CronToolInput, enabled bool) (string, error
 	return fmt.Sprintf("Job %s (%s) %s.", job.ShortID(), job.Name, state), nil
 }
 
-// NewCronTool creates an agent tool for managing cron jobs.
+// NewCronTool 创建一个 manage_cron 工具实例，用于 Agent 调度和管理定时任务。
 func NewCronTool(service *cron.Service) (tool.InvokableTool, error) {
 	impl := &cronToolImpl{service: service}
 	return utils.InferTool(

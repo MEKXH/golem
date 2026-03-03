@@ -36,6 +36,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewRunCmd 创建启动服务器命令。
 func NewRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -47,6 +48,7 @@ func NewRunCmd() *cobra.Command {
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
+	// 监听系统信号以实现优雅退出
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
@@ -61,6 +63,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	msgBus := bus.NewMessageBus(100)
 
+	// 初始化 LLM 聊天模型
 	model, err := provider.NewChatModel(ctx, cfg)
 	if err != nil {
 		slog.Warn("no model configured", "error", err)
@@ -70,15 +73,17 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid workspace: %w", err)
 	}
+	// 注册默认工具集
 	if err := loop.RegisterDefaultTools(cfg); err != nil {
 		return err
 	}
+	// 初始化指标收集
 	runtimeMetrics := metrics.NewRuntimeMetrics(workspacePath)
 	defer runtimeMetrics.Close()
 	loop.SetRuntimeMetrics(runtimeMetrics)
 	logAndAuditRuntimePolicyStartup(ctx, loop, cfg)
 
-	// Initialize cron service.
+	// 1. 初始化定时任务服务 (Cron Service)
 	cronStorePath := filepath.Join(workspacePath, "cron", "jobs.json")
 	cronService := cron.NewService(cronStorePath, func(job *cron.Job) error {
 		ch := job.Payload.Channel
@@ -92,6 +97,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		_, err := loop.ProcessForChannel(ctx, ch, chatID, "cron", job.Payload.Message)
 		return err
 	})
+	// 注册 Cron 管理工具
 	cronTool, err := tools.NewCronTool(cronService)
 	if err != nil {
 		return fmt.Errorf("failed to create cron tool: %w", err)
@@ -103,6 +109,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		slog.Warn("cron service failed to start", "error", err)
 	}
 
+	// 2. 初始化心跳服务 (Heartbeat Service)
 	stateManager := state.NewManager(workspacePath)
 	heartbeatService := buildHeartbeatService(cfg, msgBus, cronService, stateManager)
 	loop.SetActivityRecorder(heartbeatService.TrackActivity)
@@ -111,12 +118,14 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 
 	errCh := make(chan error, 2)
+	// 3. 运行 Agent 主循环
 	go func() {
 		if err := loop.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			errCh <- fmt.Errorf("agent loop failed: %w", err)
 		}
 	}()
 
+	// 4. 初始化消息通道 (Channels)
 	voiceTranscriber := buildVoiceTranscriber(cfg)
 	chanMgr := channel.NewManagerWithPolicy(msgBus, buildOutboundDeliveryPolicy(cfg))
 	chanMgr.SetRuntimeMetrics(runtimeMetrics)
@@ -125,6 +134,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	chanMgr.StartAll(ctx)
 	go chanMgr.RouteOutbound(ctx)
 
+	// 5. 启动网关服务器 (Gateway Server)
 	gatewayServer := gateway.New(cfg.Gateway, loop)
 	go func() {
 		if err := gatewayServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -142,6 +152,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 		cancel()
 	}
 
+	// 优雅停机流程
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 
