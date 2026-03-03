@@ -10,8 +10,9 @@ import (
 
 // SkillsCommand 实现 /skills 命令 — 用于查看已安装技能及其详细信息。
 // 使用方式:
-//   /skills [list] - 列出所有已发现的技能
-//   /skills show <name> - 显示指定技能的完整 Markdown 内容
+//
+//	/skills [list] - 列出所有已发现的技能
+//	/skills show <name> - 显示指定技能的完整 Markdown 内容
 type SkillsCommand struct{}
 
 // Name 返回命令名称。

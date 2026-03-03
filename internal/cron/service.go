@@ -16,8 +16,8 @@ type JobHandler func(*Job) error
 
 // Service 负责管理定时任务的生命周期，并使用轮询循环 (Ticker) 进行调度执行。
 type Service struct {
-	store    *Store        // 任务持久化存储
-	onJob    JobHandler    // 任务触发时的回调
+	store    *Store     // 任务持久化存储
+	onJob    JobHandler // 任务触发时的回调
 	mu       sync.RWMutex
 	stopChan chan struct{}
 	stopped  chan struct{}

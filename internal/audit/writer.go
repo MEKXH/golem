@@ -17,8 +17,8 @@ const (
 
 // Event 表示单条审计记录，以 JSON 行 (JSONL) 格式写入。
 type Event struct {
-	Time      time.Time `json:"time"`                // 事件发生时间
-	Type      string    `json:"type"`                // 事件类型（如 policy_allow, tool_execution）
+	Time      time.Time `json:"time"`                 // 事件发生时间
+	Type      string    `json:"type"`                 // 事件类型（如 policy_allow, tool_execution）
 	RequestID string    `json:"request_id,omitempty"` // 请求追踪 ID
 	Tool      string    `json:"tool,omitempty"`       // 关联的工具名称
 	Result    string    `json:"result,omitempty"`     // 执行结果或决策状态

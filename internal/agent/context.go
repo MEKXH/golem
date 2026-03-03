@@ -25,7 +25,7 @@ type ContextBuilder struct {
 	workspacePath   string                  // 工作区根路径
 	runtimeMetrics  *metrics.RuntimeMetrics // 运行时指标记录器
 	mu              sync.RWMutex
-	cachedBaseParts []string                // 缓存的基础 Prompt 片段
+	cachedBaseParts []string // 缓存的基础 Prompt 片段
 }
 
 // NewContextBuilder 创建并返回一个新的上下文构建器。

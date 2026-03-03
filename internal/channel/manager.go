@@ -15,14 +15,14 @@ import (
 // Manager 统一协调管理所有消息通道及其出站发送策略。
 type Manager struct {
 	channels      map[string]Channel      // 已注册的所有通道实例
-	bus           *bus.MessageBus          // 消息总线，用于收发出站消息
-	sendSem       chan struct{}            // 发送信号量，控制出站消息的最大并发发送数
+	bus           *bus.MessageBus         // 消息总线，用于收发出站消息
+	sendSem       chan struct{}           // 发送信号量，控制出站消息的最大并发发送数
 	runtimeMetric *metrics.RuntimeMetrics // 运行时指标收集器，用于监控发送状况
-	policy        DeliveryPolicy           // 出站投递策略（重试、退避、去重等）
+	policy        DeliveryPolicy          // 出站投递策略（重试、退避、去重等）
 	dedupMu       sync.Mutex
-	dedupSeenAt   map[string]time.Time     // 消息去重记录，防止重复发送
+	dedupSeenAt   map[string]time.Time // 消息去重记录，防止重复发送
 	rateMu        sync.Mutex
-	lastSendAt    time.Time                // 记录上次消息发送时间，用于速率限制
+	lastSendAt    time.Time // 记录上次消息发送时间，用于速率限制
 	mu            sync.RWMutex
 }
 

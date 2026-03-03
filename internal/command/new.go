@@ -9,7 +9,7 @@ import (
 type NewSessionCommand struct{}
 
 // Name 返回命令名称。
-func (c *NewSessionCommand) Name() string        { return "new" }
+func (c *NewSessionCommand) Name() string { return "new" }
 
 // Description 返回命令描述。
 func (c *NewSessionCommand) Description() string { return "Start a new conversation session" }

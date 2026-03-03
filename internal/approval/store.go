@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	storeVersion      = 1    // 存储文件版本
-	approvalsFileMode = 0644 // 文件权限
-	approvalsDirMode  = 0755 // 目录权限
+	storeVersion      = 1        // 存储文件版本
+	approvalsFileMode = 0644     // 文件权限
+	approvalsDirMode  = 0755     // 目录权限
 	defaultStartingID = int64(1) // 默认起始 ID
 )
 

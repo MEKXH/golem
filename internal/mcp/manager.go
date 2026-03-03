@@ -15,13 +15,13 @@ import (
 )
 
 const (
-	reconnectMaxAttempts = 3                // 最大重连尝试次数
+	reconnectMaxAttempts = 3                      // 最大重连尝试次数
 	reconnectBaseBackoff = 250 * time.Millisecond // 基础重连退避时间
 )
 
 type serverState struct {
 	cfg    config.MCPServerConfig // 服务器配置
-	client Client                  // MCP 客户端实例
+	client Client                 // MCP 客户端实例
 	tools  []ToolDefinition       // 从服务器发现的工具定义列表
 	status ServerStatus           // 服务器当前运行状态
 }
@@ -29,7 +29,7 @@ type serverState struct {
 // Manager 统一管理所有已配置的 MCP 服务器及其动态工具。
 type Manager struct {
 	mu         sync.RWMutex
-	connectors Connectors           // 支持的传输协议连接器集合
+	connectors Connectors              // 支持的传输协议连接器集合
 	servers    map[string]*serverState // 管理的服务器状态映射
 }
 

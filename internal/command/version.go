@@ -12,7 +12,7 @@ import (
 type VersionCommand struct{}
 
 // Name 返回命令名称。
-func (c *VersionCommand) Name() string        { return "version" }
+func (c *VersionCommand) Name() string { return "version" }
 
 // Description 返回命令描述。
 func (c *VersionCommand) Description() string { return "Show version information" }

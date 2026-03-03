@@ -10,17 +10,17 @@ import (
 
 // Channel 定义了聊天平台对接需要实现的接口。
 type Channel interface {
-	Name() string                                      // 返回通道名称（如 "telegram"）
-	Start(ctx context.Context) error                  // 启动通道连接或监听
-	Stop(ctx context.Context) error                   // 停止通道连接
+	Name() string                                             // 返回通道名称（如 "telegram"）
+	Start(ctx context.Context) error                          // 启动通道连接或监听
+	Stop(ctx context.Context) error                           // 停止通道连接
 	Send(ctx context.Context, msg *bus.OutboundMessage) error // 发送出站消息到平台
-	IsAllowed(senderID string) bool                   // 检查指定的发送者是否有权限使用此通道
+	IsAllowed(senderID string) bool                           // 检查指定的发送者是否有权限使用此通道
 }
 
 // BaseChannel 提供跨不同通道共享的基础功能。
 type BaseChannel struct {
-	Bus       *bus.MessageBus      // 关联的消息总线，用于转发入站消息
-	AllowList map[string]bool      // 允许访问此通道的用户 ID 列表（为空则不限制）
+	Bus       *bus.MessageBus // 关联的消息总线，用于转发入站消息
+	AllowList map[string]bool // 允许访问此通道的用户 ID 列表（为空则不限制）
 }
 
 // IsAllowed 检查发送者 ID 是否在允许名单中。

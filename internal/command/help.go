@@ -10,7 +10,7 @@ import (
 type HelpCommand struct{}
 
 // Name 返回命令名称。
-func (c *HelpCommand) Name() string        { return "help" }
+func (c *HelpCommand) Name() string { return "help" }
 
 // Description 返回命令描述。
 func (c *HelpCommand) Description() string { return "List available slash commands" }

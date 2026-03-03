@@ -33,14 +33,14 @@ type JobState struct {
 
 // Job 表示一个完整的定时任务配置及其状态。
 type Job struct {
-	ID             string   `json:"id"`               // 唯一标识符
-	Name           string   `json:"name"`             // 任务显示名称
-	Enabled        bool     `json:"enabled"`          // 是否处于启用状态
-	Schedule       Schedule `json:"schedule"`         // 调度计划
-	Payload        Payload  `json:"payload"`          // 待执行载荷
-	State          JobState `json:"state"`            // 运行状态
-	CreatedAtMS    int64    `json:"created_at_ms"`    // 创建时间
-	UpdatedAtMS    int64    `json:"updated_at_ms"`    // 更新时间
+	ID             string   `json:"id"`                         // 唯一标识符
+	Name           string   `json:"name"`                       // 任务显示名称
+	Enabled        bool     `json:"enabled"`                    // 是否处于启用状态
+	Schedule       Schedule `json:"schedule"`                   // 调度计划
+	Payload        Payload  `json:"payload"`                    // 待执行载荷
+	State          JobState `json:"state"`                      // 运行状态
+	CreatedAtMS    int64    `json:"created_at_ms"`              // 创建时间
+	UpdatedAtMS    int64    `json:"updated_at_ms"`              // 更新时间
 	DeleteAfterRun bool     `json:"delete_after_run,omitempty"` // 执行完成后是否自动从存储中删除
 }
 

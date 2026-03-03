@@ -40,8 +40,8 @@ type activeSession struct {
 // Service 负责定期执行健康探测，并将结果分发到最近活跃的会话中。
 type Service struct {
 	cfg      Config
-	probe    ProbeFunc        // 健康探测逻辑
-	dispatch DispatchFunc     // 消息分发逻辑
+	probe    ProbeFunc         // 健康探测逻辑
+	dispatch DispatchFunc      // 消息分发逻辑
 	state    *appstate.Manager // 状态管理器，用于持久化活跃信息
 
 	now func() time.Time

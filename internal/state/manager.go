@@ -14,8 +14,8 @@ const heartbeatStateFileMode = 0600
 
 // HeartbeatState 存储最新的活跃聊天目标，用于心跳消息的定向投递。
 type HeartbeatState struct {
-	LastChannel string    `json:"last_channel"` // 最近活跃的消息通道
-	LastChatID  string    `json:"last_chat_id"`  // 最近活跃的聊天 ID
+	LastChannel string    `json:"last_channel"`      // 最近活跃的消息通道
+	LastChatID  string    `json:"last_chat_id"`      // 最近活跃的聊天 ID
 	SeenAt      time.Time `json:"seen_at,omitempty"` // 最近一次活跃的时间戳
 }
 

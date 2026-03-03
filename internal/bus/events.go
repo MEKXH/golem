@@ -14,15 +14,15 @@ type requestIDContextKey struct{}
 
 // InboundMessage 表示从外部通道（如 Telegram、飞书等）接收到的入站消息。
 type InboundMessage struct {
-	Channel   string            // 消息来源通道（如 "telegram"）
-	SenderID  string            // 发送者唯一 ID
-	ChatID    string            // 聊天会话 ID
-	SessionID string            // 显式指定的会话 ID（可选）
-	Content   string            // 消息文本内容
-	Timestamp time.Time         // 接收时间
-	Media     []string          // 附件（如图片 URL）列表
-	Metadata  map[string]any    // 随消息携带的元数据
-	RequestID string            // 用于追踪的请求 ID
+	Channel   string         // 消息来源通道（如 "telegram"）
+	SenderID  string         // 发送者唯一 ID
+	ChatID    string         // 聊天会话 ID
+	SessionID string         // 显式指定的会话 ID（可选）
+	Content   string         // 消息文本内容
+	Timestamp time.Time      // 接收时间
+	Media     []string       // 附件（如图片 URL）列表
+	Metadata  map[string]any // 随消息携带的元数据
+	RequestID string         // 用于追踪的请求 ID
 }
 
 // SessionKey 返回此消息对应的唯一会话标识符。
@@ -35,13 +35,13 @@ func (m *InboundMessage) SessionKey() string {
 
 // OutboundMessage 表示发送给外部通道的出站消息。
 type OutboundMessage struct {
-	Channel   string            // 目标通道
-	ChatID    string            // 目标聊天 ID
-	Content   string            // 消息文本内容
-	ReplyTo   string            // 回复的消息 ID（可选）
-	Media     []string          // 待发送的媒体文件列表
-	Metadata  map[string]any    // 随消息携带的元数据
-	RequestID string            // 关联的请求 ID
+	Channel   string         // 目标通道
+	ChatID    string         // 目标聊天 ID
+	Content   string         // 消息文本内容
+	ReplyTo   string         // 回复的消息 ID（可选）
+	Media     []string       // 待发送的媒体文件列表
+	Metadata  map[string]any // 随消息携带的元数据
+	RequestID string         // 关联的请求 ID
 }
 
 // NewRequestID 生成一个新的 UUID 用于请求追踪。
@@ -68,16 +68,16 @@ func RequestIDFromContext(ctx context.Context) string {
 }
 
 const (
-	SystemChannel            = "system"         // 系统内部专用通道
+	SystemChannel            = "system"          // 系统内部专用通道
 	SystemTypeSubagentResult = "subagent_result" // 系统消息类型：子 Agent 执行结果
 
-	SystemMetaType          = "system_type"          // 元数据键：消息类型
-	SystemMetaTaskID        = "task_id"              // 元数据键：任务 ID
-	SystemMetaTaskLabel     = "task_label"           // 元数据键：任务标签
-	SystemMetaOriginChannel = "origin_channel"       // 元数据键：原始请求通道
-	SystemMetaOriginChatID  = "origin_chat_id"       // 元数据键：原始请求聊天 ID
-	SystemMetaOriginSender  = "origin_sender_id"     // 元数据键：原始发送者 ID
-	SystemMetaStatus        = "status"               // 元数据键：执行状态
+	SystemMetaType          = "system_type"      // 元数据键：消息类型
+	SystemMetaTaskID        = "task_id"          // 元数据键：任务 ID
+	SystemMetaTaskLabel     = "task_label"       // 元数据键：任务标签
+	SystemMetaOriginChannel = "origin_channel"   // 元数据键：原始请求通道
+	SystemMetaOriginChatID  = "origin_chat_id"   // 元数据键：原始请求聊天 ID
+	SystemMetaOriginSender  = "origin_sender_id" // 元数据键：原始发送者 ID
+	SystemMetaStatus        = "status"           // 元数据键：执行状态
 )
 
 // NewSubagentResultInbound 为异步子 Agent 回调创建一个规范化的系统入站消息。

@@ -10,8 +10,9 @@ import (
 
 // MemoryCommand 实现 /memory 命令 — 用于读取长期记忆 (MEMORY.md) 或查询日记条目。
 // 使用方式:
-//   /memory [read] - 读取长期记忆内容
-//   /memory diary [date|recent] - 读取指定日期或最近的日记分录
+//
+//	/memory [read] - 读取长期记忆内容
+//	/memory diary [date|recent] - 读取指定日期或最近的日记分录
 type MemoryCommand struct{}
 
 // Name 返回命令名称。

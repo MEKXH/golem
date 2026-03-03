@@ -36,7 +36,7 @@ type Channel struct {
 	channel.BaseChannel
 	cfg                  *config.TelegramConfig
 	bot                  *tgbotapi.BotAPI
-	transcriber          voice.Transcriber                                                      // 语音转文本服务
+	transcriber          voice.Transcriber                                                                 // 语音转文本服务
 	downloadVoice        func(ctx context.Context, fileID, fileName, mimeType string) (voice.Input, error) // 下载语音回调
 	httpClient           *http.Client
 	transcriptionTimeout time.Duration

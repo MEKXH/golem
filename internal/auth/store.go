@@ -10,10 +10,10 @@ import (
 
 // Credential 存储单个供应商的身份验证凭据（如访问令牌、刷新令牌等）。
 type Credential struct {
-	AccessToken  string    `json:"access_token"`           // 访问令牌
+	AccessToken  string    `json:"access_token"`            // 访问令牌
 	RefreshToken string    `json:"refresh_token,omitempty"` // 刷新令牌（可选）
-	Provider     string    `json:"provider"`               // 供应商名称（如 "openai"）
-	AuthMethod   string    `json:"auth_method"`            // 认证方法（如 "oauth"）
+	Provider     string    `json:"provider"`                // 供应商名称（如 "openai"）
+	AuthMethod   string    `json:"auth_method"`             // 认证方法（如 "oauth"）
 	ExpiresAt    time.Time `json:"expires_at,omitempty"`    // 令牌过期时间
 }
 

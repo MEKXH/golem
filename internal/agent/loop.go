@@ -24,23 +24,23 @@ import (
 
 // Loop 负责管理 Agent 的主处理循环，包括消息处理、模型生成及工具执行。
 type Loop struct {
-	bus           *bus.MessageBus      // 消息总线，用于收发通道消息
-	model         model.ChatModel      // 绑定的聊天模型实现
-	tools         *tools.Registry      // 工具注册表，管理所有可用工具
-	commands      *command.Registry    // 命令注册表，管理斜杠命令
-	mcpManager    *mcp.Manager         // MCP（Model Context Protocol）连接管理器
-	runtimeGuard  *runtimeGuard        // 运行时安全防护，用于权限控制
-	subagents     *SubagentManager     // 子 Agent 管理器，支持任务委派
-	sessions      *session.Manager     // 会话管理器，维护用户历史记录
-	context       *ContextBuilder      // 上下文构建器，准备模型所需的 Prompt
-	config        *config.Config       // 项目全局配置
-	maxIterations int                  // 单条消息允许的最大工具调用迭代次数
-	workspacePath string               // 工作空间根目录路径
-	now           func() time.Time     // 获取当前时间的函数（方便测试）
+	bus           *bus.MessageBus         // 消息总线，用于收发通道消息
+	model         model.ChatModel         // 绑定的聊天模型实现
+	tools         *tools.Registry         // 工具注册表，管理所有可用工具
+	commands      *command.Registry       // 命令注册表，管理斜杠命令
+	mcpManager    *mcp.Manager            // MCP（Model Context Protocol）连接管理器
+	runtimeGuard  *runtimeGuard           // 运行时安全防护，用于权限控制
+	subagents     *SubagentManager        // 子 Agent 管理器，支持任务委派
+	sessions      *session.Manager        // 会话管理器，维护用户历史记录
+	context       *ContextBuilder         // 上下文构建器，准备模型所需的 Prompt
+	config        *config.Config          // 项目全局配置
+	maxIterations int                     // 单条消息允许的最大工具调用迭代次数
+	workspacePath string                  // 工作空间根目录路径
+	now           func() time.Time        // 获取当前时间的函数（方便测试）
 	runtimeMetric *metrics.RuntimeMetrics // 运行时指标收集器
 
 	// OnToolStart 工具开始执行时的回调函数
-	OnToolStart  func(name, args string)
+	OnToolStart func(name, args string)
 	// OnToolFinish 工具执行完成后的回调函数
 	OnToolFinish func(name, result string, err error)
 

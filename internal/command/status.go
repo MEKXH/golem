@@ -18,7 +18,7 @@ import (
 type StatusCommand struct{}
 
 // Name 返回命令名称。
-func (c *StatusCommand) Name() string        { return "status" }
+func (c *StatusCommand) Name() string { return "status" }
 
 // Description 返回命令描述。
 func (c *StatusCommand) Description() string { return "Show runtime status" }
