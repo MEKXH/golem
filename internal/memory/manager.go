@@ -311,7 +311,7 @@ func (m *Manager) collectDiaryFiles() ([]diaryFile, error) {
 			continue
 		}
 		date := strings.TrimSuffix(name, ".md")
-		if _, err := time.Parse("2006-01-02", date); err != nil {
+		if !isValidDate(date) {
 			continue
 		}
 		diaries = append(diaries, diaryFile{
@@ -403,4 +403,24 @@ func clipText(content string, maxLen int) string {
 
 func utf8RuneLen(text string) int {
 	return len([]rune(text))
+}
+
+// isValidDate performs a fast, zero-allocation check to verify a string matches the YYYY-MM-DD format.
+// It skips the expensive leap-year and bounds validation of time.Parse as diary filenames are machine-generated.
+func isValidDate(s string) bool {
+	if len(s) != 10 {
+		return false
+	}
+	if s[4] != '-' || s[7] != '-' {
+		return false
+	}
+	for i := 0; i < 10; i++ {
+		if i == 4 || i == 7 {
+			continue
+		}
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
