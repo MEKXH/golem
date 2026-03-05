@@ -594,7 +594,18 @@ func (m model) View() string {
 
 	if !m.viewport.AtBottom() {
 		scrollIndicator := keyStyle.Copy().Background(lipgloss.Color("172")).Render("↓ Scrolled Up")
-		helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, scrollIndicator)
+
+		usedWidth := lipgloss.Width(helpView)
+		indicatorWidth := lipgloss.Width(scrollIndicator)
+
+		// Subtract the PaddingRight added by helpStyle (assumed to be 2) and leave some margin
+		spacerWidth := m.width - usedWidth - indicatorWidth - 2
+		if spacerWidth > 0 {
+			spacer := strings.Repeat(" ", spacerWidth)
+			helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, spacer, scrollIndicator)
+		} else {
+			helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, scrollIndicator)
+		}
 	}
 
 	helpView = helpStyle.Render(helpView)
