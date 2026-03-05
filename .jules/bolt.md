@@ -25,3 +25,11 @@
 ## 2026-03-10 - Fast Date Validation in Memory Recall
 **Learning:** The memory context recall function `collectDiaryFiles` was using `time.Parse` to validate if a file name was a properly formatted date (`YYYY-MM-DD`). Since this function is called on *every* file in the memory directory on every single interaction turn or memory read, `time.Parse`'s expensive allocations and boundary checks were causing significant overhead (~118ns per check).
 **Action:** Replaced `time.Parse` with a lightweight, manual `isValidDate` function that performs a simple length and character check (taking ~12ns per check). Avoid using `time.Parse` solely for validating simple machine-generated string patterns in high-frequency loops.
+
+## 2026-03-10 - Zero-Allocation UTF8 Counting
+**Learning:** Checking the length of a string in characters via `len([]rune(text))` works but allocates a new slice, causing O(N) memory overhead and GC pressure in hot paths (like keyword tokenization in memory recall).
+**Action:** Use `utf8.RuneCountInString(text)` from the `unicode/utf8` package for a fast, zero-allocation way to count characters.
+
+## 2026-03-10 - Optimized Slice Sorting
+**Learning:** `ReadRecentDiaries` was blindly double-sorting (descending then ascending) regardless of the number of diary files, wasting CPU cycles on unnecessary sorts when the total file count was already below the target `limit`.
+**Action:** Always wrap truncation and double-sorting in a `len(items) > limit` check. When the limit is not exceeded, a single ascending sort is sufficient.

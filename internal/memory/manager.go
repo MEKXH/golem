@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -147,15 +148,21 @@ func (m *Manager) ReadRecentDiaries(limit int) ([]DiaryEntry, error) {
 		return nil, err
 	}
 
-	sort.Slice(diaries, func(i, j int) bool {
-		return diaries[i].date > diaries[j].date
-	})
+	// Optimization: Only do double sorting if we actually need to truncate.
+	// Otherwise, a single ascending sort is sufficient.
 	if len(diaries) > limit {
+		sort.Slice(diaries, func(i, j int) bool {
+			return diaries[i].date > diaries[j].date
+		})
 		diaries = diaries[:limit]
+		sort.Slice(diaries, func(i, j int) bool {
+			return diaries[i].date < diaries[j].date
+		})
+	} else {
+		sort.Slice(diaries, func(i, j int) bool {
+			return diaries[i].date < diaries[j].date
+		})
 	}
-	sort.Slice(diaries, func(i, j int) bool {
-		return diaries[i].date < diaries[j].date
-	})
 
 	out := make([]DiaryEntry, 0, len(diaries))
 	for _, d := range diaries {
@@ -401,8 +408,10 @@ func clipText(content string, maxLen int) string {
 	return strings.TrimSpace(content[:maxLen]) + "..."
 }
 
+// utf8RuneLen returns the number of characters in a string.
+// Optimized to use utf8.RuneCountInString to avoid O(N) memory allocation from casting to a rune slice.
 func utf8RuneLen(text string) int {
-	return len([]rune(text))
+	return utf8.RuneCountInString(text)
 }
 
 // isValidDate performs a fast, zero-allocation check to verify a string matches the YYYY-MM-DD format.
