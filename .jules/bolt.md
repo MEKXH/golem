@@ -21,3 +21,7 @@
 ## 2026-03-10 - Buffered Disk I/O for Session Appends
 **Learning:** The `SessionManager.Append` method was executing unbuffered JSON encoding directly to a file descriptor. When writing multiple messages in one go (such as user input, tool responses, and agent output), this caused a burst of disk I/O syscalls proportional to the number of objects, severely impacting throughput and generating unnecessary CPU wakeups.
 **Action:** Always wrap unbuffered file descriptors with `bufio.NewWriter` before passing them to `json.NewEncoder` (or similar serializers), followed by an explicit `Flush()`. This batches writes into a single syscall, drastically improving performance for multiple small appends.
+
+## 2026-03-10 - Fast Date Validation in Memory Recall
+**Learning:** The memory context recall function `collectDiaryFiles` was using `time.Parse` to validate if a file name was a properly formatted date (`YYYY-MM-DD`). Since this function is called on *every* file in the memory directory on every single interaction turn or memory read, `time.Parse`'s expensive allocations and boundary checks were causing significant overhead (~118ns per check).
+**Action:** Replaced `time.Parse` with a lightweight, manual `isValidDate` function that performs a simple length and character check (taking ~12ns per check). Avoid using `time.Parse` solely for validating simple machine-generated string patterns in high-frequency loops.
