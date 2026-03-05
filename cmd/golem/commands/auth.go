@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/MEKXH/golem/internal/auth"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -153,21 +154,84 @@ func newAuthStatusCmd() *cobra.Command {
 			}
 			sort.Strings(providers)
 
+			var (
+				wProvider = 15
+				wMethod   = 12
+				wStatus   = 15
+				wExpires  = 25
+
+				colHeaderStyle = lipgloss.NewStyle().
+						Foreground(lipgloss.Color("#8E4EC6")). // Purple
+						Bold(true).
+						MarginRight(1)
+
+				providerStyleBase = lipgloss.NewStyle().
+							Width(wProvider).
+							MarginRight(1)
+
+				methodStyleBase = lipgloss.NewStyle().
+						Width(wMethod).
+						MarginRight(1)
+
+				statusStyleBase = lipgloss.NewStyle().
+						Width(wStatus).
+						MarginRight(1)
+
+				expiresStyleBase = lipgloss.NewStyle().
+							Width(wExpires).
+							MarginRight(1)
+
+				okColor      = lipgloss.Color("#2E8B57") // SeaGreen
+				warnColor    = lipgloss.Color("#FFA500") // Orange
+				errorColor   = lipgloss.Color("#FF0000") // Red
+				defaultColor = lipgloss.Color("241")
+			)
+
 			fmt.Println("Authenticated providers:")
+			fmt.Println()
+
+			headers := lipgloss.JoinHorizontal(lipgloss.Top,
+				colHeaderStyle.Width(wProvider).Render("PROVIDER"),
+				colHeaderStyle.Width(wMethod).Render("METHOD"),
+				colHeaderStyle.Width(wStatus).Render("STATUS"),
+				colHeaderStyle.Width(wExpires).Render("EXPIRES"),
+			)
+			fmt.Printf("  %s\n", headers)
+
+			sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).MarginRight(1)
+			separator := lipgloss.JoinHorizontal(lipgloss.Top,
+				sepStyle.Render(strings.Repeat("─", wProvider)),
+				sepStyle.Render(strings.Repeat("─", wMethod)),
+				sepStyle.Render(strings.Repeat("─", wStatus)),
+				sepStyle.Render(strings.Repeat("─", wExpires)),
+			)
+			fmt.Printf("  %s\n", separator)
+
 			for _, p := range providers {
 				cred := store.Credentials[p]
 				status := "active"
+				sColor := okColor
+
 				if cred.IsExpired() {
 					status = "expired"
+					sColor = errorColor
 				} else if cred.NeedsRefresh() {
 					status = "needs_refresh"
+					sColor = warnColor
 				}
 
-				expires := ""
+				expires := "-"
 				if !cred.ExpiresAt.IsZero() {
-					expires = " expires=" + cred.ExpiresAt.Format(time.RFC3339)
+					expires = cred.ExpiresAt.Format(time.RFC3339)
 				}
-				fmt.Printf("- %s method=%s status=%s%s\n", p, cred.AuthMethod, status, expires)
+
+				row := lipgloss.JoinHorizontal(lipgloss.Top,
+					providerStyleBase.Render(truncate(p, wProvider)),
+					methodStyleBase.Foreground(defaultColor).Render(cred.AuthMethod),
+					statusStyleBase.Foreground(sColor).Render(status),
+					expiresStyleBase.Foreground(defaultColor).Render(expires),
+				)
+				fmt.Printf("  %s\n", row)
 			}
 			return nil
 		},
