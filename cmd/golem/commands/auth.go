@@ -144,7 +144,7 @@ func newAuthStatusCmd() *cobra.Command {
 				return fmt.Errorf("load auth store: %w", err)
 			}
 			if len(store.Credentials) == 0 {
-				fmt.Println("No authenticated providers.")
+				fmt.Println("No authenticated providers. Use 'golem auth login --provider <name>' to authenticate.")
 				return nil
 			}
 
