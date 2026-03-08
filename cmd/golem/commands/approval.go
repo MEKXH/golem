@@ -70,7 +70,7 @@ func runApprovalList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if len(requests) == 0 {
-		fmt.Println("No pending approvals.")
+		fmt.Println("No pending approvals. Pending requests will appear here when an agent proposes restricted actions.")
 		return nil
 	}
 
