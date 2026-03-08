@@ -65,7 +65,7 @@ func runMCPStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(cfg.MCP.Servers) == 0 {
-		fmt.Println("No MCP servers configured.")
+		fmt.Println("No MCP servers configured. (Add them in ~/.golem/config.json under 'mcp.servers')")
 		return nil
 	}
 

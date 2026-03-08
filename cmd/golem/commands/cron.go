@@ -127,7 +127,7 @@ func runCronList(cmd *cobra.Command, args []string) error {
 
 	jobs := svc.ListJobs(true)
 	if len(jobs) == 0 {
-		fmt.Println("No scheduled jobs.")
+		fmt.Println("No scheduled jobs. Use 'golem cron add' to create one.")
 		return nil
 	}
 

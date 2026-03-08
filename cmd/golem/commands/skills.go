@@ -94,7 +94,7 @@ func runSkillsList(cmd *cobra.Command, args []string) error {
 
 	skillList := loader.ListSkills()
 	if len(skillList) == 0 {
-		fmt.Println("No skills installed.")
+		fmt.Println("No skills installed. Use 'golem skills install <owner/repo>' to add one.")
 		return nil
 	}
 
@@ -226,7 +226,7 @@ func runSkillsSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(filtered) == 0 {
-		fmt.Println("No matching skills found.")
+		fmt.Println("No matching skills found. Try another search term.")
 		return nil
 	}
 
