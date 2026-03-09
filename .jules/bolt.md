@@ -33,3 +33,7 @@
 ## 2026-03-10 - Optimized Slice Sorting
 **Learning:** `ReadRecentDiaries` was blindly double-sorting (descending then ascending) regardless of the number of diary files, wasting CPU cycles on unnecessary sorts when the total file count was already below the target `limit`.
 **Action:** Always wrap truncation and double-sorting in a `len(items) > limit` check. When the limit is not exceeded, a single ascending sort is sufficient.
+
+## 2025-10-25 - Sort and Slice for Top N Ascending
+**Learning:** `ReadRecentDiaries` was sorting a slice descending, truncating it to N elements, and then sorting it ascending again just to get the top N most recent items in chronological order. This double sorting is unnecessary and wastes CPU cycles.
+**Action:** When you need the top N items sorted in ascending order, sort the entire slice ascending once, and then simply slice the last N elements (`slice = slice[len(slice)-N:]`). This achieves the exact same result with a single sort operation and is significantly faster.

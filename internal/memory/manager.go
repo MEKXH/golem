@@ -148,20 +148,13 @@ func (m *Manager) ReadRecentDiaries(limit int) ([]DiaryEntry, error) {
 		return nil, err
 	}
 
-	// Optimization: Only do double sorting if we actually need to truncate.
-	// Otherwise, a single ascending sort is sufficient.
+	// Optimization: A single ascending sort is sufficient.
+	// We can just slice the last `limit` elements if there are more diaries than `limit`.
+	sort.Slice(diaries, func(i, j int) bool {
+		return diaries[i].date < diaries[j].date
+	})
 	if len(diaries) > limit {
-		sort.Slice(diaries, func(i, j int) bool {
-			return diaries[i].date > diaries[j].date
-		})
-		diaries = diaries[:limit]
-		sort.Slice(diaries, func(i, j int) bool {
-			return diaries[i].date < diaries[j].date
-		})
-	} else {
-		sort.Slice(diaries, func(i, j int) bool {
-			return diaries[i].date < diaries[j].date
-		})
+		diaries = diaries[len(diaries)-limit:]
 	}
 
 	out := make([]DiaryEntry, 0, len(diaries))
