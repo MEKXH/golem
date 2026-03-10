@@ -37,3 +37,7 @@
 ## 2025-10-25 - Sort and Slice for Top N Ascending
 **Learning:** `ReadRecentDiaries` was sorting a slice descending, truncating it to N elements, and then sorting it ascending again just to get the top N most recent items in chronological order. This double sorting is unnecessary and wastes CPU cycles.
 **Action:** When you need the top N items sorted in ascending order, sort the entire slice ascending once, and then simply slice the last N elements (`slice = slice[len(slice)-N:]`). This achieves the exact same result with a single sort operation and is significantly faster.
+
+## 2026-03-10 - Cache ToolInfos in Registry
+**Learning:** `GetToolInfos` was called on every chat turn, dynamically allocating slices and invoking `t.Info(ctx)` for ~15 tools. This is a common pattern in agent frameworks that constantly re-bind tools to models, resulting in unnecessary CPU overhead and garbage collection pressure.
+**Action:** When a method returns a stable list of objects that are only updated infrequently (like at startup during registration), cache the constructed slice. Use `sync.RWMutex` to protect the cache, return shallow copies to prevent caller mutation, and validate the map length (`len(r.tools) == len(infos)`) before storing the cache to prevent race conditions during concurrent updates.
