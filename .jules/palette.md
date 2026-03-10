@@ -9,3 +9,7 @@
 ## 2026-03-07 - Empty State Actions
 **Learning:** Empty states in CLI commands (e.g., "No skills installed", "No scheduled jobs") can leave users frustrated because they don't immediately know how to resolve the state. Providing actionable guidance directly in the empty state message drastically improves discoverability.
 **Action:** When printing an empty state message, always include a helpful call-to-action or suggest the exact command needed to populate the state (e.g., "No scheduled jobs. Use 'golem cron add' to create one.").
+
+## 2026-03-12 - Multibyte String Truncation
+**Learning:** When truncating strings for UI display in Go (especially in CLIs where multi-byte characters like emojis or non-English text might appear), slicing by bytes (e.g. `s[:maxLen]`) can produce invalid UTF-8 characters and break rendering, causing ugly symbols in the terminal.
+**Action:** Always slice by runes by converting to `[]rune(s)` before calculating length or slicing, ensuring that multibyte characters are kept intact when truncating.
