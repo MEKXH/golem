@@ -41,3 +41,7 @@
 ## 2026-03-10 - Cache ToolInfos in Registry
 **Learning:** `GetToolInfos` was called on every chat turn, dynamically allocating slices and invoking `t.Info(ctx)` for ~15 tools. This is a common pattern in agent frameworks that constantly re-bind tools to models, resulting in unnecessary CPU overhead and garbage collection pressure.
 **Action:** When a method returns a stable list of objects that are only updated infrequently (like at startup during registration), cache the constructed slice. Use `sync.RWMutex` to protect the cache, return shallow copies to prevent caller mutation, and validate the map length (`len(r.tools) == len(infos)`) before storing the cache to prevent race conditions during concurrent updates.
+
+## 2026-03-12 - Fast Substring Matching
+**Learning:** `isTimeoutError` in `internal/metrics/runtime.go` used `fmt.Sprint(runErr)` to format errors as strings. It also used `strings.TrimSpace` on string lengths before concatenation. This was incredibly slow compared to a simple `.Error()` check, and required several memory allocations to run.
+**Action:** When a function accepts an error interface, instead of utilizing `fmt.Sprint`, explicitly call `runErr.Error()` to extract the error string if `runErr != nil`. Furthermore, always avoid unneeded substring manipulation via concatenation or padding elimination (like `strings.TrimSpace`) before using `strings.Contains`, as it requires allocation. Independent short-circuited checks against unmutated string targets are often the most performant approach.
