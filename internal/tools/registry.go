@@ -31,9 +31,10 @@ type GuardFunc func(ctx context.Context, name, argsJSON string) (GuardResult, er
 
 // Registry 按名称统一管理所有可调用的工具实例。
 type Registry struct {
-	mu    sync.RWMutex
-	tools map[string]tool.InvokableTool // 工具名称到实例的映射
-	guard GuardFunc                     // 执行前置守卫逻辑
+	mu          sync.RWMutex
+	tools       map[string]tool.InvokableTool // 工具名称到实例的映射
+	guard       GuardFunc                     // 执行前置守卫逻辑
+	cachedInfos []*schema.ToolInfo
 }
 
 // NewRegistry 创建并初始化一个新的工具注册表。
@@ -58,6 +59,7 @@ func (r *Registry) Register(t tool.InvokableTool) error {
 		return fmt.Errorf("tool already registered: %s", info.Name)
 	}
 	r.tools[info.Name] = t
+	r.cachedInfos = nil
 	return nil
 }
 
@@ -86,6 +88,14 @@ func (r *Registry) getGuard() GuardFunc {
 // GetToolInfos 返回所有已注册工具的元数据（Schema），通常用于 LLM 的工具绑定。
 func (r *Registry) GetToolInfos(ctx context.Context) ([]*schema.ToolInfo, error) {
 	r.mu.RLock()
+	// ⚡ Bolt optimization: cache ToolInfos to prevent O(N) allocations and dynamic t.Info() calls on every chat turn.
+	if r.cachedInfos != nil {
+		result := make([]*schema.ToolInfo, len(r.cachedInfos))
+		copy(result, r.cachedInfos)
+		r.mu.RUnlock()
+		return result, nil
+	}
+
 	toolsList := make([]tool.InvokableTool, 0, len(r.tools))
 	for _, t := range r.tools {
 		toolsList = append(toolsList, t)
@@ -100,6 +110,16 @@ func (r *Registry) GetToolInfos(ctx context.Context) ([]*schema.ToolInfo, error)
 		}
 		infos = append(infos, info)
 	}
+
+	r.mu.Lock()
+	// ⚡ Bolt optimization: only update cache if tools map wasn't modified during the unlocked window.
+	if len(r.tools) == len(infos) {
+		r.cachedInfos = make([]*schema.ToolInfo, len(infos))
+		copy(r.cachedInfos, infos)
+	}
+	r.mu.Unlock()
+
+	// Since infos was just created locally, we can return it directly without an extra copy.
 	return infos, nil
 }
 
