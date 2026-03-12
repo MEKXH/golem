@@ -337,13 +337,24 @@ func isTimeoutError(runErr error, result string) bool {
 	if errors.Is(runErr, context.DeadlineExceeded) {
 		return true
 	}
-	lowered := strings.ToLower(strings.TrimSpace(fmt.Sprint(runErr)))
-	if lowered == "<nil>" {
-		lowered = ""
+
+	if runErr != nil {
+		loweredErr := strings.ToLower(runErr.Error())
+		if strings.Contains(loweredErr, "deadline exceeded") ||
+			strings.Contains(loweredErr, "timeout") ||
+			strings.Contains(loweredErr, "timed out") {
+			return true
+		}
 	}
-	loweredResult := strings.ToLower(strings.TrimSpace(result))
-	combined := lowered + " " + loweredResult
-	return strings.Contains(combined, "deadline exceeded") ||
-		strings.Contains(combined, "timeout") ||
-		strings.Contains(combined, "timed out")
+
+	if result != "" {
+		loweredResult := strings.ToLower(result)
+		if strings.Contains(loweredResult, "deadline exceeded") ||
+			strings.Contains(loweredResult, "timeout") ||
+			strings.Contains(loweredResult, "timed out") {
+			return true
+		}
+	}
+
+	return false
 }

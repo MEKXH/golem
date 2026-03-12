@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -106,5 +107,25 @@ func TestRuntimeMetrics_RecordMemoryRecall(t *testing.T) {
 	}
 	if loaded.Memory.TotalItems != 4 {
 		t.Fatalf("expected persisted memory items=4, got %+v", loaded.Memory)
+	}
+}
+
+func TestIsTimeoutError(t *testing.T) {
+	if !isTimeoutError(context.DeadlineExceeded, "") {
+		t.Error("Expected true for DeadlineExceeded")
+	}
+	if !isTimeoutError(errors.New("some timeout occurred"), "") {
+		t.Error("Expected true for timeout error")
+	}
+	if !isTimeoutError(nil, "Error: connection timed out") {
+		t.Error("Expected true for timed out result")
+	}
+	if isTimeoutError(nil, "Error: standard error") {
+		t.Error("Expected false for standard error")
+	}
+
+	largeResult := "Error: something went wrong\n" + strings.Repeat("x", 1000) + "\ntimeout in the end"
+	if !isTimeoutError(nil, largeResult) {
+		t.Error("Expected true for large result with timeout at the end")
 	}
 }
