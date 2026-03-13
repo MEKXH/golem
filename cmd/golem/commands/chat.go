@@ -323,9 +323,7 @@ func (m model) renderMessage(msg *ChatMessage) string {
 					contentBuilder.WriteString(errStyle.Italic(true).Render(fmt.Sprintf("%v", t.Err)))
 				} else {
 					res := t.Result
-					if len(res) > 200 {
-						res = res[:200] + "..."
-					}
+					res = truncate(res, 200)
 					successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#2E8B57"))
 					contentBuilder.WriteString(successStyle.Render(" ✔ "))
 					contentBuilder.WriteString(successStyle.Italic(true).Render(res))
