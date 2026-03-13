@@ -6,6 +6,7 @@ import (
 
 	"github.com/MEKXH/golem/internal/approval"
 	"github.com/MEKXH/golem/internal/config"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -74,9 +75,73 @@ func runApprovalList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	var (
+		wID     = 20
+		wTool   = 15
+		wReason = 40
+		wStatus = 10
+
+		colHeaderStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#8E4EC6")). // Purple
+				Bold(true).
+				MarginRight(1)
+
+		idStyleBase = lipgloss.NewStyle().
+				Width(wID).
+				MarginRight(1)
+
+		toolStyleBase = lipgloss.NewStyle().
+				Width(wTool).
+				MarginRight(1)
+
+		reasonStyleBase = lipgloss.NewStyle().
+				Width(wReason).
+				MarginRight(1)
+
+		statusStyleBase = lipgloss.NewStyle().
+				Width(wStatus).
+				MarginRight(1)
+
+		pendingColor = lipgloss.Color("#FFA500") // Orange
+	)
+
+	fmt.Println("Pending Approvals:")
+	fmt.Println()
+
+	// Render Headers
+	headers := lipgloss.JoinHorizontal(lipgloss.Top,
+		colHeaderStyle.Width(wID).Render("ID"),
+		colHeaderStyle.Width(wTool).Render("TOOL"),
+		colHeaderStyle.Width(wStatus).Render("STATUS"),
+		colHeaderStyle.Width(wReason).Render("REASON"),
+	)
+	fmt.Printf("  %s\n", headers)
+
+	// Render Separator
+	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).MarginRight(1)
+	separator := lipgloss.JoinHorizontal(lipgloss.Top,
+		sepStyle.Render(strings.Repeat("─", wID)),
+		sepStyle.Render(strings.Repeat("─", wTool)),
+		sepStyle.Render(strings.Repeat("─", wStatus)),
+		sepStyle.Render(strings.Repeat("─", wReason)),
+	)
+	fmt.Printf("  %s\n", separator)
+
 	for _, req := range requests {
-		fmt.Printf("%s %s %s\n", req.ID, req.ToolName, req.Status)
+		reason := req.Reason
+		if reason == "" {
+			reason = "-"
+		}
+
+		row := lipgloss.JoinHorizontal(lipgloss.Top,
+			idStyleBase.Render(truncate(req.ID, wID)),
+			toolStyleBase.Render(truncate(req.ToolName, wTool)),
+			statusStyleBase.Foreground(pendingColor).Render(string(req.Status)),
+			reasonStyleBase.Render(truncate(reason, wReason)),
+		)
+		fmt.Printf("  %s\n", row)
 	}
+
 	return nil
 }
 
