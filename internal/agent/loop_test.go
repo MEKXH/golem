@@ -367,7 +367,8 @@ func TestRegisterDefaultTools_GeoSpatialQuerySkippedWithoutDSN(t *testing.T) {
 		t.Fatalf("did not expect geo_spatial_query without DSN, got: %v", names)
 	}
 	if !slices.Contains(names, "geo_info") || !slices.Contains(names, "geo_process") ||
-		!slices.Contains(names, "geo_crs_detect") || !slices.Contains(names, "geo_format_convert") {
+		!slices.Contains(names, "geo_crs_detect") || !slices.Contains(names, "geo_format_convert") ||
+		!slices.Contains(names, "geo_sql_codebook") {
 		t.Fatalf("expected baseline geo tools to stay registered, got: %v", names)
 	}
 }
@@ -388,6 +389,9 @@ func TestRegisterDefaultTools_GeoSpatialQueryRegisteredWithDSN(t *testing.T) {
 	names := loop.tools.Names()
 	if !slices.Contains(names, "geo_spatial_query") {
 		t.Fatalf("expected geo_spatial_query to be registered, got: %v", names)
+	}
+	if !slices.Contains(names, "geo_sql_codebook") {
+		t.Fatalf("expected geo_sql_codebook to be registered, got: %v", names)
 	}
 }
 

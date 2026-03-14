@@ -201,6 +201,9 @@ func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 			func() (tool.InvokableTool, error) {
 				return tools.NewGeoFormatConvertTool(gdalBinDir, l.workspacePath, geoTimeout, geoRestrict)
 			},
+			func() (tool.InvokableTool, error) {
+				return tools.NewGeoSQLCodebookTool(l.workspacePath)
+			},
 		}
 		for _, fn := range geoToolFns {
 			t, err := fn()

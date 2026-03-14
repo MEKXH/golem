@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/MEKXH/golem/internal/geocodebook"
 	"github.com/MEKXH/golem/internal/memory"
 	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/session"
@@ -76,6 +77,13 @@ func (c *ContextBuilder) InvalidateCache(changedPath string) {
 		c.cachedBaseParts = nil
 		return
 	}
+
+	codebookDir := filepath.Join(workspaceAbs, "geo-codebook")
+	rel, err = filepath.Rel(codebookDir, changedAbs)
+	if err == nil && !strings.HasPrefix(rel, "..") {
+		c.cachedBaseParts = nil
+		return
+	}
 }
 
 // BuildSystemPrompt 组装完整的系统提示词 (System Prompt)。
@@ -135,6 +143,10 @@ func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
 	// 注入技能摘要
 	if skillsSummary := skills.NewLoader(c.workspacePath).BuildSkillsSummary(); skillsSummary != "" {
 		parts = append(parts, skillsSummary)
+	}
+
+	if codebookSummary, err := geocodebook.NewLoader(c.workspacePath).BuildSummary(); err == nil && codebookSummary != "" {
+		parts = append(parts, codebookSummary)
 	}
 
 	c.cachedBaseParts = make([]string, len(parts))

@@ -26,21 +26,31 @@ Key things to check:
 - EPSG:4326 (WGS 84) is the most common geographic CRS
 - EPSG:4490 (CGCS2000) is commonly used in China
 
-### Step 3: Inspect PostGIS Before Querying
+### Step 3: Check the Spatial SQL Codebook
+When the task maps to a common PostGIS pattern, inspect the codebook first:
+```
+geo_sql_codebook(action="list", intent="<analysis goal>")
+```
+Render a verified pattern before writing SQL from scratch:
+```
+geo_sql_codebook(action="render", pattern="<pattern_name>", values={...})
+```
+
+### Step 4: Inspect PostGIS Before Querying
 When analysis involves a PostGIS database, inspect the available schema before composing SQL:
 ```
 geo_spatial_query(action="schema")
 ```
 Use the returned tables, columns, geometry types, and SRIDs to write the query.
 
-### Step 4: Execute Spatial SQL
+### Step 5: Execute Spatial SQL
 Run the final read-only SQL only after checking the schema:
 ```
 geo_spatial_query(action="query", sql="SELECT ...")
 ```
 Prefer `SELECT`, `WITH`, or `EXPLAIN` queries only.
 
-### Step 5: Process the Data
+### Step 6: Process the Data
 Use `geo_process` for GDAL operations:
 
 **Reprojection:**
@@ -58,7 +68,7 @@ geo_process(command="gdalwarp", args=["-cutline", "boundary.shp", "-crop_to_cutl
 geo_process(command="ogr2ogr", args=["-f", "GeoJSON", "-t_srs", "EPSG:4326", "output.geojson", "input.shp"])
 ```
 
-### Step 6: Convert Format if Needed
+### Step 7: Convert Format if Needed
 Use `geo_format_convert` for simple format changes:
 ```
 geo_format_convert(input_path="data.shp", output_path="data.geojson")
@@ -68,6 +78,7 @@ geo_format_convert(input_path="data.shp", output_path="data.geojson")
 
 - **Always inspect data before processing** — understanding the CRS and extent prevents errors
 - **Always verify CRS compatibility** before spatial operations
+- **Check the SQL codebook before freeform SQL** — prefer `geo_sql_codebook` lookups and rendered patterns first
 - **Inspect PostGIS schema before querying** — use `geo_spatial_query(action="schema")` before `action="query"`
 - **Prefer EPSG:4326** (WGS 84) for output when no specific CRS is requested
 - **Use GeoPackage (.gpkg)** as the default output format for vectors — it's modern and avoids Shapefile limitations
@@ -93,4 +104,5 @@ geo_format_convert(input_path="data.shp", output_path="data.geojson")
 2. **Don't assume WGS84** — always check with `geo_crs_detect`
 3. **Don't use Shapefile for web** — use GeoJSON or GeoPackage instead
 4. **Don't calculate areas in geographic CRS** — reproject to a local projected CRS first
-5. **Don't guess PostGIS table shapes** — inspect schema first, then query
+5. **Don't skip the codebook** — reuse verified patterns before writing custom SQL
+6. **Don't guess PostGIS table shapes** — inspect schema first, then query

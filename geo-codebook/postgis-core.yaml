@@ -1,0 +1,67 @@
+name: postgis-core
+description: Common verified PostGIS query patterns for geo analysis
+patterns:
+  - name: point-buffer-count
+    description: Count features within a buffer around a point
+    tags: [buffer, count, point, proximity]
+    template: |
+      SELECT COUNT(*) FROM {{target_table}}
+      WHERE ST_DWithin(
+        {{geom_col}}::geography,
+        ST_SetSRID(ST_MakePoint({{lon}}, {{lat}}), 4326)::geography,
+        {{distance_m}}
+      )
+    variables:
+      target_table: { type: table, required: true }
+      geom_col: { type: column, default: geom }
+      lon: { type: float, required: true }
+      lat: { type: float, required: true }
+      distance_m: { type: float, required: true }
+    verified: true
+    success_rate: 0.98
+  - name: nearest-neighbor
+    description: Find the nearest feature to a point
+    tags: [nearest, distance, point]
+    template: |
+      SELECT * FROM {{target_table}}
+      ORDER BY {{geom_col}} <-> ST_SetSRID(ST_MakePoint({{lon}}, {{lat}}), 4326)
+      LIMIT 1
+    variables:
+      target_table: { type: table, required: true }
+      geom_col: { type: column, default: geom }
+      lon: { type: float, required: true }
+      lat: { type: float, required: true }
+    verified: true
+    success_rate: 0.95
+  - name: polygon-contains-point
+    description: Find polygons containing a point
+    tags: [contains, polygon, point]
+    template: |
+      SELECT * FROM {{target_table}}
+      WHERE ST_Contains(
+        {{geom_col}},
+        ST_SetSRID(ST_MakePoint({{lon}}, {{lat}}), 4326)
+      )
+    variables:
+      target_table: { type: table, required: true }
+      geom_col: { type: column, default: geom }
+      lon: { type: float, required: true }
+      lat: { type: float, required: true }
+    verified: true
+    success_rate: 0.94
+  - name: intersects-boundary
+    description: Find features intersecting a named boundary geometry
+    tags: [intersects, boundary, overlay]
+    template: |
+      SELECT t.* FROM {{target_table}} t
+      JOIN {{boundary_table}} b ON ST_Intersects(t.{{geom_col}}, b.{{boundary_geom_col}})
+      WHERE b.{{boundary_name_col}} = '{{boundary_name}}'
+    variables:
+      target_table: { type: table, required: true }
+      boundary_table: { type: table, required: true }
+      geom_col: { type: column, default: geom }
+      boundary_geom_col: { type: column, default: geom }
+      boundary_name_col: { type: column, default: name }
+      boundary_name: { type: string, required: true }
+    verified: true
+    success_rate: 0.92

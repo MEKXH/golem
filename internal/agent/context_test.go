@@ -84,6 +84,31 @@ func TestBuildSystemPrompt_IncludesBuiltinSkillsSummary(t *testing.T) {
 	}
 }
 
+func TestBuildSystemPrompt_IncludesGeoCodebookSummary(t *testing.T) {
+	workspace := t.TempDir()
+	codebookDir := filepath.Join(workspace, "geo-codebook")
+	if err := os.MkdirAll(codebookDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll codebook: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(codebookDir, "patterns.yaml"),
+		[]byte("name: postgis-core\ndescription: Common patterns\npatterns:\n  - name: point-buffer-count\n    description: Count features in a buffer\n    template: SELECT 1\n    verified: true\n    success_rate: 0.98\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile codebook: %v", err)
+	}
+
+	cb := NewContextBuilder(workspace)
+	prompt := cb.BuildSystemPrompt()
+
+	if !strings.Contains(prompt, "Spatial SQL Codebook") {
+		t.Fatalf("expected codebook summary in prompt, got: %s", prompt)
+	}
+	if !strings.Contains(prompt, "point-buffer-count") {
+		t.Fatalf("expected pattern name in prompt, got: %s", prompt)
+	}
+}
+
 func TestBuildMessages_UsesKeywordMemoryRecallWithStats(t *testing.T) {
 	workspace := t.TempDir()
 	memDir := filepath.Join(workspace, "memory")

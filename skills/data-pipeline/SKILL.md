@@ -26,7 +26,14 @@ Use `geo_format_convert` for direct format changes:
 geo_format_convert(input_path="roads.shp", output_path="roads.geojson")
 ```
 
-### Step 3: Inspect PostGIS Before Loading or Querying
+### Step 3: Reuse Verified SQL Patterns First
+When the pipeline targets PostGIS, inspect the codebook before composing custom SQL:
+```
+geo_sql_codebook(action="list", intent="<pipeline validation goal>")
+geo_sql_codebook(action="render", pattern="<pattern_name>", values={...})
+```
+
+### Step 4: Inspect PostGIS Before Loading or Querying
 If the pipeline targets PostGIS, first inspect the visible schema:
 ```
 geo_spatial_query(action="schema")
@@ -40,5 +47,6 @@ geo_spatial_query(action="query", sql="SELECT ...")
 
 - Prefer GeoPackage for intermediate vector outputs.
 - Prefer GeoTIFF for intermediate raster outputs.
+- Reuse verified codebook patterns before writing ad-hoc SQL.
 - Do not mix coordinate systems in the same overlay step.
 - Keep intermediate and final outputs inside the workspace.
