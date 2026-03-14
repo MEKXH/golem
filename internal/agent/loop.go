@@ -217,6 +217,18 @@ func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 				registered = append(registered, info.Name)
 			}
 		}
+		fabricatedTools, err := tools.LoadGeoFabricatedTools(l.workspacePath)
+		if err != nil {
+			return err
+		}
+		for _, fabricatedTool := range fabricatedTools {
+			if err := l.tools.Register(fabricatedTool); err != nil {
+				return err
+			}
+			if info, err := fabricatedTool.Info(context.Background()); err == nil && info != nil && info.Name != "" {
+				registered = append(registered, info.Name)
+			}
+		}
 		if postGISDSN != "" {
 			spatialQueryTool, err := tools.NewGeoSpatialQueryTool(
 				postGISDSN,

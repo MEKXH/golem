@@ -1,6 +1,6 @@
 ---
 name: data-pipeline
-description: Guide agent through geospatial ETL workflows using the built-in geo tools
+description: Guide agent through geospatial ETL workflows using built-in and fabricated geo tools
 ---
 
 ## Data Pipeline Workflow
@@ -49,6 +49,14 @@ Then use read-only SQL to validate the loaded result shape:
 geo_spatial_query(action="query", sql="SELECT ...")
 ```
 
+### Step 5: Fabricate a Reusable Pipeline Tool
+If the ETL step is repetitive and not covered by the built-in geo tools, fabricate a persistent workspace tool:
+- Put the executable script under `tools/geo/scripts/`.
+- Put the manifest under `tools/geo/<tool_name>.yaml`.
+- Use a `geo_` tool name and describe the expected parameters explicitly.
+- Fabricated tool input arrives as JSON on stdin.
+- The tool will register automatically on the next agent startup.
+
 ## Conventions
 
 - Prefer GeoPackage for intermediate vector outputs.
@@ -56,3 +64,4 @@ geo_spatial_query(action="query", sql="SELECT ...")
 - Reuse verified codebook patterns before writing ad-hoc SQL.
 - Do not mix coordinate systems in the same overlay step.
 - Keep intermediate and final outputs inside the workspace.
+- Prefer fabricating reusable ETL helpers only after confirming the built-in geo tools are insufficient.

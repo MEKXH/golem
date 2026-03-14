@@ -1,6 +1,6 @@
 ---
 name: spatial-analysis
-description: Guide agent through geospatial data analysis tasks using built-in GDAL tools
+description: Guide agent through geospatial data analysis tasks using built-in and fabricated geo tools
 ---
 
 ## Spatial Analysis Workflow
@@ -82,6 +82,15 @@ Use `geo_format_convert` for simple format changes:
 geo_format_convert(input_path="data.shp", output_path="data.geojson")
 ```
 
+### Step 9: Fabricate a Missing Persistent Tool
+If the task is recurrent and no built-in tool or verified codebook pattern fits, fabricate a workspace geo tool:
+- Create the script under `tools/geo/scripts/`.
+- Create the manifest under `tools/geo/<tool_name>.yaml`.
+- Use a `geo_` tool name.
+- Declare `name`, `description`, `runner`, `script`, and `parameters` in the manifest.
+- The script will receive tool arguments as JSON on stdin.
+- The fabricated tool will auto-register on the next agent startup.
+
 ## Key Conventions
 
 - **Discover candidate datasets before assuming they already exist** — use `geo_data_catalog` for local, OSM, or STAC discovery.
@@ -89,6 +98,7 @@ geo_format_convert(input_path="data.shp", output_path="data.geojson")
 - **Always verify CRS compatibility** before spatial operations.
 - **Check the SQL codebook before freeform SQL** — prefer `geo_sql_codebook` lookups and rendered patterns first.
 - **Inspect PostGIS schema before querying** — use `geo_spatial_query(action="schema")` before `action="query"`.
+- **Fabricate only when reuse fails** — prefer built-in tools and verified SQL patterns before creating a new persistent tool.
 - **Prefer EPSG:4326** (WGS 84) for output when no specific CRS is requested.
 - **Use GeoPackage (.gpkg)** as the default output format for vectors — it's modern and avoids Shapefile limitations.
 - **Use GeoTIFF (.tif)** as the default output format for rasters.
@@ -103,3 +113,4 @@ geo_format_convert(input_path="data.shp", output_path="data.geojson")
 5. **Don't calculate areas in geographic CRS** — reproject to a local projected CRS first.
 6. **Don't skip the codebook** — reuse verified patterns before writing custom SQL.
 7. **Don't guess PostGIS table shapes** — inspect schema first, then query.
+8. **Don't fabricate one-off tools casually** — only persist a new `geo_*` tool when the capability is reusable.

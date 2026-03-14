@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/MEKXH/golem/internal/geocodebook"
+	"github.com/MEKXH/golem/internal/geotoolfab"
 	"github.com/MEKXH/golem/internal/memory"
 	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/session"
@@ -84,6 +85,13 @@ func (c *ContextBuilder) InvalidateCache(changedPath string) {
 		c.cachedBaseParts = nil
 		return
 	}
+
+	fabricatedToolsDir := filepath.Join(workspaceAbs, "tools", "geo")
+	rel, err = filepath.Rel(fabricatedToolsDir, changedAbs)
+	if err == nil && !strings.HasPrefix(rel, "..") {
+		c.cachedBaseParts = nil
+		return
+	}
 }
 
 // BuildSystemPrompt 组装完整的系统提示词 (System Prompt)。
@@ -147,6 +155,10 @@ func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
 
 	if codebookSummary, err := geocodebook.NewLoader(c.workspacePath).BuildSummary(); err == nil && codebookSummary != "" {
 		parts = append(parts, codebookSummary)
+	}
+
+	if fabricatedSummary := geotoolfab.NewLoader(c.workspacePath).BuildSummary(); fabricatedSummary != "" {
+		parts = append(parts, fabricatedSummary)
 	}
 
 	c.cachedBaseParts = make([]string, len(parts))

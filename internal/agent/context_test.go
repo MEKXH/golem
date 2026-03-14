@@ -109,6 +109,37 @@ func TestBuildSystemPrompt_IncludesGeoCodebookSummary(t *testing.T) {
 	}
 }
 
+func TestBuildSystemPrompt_IncludesGeoToolFabricationGuide(t *testing.T) {
+	workspace := t.TempDir()
+	scriptPath := filepath.Join(workspace, "tools", "geo", "scripts", "sinuosity.py")
+	if err := os.MkdirAll(filepath.Dir(scriptPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll script dir: %v", err)
+	}
+	if err := os.WriteFile(scriptPath, []byte("print('ok')\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile script: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(workspace, "tools", "geo", "geo_sinuosity.yaml"),
+		[]byte("name: geo_sinuosity\ndescription: River sinuosity calculator\nrunner: python\nscript: tools/geo/scripts/sinuosity.py\nparameters:\n  input_path:\n    type: string\n    required: true\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile manifest: %v", err)
+	}
+
+	cb := NewContextBuilder(workspace)
+	prompt := cb.BuildSystemPrompt()
+
+	if !strings.Contains(prompt, "Geo Tool Fabrication") {
+		t.Fatalf("expected geo tool fabrication guide in prompt, got: %s", prompt)
+	}
+	if !strings.Contains(prompt, "tools/geo/scripts/") || !strings.Contains(prompt, "tools/geo/<tool_name>.yaml") {
+		t.Fatalf("expected fabrication file paths in prompt, got: %s", prompt)
+	}
+	if !strings.Contains(prompt, "geo_sinuosity") {
+		t.Fatalf("expected installed fabricated tool in prompt, got: %s", prompt)
+	}
+}
+
 func TestBuildMessages_UsesKeywordMemoryRecallWithStats(t *testing.T) {
 	workspace := t.TempDir()
 	memDir := filepath.Join(workspace, "memory")

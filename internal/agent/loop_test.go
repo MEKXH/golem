@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -392,6 +394,50 @@ func TestRegisterDefaultTools_GeoSpatialQueryRegisteredWithDSN(t *testing.T) {
 	}
 	if !slices.Contains(names, "geo_sql_codebook") {
 		t.Fatalf("expected geo_sql_codebook to be registered, got: %v", names)
+	}
+}
+
+func TestRegisterDefaultTools_LoadsWorkspaceGeoFabricatedTools(t *testing.T) {
+	workspace := t.TempDir()
+	scriptPath := filepath.Join(workspace, "tools", "geo", "scripts", "sinuosity.py")
+	if err := os.MkdirAll(filepath.Dir(scriptPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(scriptPath, []byte("# placeholder\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	manifestPath := filepath.Join(workspace, "tools", "geo", "geo_sinuosity.yaml")
+	manifest := `name: geo_sinuosity
+description: Compute sinuosity ratio for river centerlines.
+runner: python
+script: tools/geo/scripts/sinuosity.py
+parameters:
+  input_path:
+    type: string
+    description: Path to the input vector file.
+    required: true
+`
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.Agents.Defaults.WorkspaceMode = "path"
+	cfg.Agents.Defaults.Workspace = workspace
+	cfg.Tools.Geo.Enabled = true
+
+	loop, err := NewLoop(cfg, bus.NewMessageBus(1), nil)
+	if err != nil {
+		t.Fatalf("NewLoop error: %v", err)
+	}
+	if err := loop.RegisterDefaultTools(cfg); err != nil {
+		t.Fatalf("RegisterDefaultTools error: %v", err)
+	}
+
+	names := loop.tools.Names()
+	if !slices.Contains(names, "geo_sinuosity") {
+		t.Fatalf("expected fabricated geo tool to be registered, got: %v", names)
 	}
 }
 

@@ -1,6 +1,6 @@
 ---
 name: remote-sensing
-description: Guide agent through raster and satellite imagery analysis with the built-in geo tools
+description: Guide agent through raster and satellite imagery analysis with the built-in and fabricated geo tools
 ---
 
 ## Remote Sensing Workflow
@@ -41,6 +41,14 @@ If the result needs a simpler output format, use:
 geo_format_convert(input_path="result.tif", output_path="result.png")
 ```
 
+### Step 6: Fabricate a Reusable Raster Tool
+If a raster workflow is clearly reusable and not covered by `geo_process` or `geo_format_convert`, fabricate a workspace geo tool:
+- Store the script in `tools/geo/scripts/`.
+- Store the manifest in `tools/geo/<tool_name>.yaml`.
+- Use a `geo_` name and declare the parameter schema.
+- Tool arguments arrive as JSON on stdin.
+- The fabricated tool auto-registers on the next agent startup.
+
 ## Conventions
 
 - Discover candidate imagery before guessing URLs or collections.
@@ -48,3 +56,4 @@ geo_format_convert(input_path="result.tif", output_path="result.png")
 - Reproject before area or distance analysis.
 - Prefer GeoTIFF for raster outputs unless the user asks for a web-ready preview.
 - Keep all generated outputs inside the workspace.
+- Prefer persistent fabricated raster tools only when the operation is reusable across scenes or projects.

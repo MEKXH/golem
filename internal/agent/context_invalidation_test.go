@@ -70,6 +70,19 @@ func TestContextBuilder_InvalidateCache_Selective(t *testing.T) {
 
 	_ = cb.buildBaseSystemPromptParts()
 
+	fabricatedToolManifest := filepath.Join(workspace, "tools", "geo", "geo_sinuosity.yaml")
+	cb.InvalidateCache(fabricatedToolManifest)
+
+	cb.mu.RLock()
+	if cb.cachedBaseParts != nil {
+		cb.mu.RUnlock()
+		t.Errorf("cache was NOT cleared for fabricated geo tool manifest: %s", fabricatedToolManifest)
+	} else {
+		cb.mu.RUnlock()
+	}
+
+	_ = cb.buildBaseSystemPromptParts()
+
 	cb.InvalidateCache("")
 
 	cb.mu.RLock()
