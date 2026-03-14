@@ -183,6 +183,64 @@ func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 		registered = append(registered, info.Name)
 	}
 
+	if cfg.Tools.Geo.Enabled {
+		gdalBinDir := cfg.Tools.Geo.GdalBinDir
+		geoTimeout := cfg.Tools.Geo.TimeoutSeconds
+		geoRestrict := cfg.Tools.Geo.RestrictToWorkspace
+		postGISDSN := strings.TrimSpace(cfg.Tools.Geo.PostGISDSN)
+		geoToolFns := []func() (tool.InvokableTool, error){
+			func() (tool.InvokableTool, error) {
+				return tools.NewGeoInfoTool(gdalBinDir, l.workspacePath, geoRestrict)
+			},
+			func() (tool.InvokableTool, error) {
+				return tools.NewGeoProcessTool(gdalBinDir, l.workspacePath, geoTimeout, geoRestrict)
+			},
+			func() (tool.InvokableTool, error) {
+				return tools.NewGeoCrsDetectTool(gdalBinDir, l.workspacePath, geoRestrict)
+			},
+			func() (tool.InvokableTool, error) {
+				return tools.NewGeoFormatConvertTool(gdalBinDir, l.workspacePath, geoTimeout, geoRestrict)
+			},
+		}
+		for _, fn := range geoToolFns {
+			t, err := fn()
+			if err != nil {
+				return err
+			}
+			if err := l.tools.Register(t); err != nil {
+				return err
+			}
+			if info, err := t.Info(context.Background()); err == nil && info != nil && info.Name != "" {
+				registered = append(registered, info.Name)
+			}
+		}
+		if postGISDSN != "" {
+			spatialQueryTool, err := tools.NewGeoSpatialQueryTool(
+				postGISDSN,
+				cfg.Tools.Geo.QueryTimeoutSeconds,
+				cfg.Tools.Geo.MaxRows,
+				cfg.Tools.Geo.ReadOnly,
+			)
+			if err != nil {
+				return err
+			}
+			if err := l.tools.Register(spatialQueryTool); err != nil {
+				return err
+			}
+			if info, err := spatialQueryTool.Info(context.Background()); err == nil && info != nil && info.Name != "" {
+				registered = append(registered, info.Name)
+			}
+		} else {
+			slog.Info("geo_spatial_query not registered", "reason", "tools.geo.postgis_dsn is empty")
+		}
+		slog.Info(
+			"geo tools registered",
+			"gdal_bin_dir", gdalBinDir,
+			"restrict_to_workspace", geoRestrict,
+			"spatial_query_enabled", postGISDSN != "",
+		)
+	}
+
 	if len(cfg.MCP.Servers) > 0 {
 		mgr := mcp.NewManager(cfg.MCP.Servers, mcp.DefaultConnectors())
 		if err := mgr.Connect(context.Background()); err != nil {

@@ -349,6 +349,48 @@ func TestRegisterDefaultTools_WithWebSearchKey(t *testing.T) {
 	}
 }
 
+func TestRegisterDefaultTools_GeoSpatialQuerySkippedWithoutDSN(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Tools.Geo.Enabled = true
+	cfg.Tools.Geo.PostGISDSN = ""
+
+	loop, err := NewLoop(cfg, bus.NewMessageBus(1), nil)
+	if err != nil {
+		t.Fatalf("NewLoop error: %v", err)
+	}
+	if err := loop.RegisterDefaultTools(cfg); err != nil {
+		t.Fatalf("RegisterDefaultTools error: %v", err)
+	}
+
+	names := loop.tools.Names()
+	if slices.Contains(names, "geo_spatial_query") {
+		t.Fatalf("did not expect geo_spatial_query without DSN, got: %v", names)
+	}
+	if !slices.Contains(names, "geo_info") || !slices.Contains(names, "geo_process") ||
+		!slices.Contains(names, "geo_crs_detect") || !slices.Contains(names, "geo_format_convert") {
+		t.Fatalf("expected baseline geo tools to stay registered, got: %v", names)
+	}
+}
+
+func TestRegisterDefaultTools_GeoSpatialQueryRegisteredWithDSN(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Tools.Geo.Enabled = true
+	cfg.Tools.Geo.PostGISDSN = "postgres://golem:golem@localhost:5432/golem?sslmode=disable"
+
+	loop, err := NewLoop(cfg, bus.NewMessageBus(1), nil)
+	if err != nil {
+		t.Fatalf("NewLoop error: %v", err)
+	}
+	if err := loop.RegisterDefaultTools(cfg); err != nil {
+		t.Fatalf("RegisterDefaultTools error: %v", err)
+	}
+
+	names := loop.tools.Names()
+	if !slices.Contains(names, "geo_spatial_query") {
+		t.Fatalf("expected geo_spatial_query to be registered, got: %v", names)
+	}
+}
+
 func TestProcessForChannel_UsesCustomSessionKey(t *testing.T) {
 	loop := newTestLoop(t, nil, 1)
 	result, err := loop.ProcessForChannel(context.Background(), "gateway", "s42", "api", "hello")

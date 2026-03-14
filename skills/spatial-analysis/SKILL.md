@@ -1,0 +1,96 @@
+---
+name: spatial-analysis
+description: Guide agent through geospatial data analysis tasks using built-in GDAL tools
+---
+
+## Spatial Analysis Workflow
+
+When the user requests geospatial data analysis, follow this structured approach:
+
+### Step 1: Inspect the Data
+Use `geo_info` to understand the data before doing anything:
+```
+geo_info(path="<file_path>")
+```
+This tells you the format, CRS, extent, and size.
+
+### Step 2: Check the CRS
+Use `geo_crs_detect` to verify the coordinate reference system:
+```
+geo_crs_detect(path="<file_path>")
+```
+Key things to check:
+- Is it geographic (lat/lon in degrees) or projected (in metres/feet)?
+- For area calculations, you need a projected CRS (e.g., UTM zone)
+- For distance calculations, you need a projected CRS
+- EPSG:4326 (WGS 84) is the most common geographic CRS
+- EPSG:4490 (CGCS2000) is commonly used in China
+
+### Step 3: Inspect PostGIS Before Querying
+When analysis involves a PostGIS database, inspect the available schema before composing SQL:
+```
+geo_spatial_query(action="schema")
+```
+Use the returned tables, columns, geometry types, and SRIDs to write the query.
+
+### Step 4: Execute Spatial SQL
+Run the final read-only SQL only after checking the schema:
+```
+geo_spatial_query(action="query", sql="SELECT ...")
+```
+Prefer `SELECT`, `WITH`, or `EXPLAIN` queries only.
+
+### Step 5: Process the Data
+Use `geo_process` for GDAL operations:
+
+**Reprojection:**
+```
+geo_process(command="gdalwarp", args=["-t_srs", "EPSG:4326", "input.tif", "output.tif"])
+```
+
+**Raster clipping:**
+```
+geo_process(command="gdalwarp", args=["-cutline", "boundary.shp", "-crop_to_cutline", "input.tif", "clipped.tif"])
+```
+
+**Vector conversion with reprojection:**
+```
+geo_process(command="ogr2ogr", args=["-f", "GeoJSON", "-t_srs", "EPSG:4326", "output.geojson", "input.shp"])
+```
+
+### Step 6: Convert Format if Needed
+Use `geo_format_convert` for simple format changes:
+```
+geo_format_convert(input_path="data.shp", output_path="data.geojson")
+```
+
+## Key Conventions
+
+- **Always inspect data before processing** — understanding the CRS and extent prevents errors
+- **Always verify CRS compatibility** before spatial operations
+- **Inspect PostGIS schema before querying** — use `geo_spatial_query(action="schema")` before `action="query"`
+- **Prefer EPSG:4326** (WGS 84) for output when no specific CRS is requested
+- **Use GeoPackage (.gpkg)** as the default output format for vectors — it's modern and avoids Shapefile limitations
+- **Use GeoTIFF (.tif)** as the default output format for rasters
+- **China-specific**: CGCS2000 (EPSG:4490) is geometrically almost identical to WGS84 but is the official CRS
+
+## Common Format Extensions
+
+| Extension | Format | Type |
+|-----------|--------|------|
+| .tif/.tiff | GeoTIFF | Raster |
+| .shp | ESRI Shapefile | Vector |
+| .geojson | GeoJSON | Vector |
+| .gpkg | GeoPackage | Both |
+| .kml | KML | Vector |
+| .nc | NetCDF | Raster |
+| .csv | CSV (with geometry) | Vector |
+| .parquet | GeoParquet | Vector |
+
+## Common Mistakes to Avoid
+
+1. **Don't mix CRS** — always reproject to a common CRS before overlay analysis
+2. **Don't assume WGS84** — always check with `geo_crs_detect`
+3. **Don't use Shapefile for web** — use GeoJSON or GeoPackage instead
+4. **Don't calculate areas in geographic CRS** — reproject to a local projected CRS first
+5. **Don't guess PostGIS table shapes** — inspect schema first, then query

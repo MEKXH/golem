@@ -206,6 +206,19 @@ type ToolsConfig struct {
 	Web   WebToolsConfig  `mapstructure:"web"`
 	Exec  ExecToolConfig  `mapstructure:"exec"`
 	Voice VoiceToolConfig `mapstructure:"voice"`
+	Geo   GeoToolsConfig  `mapstructure:"geo"`
+}
+
+// GeoToolsConfig GIS/geospatial tool settings.
+type GeoToolsConfig struct {
+	Enabled             bool   `mapstructure:"enabled"`
+	GdalBinDir          string `mapstructure:"gdal_bin_dir"`
+	RestrictToWorkspace bool   `mapstructure:"restrict_to_workspace"`
+	TimeoutSeconds      int    `mapstructure:"timeout_seconds"`
+	PostGISDSN          string `mapstructure:"postgis_dsn"`
+	QueryTimeoutSeconds int    `mapstructure:"query_timeout_seconds"`
+	MaxRows             int    `mapstructure:"max_rows"`
+	ReadOnly            bool   `mapstructure:"readonly"`
 }
 
 // WebToolsConfig web tool settings
@@ -341,6 +354,16 @@ func DefaultConfig() *Config {
 				Provider:       "openai",
 				Model:          "gpt-4o-mini-transcribe",
 				TimeoutSeconds: 30,
+			},
+			Geo: GeoToolsConfig{
+				Enabled:             true,
+				GdalBinDir:          "",
+				RestrictToWorkspace: true,
+				TimeoutSeconds:      120,
+				PostGISDSN:          "",
+				QueryTimeoutSeconds: 30,
+				MaxRows:             200,
+				ReadOnly:            true,
 			},
 		},
 		Heartbeat: HeartbeatConfig{
@@ -627,6 +650,25 @@ func (c *Config) Validate() error {
 	}
 	if c.Tools.Voice.TimeoutSeconds == 0 {
 		c.Tools.Voice.TimeoutSeconds = 30
+	}
+
+	if c.Tools.Geo.TimeoutSeconds < 0 {
+		return fmt.Errorf("tools.geo.timeout_seconds must not be negative, got %d", c.Tools.Geo.TimeoutSeconds)
+	}
+	if c.Tools.Geo.TimeoutSeconds == 0 {
+		c.Tools.Geo.TimeoutSeconds = 120
+	}
+	if c.Tools.Geo.QueryTimeoutSeconds < 0 {
+		return fmt.Errorf("tools.geo.query_timeout_seconds must not be negative, got %d", c.Tools.Geo.QueryTimeoutSeconds)
+	}
+	if c.Tools.Geo.QueryTimeoutSeconds == 0 {
+		c.Tools.Geo.QueryTimeoutSeconds = 30
+	}
+	if c.Tools.Geo.MaxRows < 0 {
+		return fmt.Errorf("tools.geo.max_rows must not be negative, got %d", c.Tools.Geo.MaxRows)
+	}
+	if c.Tools.Geo.MaxRows == 0 {
+		c.Tools.Geo.MaxRows = 200
 	}
 
 	return nil
