@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/command"
 	"github.com/MEKXH/golem/internal/config"
+	"github.com/MEKXH/golem/internal/geopipeline"
 	"github.com/MEKXH/golem/internal/mcp"
 	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/session"
@@ -432,6 +434,8 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 	messages := l.context.BuildMessages(sess.GetHistory(50), msg.Content, msg.Media)
 
 	var finalContent string
+	learnedGeoSteps := make([]geopipeline.Step, 0)
+	hasGeoFailure := false
 
 	for i := 0; i < l.maxIterations; i++ {
 		if l.model == nil {
@@ -457,8 +461,10 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 		messages = append(messages, resp)
 
 		type toolResult struct {
-			index int
-			msg   *schema.Message
+			index   int
+			msg     *schema.Message
+			step    geopipeline.Step
+			success bool
 		}
 
 		resultChan := make(chan toolResult, len(resp.ToolCalls))
@@ -533,6 +539,11 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 						Content:    result,
 						ToolCallID: tc.ID,
 					},
+					step: geopipeline.Step{
+						Tool:     tc.Function.Name,
+						ArgsJSON: tc.Function.Arguments,
+					},
+					success: err == nil,
 				}
 			}(i, tc)
 		}
@@ -544,9 +555,25 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 		results := make([]*schema.Message, len(resp.ToolCalls))
 		for res := range resultChan {
 			results[res.index] = res.msg
+			if strings.HasPrefix(res.step.Tool, "geo_") {
+				if res.success {
+					learnedGeoSteps = append(learnedGeoSteps, res.step)
+				} else {
+					hasGeoFailure = true
+				}
+			}
 		}
 
 		messages = append(messages, results...)
+	}
+
+	if len(learnedGeoSteps) > 0 && !hasGeoFailure {
+		recorder := geopipeline.NewRecorder(l.workspacePath)
+		if err := recorder.Save(msg.Content, learnedGeoSteps); err != nil {
+			slog.Warn("failed to save learned geo pipeline", "request_id", msg.RequestID, "error", err)
+		} else {
+			l.context.InvalidateCache(filepath.Join(l.workspacePath, "pipelines", "geo"))
+		}
 	}
 
 	if finalContent == "" {

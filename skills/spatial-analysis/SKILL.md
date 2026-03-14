@@ -1,6 +1,6 @@
 ---
 name: spatial-analysis
-description: Guide agent through geospatial data analysis tasks using built-in and fabricated geo tools
+description: Guide agent through geospatial data analysis tasks using built-in, learned, and fabricated geo tools
 ---
 
 ## Spatial Analysis Workflow
@@ -27,90 +27,38 @@ Use `geo_crs_detect` to verify the coordinate reference system:
 ```
 geo_crs_detect(path="<file_path>")
 ```
-Key things to check:
-- Is it geographic (lat/lon in degrees) or projected (in metres/feet)?
-- For area calculations, you need a projected CRS (e.g., UTM zone)
-- For distance calculations, you need a projected CRS
-- EPSG:4326 (WGS 84) is the most common geographic CRS
-- EPSG:4490 (CGCS2000) is commonly used in China
 
-### Step 4: Check the Spatial SQL Codebook
+### Step 4: Reuse Learned Pipelines First
+Before inventing a new multi-step flow, check whether the workspace already contains a similar learned geo pipeline in `pipelines/geo/`.
+Reuse the same tool sequence when the goal is materially similar.
+
+### Step 5: Check the Spatial SQL Codebook
 When the task maps to a common PostGIS pattern, inspect the codebook first:
 ```
 geo_sql_codebook(action="list", intent="<analysis goal>")
-```
-Render a verified pattern before writing SQL from scratch:
-```
 geo_sql_codebook(action="render", pattern="<pattern_name>", values={...})
 ```
 
-### Step 5: Inspect PostGIS Before Querying
+### Step 6: Inspect PostGIS Before Querying
 When analysis involves a PostGIS database, inspect the available schema before composing SQL:
 ```
 geo_spatial_query(action="schema")
-```
-Use the returned tables, columns, geometry types, and SRIDs to write the query.
-
-### Step 6: Execute Spatial SQL
-Run the final read-only SQL only after checking the schema:
-```
 geo_spatial_query(action="query", sql="SELECT ...")
 ```
-Prefer `SELECT`, `WITH`, or `EXPLAIN` queries only.
 
-### Step 7: Process the Data
-Use `geo_process` for GDAL operations:
+### Step 7: Process and Convert Data
+Use `geo_process` for GDAL/OGR operations and `geo_format_convert` for direct format changes.
 
-**Reprojection:**
-```
-geo_process(command="gdalwarp", args=["-t_srs", "EPSG:4326", "input.tif", "output.tif"])
-```
-
-**Raster clipping:**
-```
-geo_process(command="gdalwarp", args=["-cutline", "boundary.shp", "-crop_to_cutline", "input.tif", "clipped.tif"])
-```
-
-**Vector conversion with reprojection:**
-```
-geo_process(command="ogr2ogr", args=["-f", "GeoJSON", "-t_srs", "EPSG:4326", "output.geojson", "input.shp"])
-```
-
-### Step 8: Convert Format if Needed
-Use `geo_format_convert` for simple format changes:
-```
-geo_format_convert(input_path="data.shp", output_path="data.geojson")
-```
-
-### Step 9: Fabricate a Missing Persistent Tool
-If the task is recurrent and no built-in tool or verified codebook pattern fits, fabricate a workspace geo tool:
+### Step 8: Fabricate a Missing Persistent Tool
+If the task is recurrent and no learned pipeline, built-in tool, or verified codebook pattern fits, fabricate a workspace geo tool:
 - Create the script under `tools/geo/scripts/`.
 - Create the manifest under `tools/geo/<tool_name>.yaml`.
 - Use a `geo_` tool name.
-- Declare `name`, `description`, `runner`, `script`, and `parameters` in the manifest.
 - The script will receive tool arguments as JSON on stdin.
 - The fabricated tool will auto-register on the next agent startup.
 
 ## Key Conventions
 
-- **Discover candidate datasets before assuming they already exist** — use `geo_data_catalog` for local, OSM, or STAC discovery.
-- **Always inspect data before processing** — understanding the CRS and extent prevents errors.
-- **Always verify CRS compatibility** before spatial operations.
-- **Check the SQL codebook before freeform SQL** — prefer `geo_sql_codebook` lookups and rendered patterns first.
-- **Inspect PostGIS schema before querying** — use `geo_spatial_query(action="schema")` before `action="query"`.
-- **Fabricate only when reuse fails** — prefer built-in tools and verified SQL patterns before creating a new persistent tool.
-- **Prefer EPSG:4326** (WGS 84) for output when no specific CRS is requested.
-- **Use GeoPackage (.gpkg)** as the default output format for vectors — it's modern and avoids Shapefile limitations.
-- **Use GeoTIFF (.tif)** as the default output format for rasters.
-- **China-specific**: CGCS2000 (EPSG:4490) is geometrically almost identical to WGS84 but is the official CRS.
-
-## Common Mistakes to Avoid
-
-1. **Don't guess where the data is** — search local, OSM, or STAC sources first.
-2. **Don't mix CRS** — always reproject to a common CRS before overlay analysis.
-3. **Don't assume WGS84** — always check with `geo_crs_detect`.
-4. **Don't use Shapefile for web** — use GeoJSON or GeoPackage instead.
-5. **Don't calculate areas in geographic CRS** — reproject to a local projected CRS first.
-6. **Don't skip the codebook** — reuse verified patterns before writing custom SQL.
-7. **Don't guess PostGIS table shapes** — inspect schema first, then query.
-8. **Don't fabricate one-off tools casually** — only persist a new `geo_*` tool when the capability is reusable.
+- Prefer reusing learned pipelines before fabricating a new tool.
+- Prefer built-in tools and verified SQL patterns before creating a persistent tool.
+- Keep generated outputs inside the workspace.

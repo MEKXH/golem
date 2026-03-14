@@ -1,6 +1,6 @@
 ---
 name: remote-sensing
-description: Guide agent through raster and satellite imagery analysis with the built-in and fabricated geo tools
+description: Guide agent through raster and satellite imagery analysis with the built-in, learned, and fabricated geo tools
 ---
 
 ## Remote Sensing Workflow
@@ -8,52 +8,25 @@ description: Guide agent through raster and satellite imagery analysis with the 
 Use this skill when the task involves satellite imagery, raster products, vegetation indices, terrain, or image preprocessing.
 
 ### Step 1: Discover Candidate Imagery
-If the user does not already provide raster files, discover likely datasets first:
-```
-geo_data_catalog(action="stac_search", collections=["sentinel-2-l2a"], bbox=[minLon,minLat,maxLon,maxLat], limit=5)
-geo_data_catalog(action="local_scan", path="<workspace path>")
-```
+If the user does not already provide raster files, discover likely datasets first with `geo_data_catalog`.
 
-### Step 2: Inspect the Raster
-Start with:
-```
-geo_info(path="<raster_path>")
-```
+### Step 2: Inspect and Verify CRS
+Start with `geo_info` and `geo_crs_detect`.
 
-### Step 3: Verify CRS Before Raster Math
-Check whether the raster is in the right coordinate system:
-```
-geo_crs_detect(path="<raster_path>")
-```
-Reproject first when the downstream analysis requires a projected CRS.
+### Step 3: Reuse Learned Pipelines First
+Before creating a new raster workflow, inspect whether `pipelines/geo/` already captures a similar scene-prep or raster-analysis sequence.
 
 ### Step 4: Use GDAL for Raster Processing
-Typical operations go through `geo_process`:
-```
-geo_process(command="gdalwarp", args=["-t_srs", "EPSG:4326", "input.tif", "output.tif"])
-geo_process(command="gdaldem", args=["slope", "dem.tif", "slope.tif"])
-geo_process(command="gdal_translate", args=["-of", "GTiff", "input.vrt", "output.tif"])
-```
+Typical operations go through `geo_process`.
 
 ### Step 5: Convert Deliverables
-If the result needs a simpler output format, use:
-```
-geo_format_convert(input_path="result.tif", output_path="result.png")
-```
+Use `geo_format_convert` when the result needs a simpler output format.
 
 ### Step 6: Fabricate a Reusable Raster Tool
-If a raster workflow is clearly reusable and not covered by `geo_process` or `geo_format_convert`, fabricate a workspace geo tool:
-- Store the script in `tools/geo/scripts/`.
-- Store the manifest in `tools/geo/<tool_name>.yaml`.
-- Use a `geo_` name and declare the parameter schema.
-- Tool arguments arrive as JSON on stdin.
-- The fabricated tool auto-registers on the next agent startup.
+If a raster workflow is clearly reusable and not covered by learned pipelines or built-in tools, fabricate a workspace geo tool under `tools/geo/`.
 
 ## Conventions
 
-- Discover candidate imagery before guessing URLs or collections.
-- Inspect before processing.
-- Reproject before area or distance analysis.
+- Prefer learned pipelines before fabricating a new raster tool.
 - Prefer GeoTIFF for raster outputs unless the user asks for a web-ready preview.
 - Keep all generated outputs inside the workspace.
-- Prefer persistent fabricated raster tools only when the operation is reusable across scenes or projects.

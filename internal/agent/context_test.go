@@ -140,6 +140,31 @@ func TestBuildSystemPrompt_IncludesGeoToolFabricationGuide(t *testing.T) {
 	}
 }
 
+func TestBuildSystemPrompt_IncludesLearnedGeoPipelines(t *testing.T) {
+	workspace := t.TempDir()
+	pipelinesDir := filepath.Join(workspace, "pipelines", "geo")
+	if err := os.MkdirAll(pipelinesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll pipelines: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(pipelinesDir, "pipeline-1.yaml"),
+		[]byte("id: pipeline-1\ngoal: analyze river sinuosity\ncreated_at: \"2026-03-14T21:30:00Z\"\nsteps:\n  - tool: geo_info\n    args_json: '{\"path\":\"river.geojson\"}'\n  - tool: geo_sinuosity\n    args_json: '{\"input_path\":\"river.geojson\"}'\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile pipeline: %v", err)
+	}
+
+	cb := NewContextBuilder(workspace)
+	prompt := cb.BuildSystemPrompt()
+
+	if !strings.Contains(prompt, "Learned Geo Pipelines") {
+		t.Fatalf("expected learned pipelines section in prompt, got: %s", prompt)
+	}
+	if !strings.Contains(prompt, "analyze river sinuosity") || !strings.Contains(prompt, "geo_sinuosity") {
+		t.Fatalf("expected learned pipeline summary in prompt, got: %s", prompt)
+	}
+}
+
 func TestBuildMessages_UsesKeywordMemoryRecallWithStats(t *testing.T) {
 	workspace := t.TempDir()
 	memDir := filepath.Join(workspace, "memory")

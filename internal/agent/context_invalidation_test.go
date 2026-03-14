@@ -83,6 +83,19 @@ func TestContextBuilder_InvalidateCache_Selective(t *testing.T) {
 
 	_ = cb.buildBaseSystemPromptParts()
 
+	learnedPipelineFile := filepath.Join(workspace, "pipelines", "geo", "pipeline-1.yaml")
+	cb.InvalidateCache(learnedPipelineFile)
+
+	cb.mu.RLock()
+	if cb.cachedBaseParts != nil {
+		cb.mu.RUnlock()
+		t.Errorf("cache was NOT cleared for learned geo pipeline file: %s", learnedPipelineFile)
+	} else {
+		cb.mu.RUnlock()
+	}
+
+	_ = cb.buildBaseSystemPromptParts()
+
 	cb.InvalidateCache("")
 
 	cb.mu.RLock()

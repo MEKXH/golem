@@ -145,6 +145,45 @@ func (m *multiTurnMockModel) BindTools(toolInfos []*schema.ToolInfo) error {
 	return nil
 }
 
+type geoPipelineMockModel struct {
+	callCount int
+}
+
+func (m *geoPipelineMockModel) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
+	m.callCount++
+	if m.callCount == 1 {
+		return &schema.Message{
+			Role:    schema.Assistant,
+			Content: "",
+			ToolCalls: []schema.ToolCall{
+				{
+					ID: "geo_call_1",
+					Function: schema.FunctionCall{
+						Name:      "geo_info",
+						Arguments: `{"path":"river.geojson"}`,
+					},
+				},
+				{
+					ID: "geo_call_2",
+					Function: schema.FunctionCall{
+						Name:      "geo_sinuosity",
+						Arguments: `{"input_path":"river.geojson"}`,
+					},
+				},
+			},
+		}, nil
+	}
+	return &schema.Message{Role: schema.Assistant, Content: "Pipeline complete"}, nil
+}
+
+func (m *geoPipelineMockModel) Stream(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.StreamReader[*schema.Message], error) {
+	return nil, nil
+}
+
+func (m *geoPipelineMockModel) BindTools(toolInfos []*schema.ToolInfo) error {
+	return nil
+}
+
 // alwaysToolCallModel always returns a tool call, never a final response.
 type alwaysToolCallModel struct {
 	callCount int
@@ -189,6 +228,18 @@ func (t *testTool) InvokableRun(ctx context.Context, args string, opts ...tool.O
 	return "tool executed successfully", nil
 }
 
+type namedTestTool struct {
+	name string
+}
+
+func (t *namedTestTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{Name: t.name, Desc: "A named test tool"}, nil
+}
+
+func (t *namedTestTool) InvokableRun(ctx context.Context, args string, opts ...tool.Option) (string, error) {
+	return "ok", nil
+}
+
 // newTestLoop creates a Loop with the given model, maxIterations, and a temp workspace.
 func newTestLoop(t *testing.T, chatModel model.ChatModel, maxIterations int) *Loop {
 	t.Helper()
@@ -224,6 +275,43 @@ func TestProcessDirect_WithToolCalls(t *testing.T) {
 
 	if mockModel.callCount != 2 {
 		t.Errorf("expected model to be called 2 times, got %d", mockModel.callCount)
+	}
+}
+
+func TestProcessDirect_LearnsGeoPipelineFromSuccessfulToolSequence(t *testing.T) {
+	mockModel := &geoPipelineMockModel{}
+	loop := newTestLoop(t, mockModel, 10)
+
+	if err := loop.tools.Register(&namedTestTool{name: "geo_info"}); err != nil {
+		t.Fatalf("failed to register geo_info: %v", err)
+	}
+	if err := loop.tools.Register(&namedTestTool{name: "geo_sinuosity"}); err != nil {
+		t.Fatalf("failed to register geo_sinuosity: %v", err)
+	}
+
+	result, err := loop.ProcessDirect(context.Background(), "analyze river sinuosity")
+	if err != nil {
+		t.Fatalf("ProcessDirect returned error: %v", err)
+	}
+	if result != "Pipeline complete" {
+		t.Fatalf("expected final response, got %q", result)
+	}
+
+	matches, err := filepath.Glob(filepath.Join(loop.workspacePath, "pipelines", "geo", "*.yaml"))
+	if err != nil {
+		t.Fatalf("Glob() error = %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("expected 1 learned geo pipeline, got %d", len(matches))
+	}
+
+	body, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	text := string(body)
+	if !strings.Contains(text, "geo_info") || !strings.Contains(text, "geo_sinuosity") {
+		t.Fatalf("expected learned tool sequence in pipeline record, got %s", text)
 	}
 }
 
