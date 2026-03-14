@@ -100,22 +100,29 @@ func runSkillsList(cmd *cobra.Command, args []string) error {
 
 	wName := 20
 	wSource := 12
+	wDesc := 30
+
+	colHeaderStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#8E4EC6")). // Purple
+		Bold(true).
+		MarginRight(1)
 
 	nameStyle := lipgloss.NewStyle().Width(wName).MarginRight(1)
 	sourceStyle := lipgloss.NewStyle().Width(wSource).MarginRight(1)
-	descStyle := lipgloss.NewStyle()
+	descStyle := lipgloss.NewStyle().Width(wDesc)
 
 	headers := lipgloss.JoinHorizontal(lipgloss.Top,
-		nameStyle.Render("NAME"),
-		sourceStyle.Render("SOURCE"),
-		descStyle.Render("DESCRIPTION"),
+		colHeaderStyle.Width(wName).Render("NAME"),
+		colHeaderStyle.Width(wSource).Render("SOURCE"),
+		colHeaderStyle.Width(wDesc).Render("DESCRIPTION"),
 	)
 	fmt.Printf("  %s\n", headers)
 
+	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).MarginRight(1)
 	separator := lipgloss.JoinHorizontal(lipgloss.Top,
-		nameStyle.Render(strings.Repeat("-", wName)),
-		sourceStyle.Render(strings.Repeat("-", wSource)),
-		descStyle.Render(strings.Repeat("-", 30)),
+		sepStyle.Render(strings.Repeat("─", wName)),
+		sepStyle.Render(strings.Repeat("─", wSource)),
+		sepStyle.Render(strings.Repeat("─", wDesc)),
 	)
 	fmt.Printf("  %s\n", separator)
 
@@ -232,22 +239,29 @@ func runSkillsSearch(cmd *cobra.Command, args []string) error {
 
 	wName := 20
 	wRepo := 32
+	wDesc := 30
+
+	colHeaderStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#8E4EC6")). // Purple
+		Bold(true).
+		MarginRight(1)
 
 	nameStyle := lipgloss.NewStyle().Width(wName).MarginRight(1)
 	repoStyle := lipgloss.NewStyle().Width(wRepo).MarginRight(1)
-	descStyle := lipgloss.NewStyle()
+	descStyle := lipgloss.NewStyle().Width(wDesc)
 
 	headers := lipgloss.JoinHorizontal(lipgloss.Top,
-		nameStyle.Render("NAME"),
-		repoStyle.Render("REPOSITORY"),
-		descStyle.Render("DESCRIPTION"),
+		colHeaderStyle.Width(wName).Render("NAME"),
+		colHeaderStyle.Width(wRepo).Render("REPOSITORY"),
+		colHeaderStyle.Width(wDesc).Render("DESCRIPTION"),
 	)
 	fmt.Printf("  %s\n", headers)
 
+	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).MarginRight(1)
 	separator := lipgloss.JoinHorizontal(lipgloss.Top,
-		nameStyle.Render(strings.Repeat("-", wName)),
-		repoStyle.Render(strings.Repeat("-", wRepo)),
-		descStyle.Render(strings.Repeat("-", 30)),
+		sepStyle.Render(strings.Repeat("─", wName)),
+		sepStyle.Render(strings.Repeat("─", wRepo)),
+		sepStyle.Render(strings.Repeat("─", wDesc)),
 	)
 	fmt.Printf("  %s\n", separator)
 
