@@ -7,8 +7,14 @@ description: Guide agent through geospatial ETL workflows using the built-in geo
 
 Use this skill for geospatial ETL tasks: ingest, normalize, convert, reproject, and prepare datasets for analysis.
 
-### Step 1: Inspect Every Input
-For each source file:
+### Step 1: Discover and Inspect Inputs
+Start by locating candidate datasets:
+```
+geo_data_catalog(action="local_scan", path="<workspace path>")
+geo_data_catalog(action="overpass_search", bbox=[minLon,minLat,maxLon,maxLat], tags={"amenity":"school"}, limit=10)
+geo_data_catalog(action="stac_search", collections=["sentinel-2-l2a"], bbox=[minLon,minLat,maxLon,maxLat], limit=5)
+```
+Then inspect each selected file:
 ```
 geo_info(path="<input_path>")
 geo_crs_detect(path="<input_path>")
