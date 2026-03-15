@@ -45,3 +45,7 @@
 ## 2026-03-12 - Fast Substring Matching
 **Learning:** `isTimeoutError` in `internal/metrics/runtime.go` used `fmt.Sprint(runErr)` to format errors as strings. It also used `strings.TrimSpace` on string lengths before concatenation. This was incredibly slow compared to a simple `.Error()` check, and required several memory allocations to run.
 **Action:** When a function accepts an error interface, instead of utilizing `fmt.Sprint`, explicitly call `runErr.Error()` to extract the error string if `runErr != nil`. Furthermore, always avoid unneeded substring manipulation via concatenation or padding elimination (like `strings.TrimSpace`) before using `strings.Contains`, as it requires allocation. Independent short-circuited checks against unmutated string targets are often the most performant approach.
+
+## 2026-03-14 - Global strings.NewReplacer
+**Learning:** `strings.NewReplacer` allocates memory and has non-trivial initialization logic. Creating a new instance on every invocation in hot paths (like generating session file paths on every message or parsing workflow goals) causes redundant O(N) allocations and CPU overhead, as confirmed by benchmarks (2573 ns/op down to 692.0 ns/op).
+**Action:** When a string replacer uses a static set of search-and-replace pairs, cache the `strings.Replacer` instance as a global or package-level variable. `strings.Replacer` is safe for concurrent use, making it ideal for caching.
