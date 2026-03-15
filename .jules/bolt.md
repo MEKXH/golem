@@ -49,3 +49,6 @@
 ## 2026-03-14 - Global strings.NewReplacer
 **Learning:** `strings.NewReplacer` allocates memory and has non-trivial initialization logic. Creating a new instance on every invocation in hot paths (like generating session file paths on every message or parsing workflow goals) causes redundant O(N) allocations and CPU overhead, as confirmed by benchmarks (2573 ns/op down to 692.0 ns/op).
 **Action:** When a string replacer uses a static set of search-and-replace pairs, cache the `strings.Replacer` instance as a global or package-level variable. `strings.Replacer` is safe for concurrent use, making it ideal for caching.
+## 2026-03-20 - Fast Substring Matching Iteration 2
+**Learning:** `isTimeoutError` in `internal/metrics/runtime.go` used `strings.ToLower()` to perform case-insensitive substring searches. This caused unnecessary memory allocations since both the error string and the result string were converted to entirely new lowercase strings on the heap before using `strings.Contains`.
+**Action:** When a function needs case-insensitive substring matching on hot paths without modifying the original strings, introduce a custom zero-allocation search loop (like `containsIgnoreCase`) that performs in-place case conversion on individual bytes/runes. This prevents O(N) allocation per call.

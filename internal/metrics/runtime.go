@@ -339,22 +339,56 @@ func isTimeoutError(runErr error, result string) bool {
 	}
 
 	if runErr != nil {
-		loweredErr := strings.ToLower(runErr.Error())
-		if strings.Contains(loweredErr, "deadline exceeded") ||
-			strings.Contains(loweredErr, "timeout") ||
-			strings.Contains(loweredErr, "timed out") {
+		errStr := runErr.Error()
+		if containsIgnoreCase(errStr, "deadline exceeded") ||
+			containsIgnoreCase(errStr, "timeout") ||
+			containsIgnoreCase(errStr, "timed out") {
 			return true
 		}
 	}
 
 	if result != "" {
-		loweredResult := strings.ToLower(result)
-		if strings.Contains(loweredResult, "deadline exceeded") ||
-			strings.Contains(loweredResult, "timeout") ||
-			strings.Contains(loweredResult, "timed out") {
+		if containsIgnoreCase(result, "deadline exceeded") ||
+			containsIgnoreCase(result, "timeout") ||
+			containsIgnoreCase(result, "timed out") {
 			return true
 		}
 	}
 
+	return false
+}
+
+// containsIgnoreCase performs a fast, zero-allocation substring check ignoring case.
+// It assumes the target substring only contains ASCII characters (which is true for our use cases).
+func containsIgnoreCase(s, substr string) bool {
+	sLen := len(s)
+	subLen := len(substr)
+	if subLen == 0 {
+		return true
+	}
+	if sLen < subLen {
+		return false
+	}
+
+	for i := 0; i <= sLen-subLen; i++ {
+		match := true
+		for j := 0; j < subLen; j++ {
+			c1 := s[i+j]
+			c2 := substr[j]
+			if c1 >= 'A' && c1 <= 'Z' {
+				c1 += 'a' - 'A'
+			}
+			if c2 >= 'A' && c2 <= 'Z' {
+				c2 += 'a' - 'A'
+			}
+			if c1 != c2 {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
 	return false
 }
