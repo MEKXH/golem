@@ -3,6 +3,7 @@ package geocodebook
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -147,6 +148,21 @@ patterns:
 	}
 }
 
+func TestWorkspaceCodebook_HasAtLeast30Patterns(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	workspace := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", ".."))
+
+	matches, err := NewLoader(workspace).ListPatterns("", 100)
+	if err != nil {
+		t.Fatalf("ListPatterns() error = %v", err)
+	}
+	if len(matches) < 30 {
+		t.Fatalf("expected at least 30 workspace codebook patterns, got %d", len(matches))
+	}
+}
 func writeTestCodebook(t *testing.T, workspace, content string) {
 	t.Helper()
 	dir := filepath.Join(workspace, "geo-codebook")
