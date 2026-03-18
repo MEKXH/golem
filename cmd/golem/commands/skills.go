@@ -233,7 +233,7 @@ func runSkillsSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(filtered) == 0 {
-		fmt.Println("No matching skills found. Try another search term.")
+		fmt.Println("No matching skills found. Try another search term, or use 'golem skills search' to list all available skills.")
 		return nil
 	}
 
