@@ -104,6 +104,7 @@ func newAuthLoginCmd() *cobra.Command {
 
 func newAuthLogoutCmd() *cobra.Command {
 	var provider string
+	var yes bool
 
 	cmd := &cobra.Command{
 		Use:   "logout",
@@ -111,6 +112,16 @@ func newAuthLogoutCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p := strings.TrimSpace(provider)
 			if p == "" {
+				if !yes {
+					fmt.Print("Are you sure you want to log out from all providers? [y/N] ")
+					var response string
+					fmt.Scanln(&response)
+					response = strings.ToLower(strings.TrimSpace(response))
+					if response != "y" && response != "yes" {
+						fmt.Println("Logout cancelled.")
+						return nil
+					}
+				}
 				if err := auth.DeleteAllCredentials(); err != nil {
 					return fmt.Errorf("delete all credentials: %w", err)
 				}
@@ -131,6 +142,7 @@ func newAuthLogoutCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&provider, "provider", "p", "", "Provider name")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Skip confirmation prompt")
 	return cmd
 }
 

@@ -158,8 +158,10 @@ description: "Demo skill from test server"
 		t.Fatalf("expected search result in output, got: %s", outSearch)
 	}
 
+	cmd := newSkillsRemoveCmd()
+	_ = cmd.Flags().Set("yes", "true")
 	outRemove := captureOutput(t, func() {
-		if err := runSkillsRemove(nil, []string{"demo-skill"}); err != nil {
+		if err := runSkillsRemove(cmd, []string{"demo-skill"}); err != nil {
 			t.Fatalf("runSkillsRemove: %v", err)
 		}
 	})

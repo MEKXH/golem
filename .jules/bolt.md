@@ -45,3 +45,15 @@
 ## 2026-03-12 - Fast Substring Matching
 **Learning:** `isTimeoutError` in `internal/metrics/runtime.go` used `fmt.Sprint(runErr)` to format errors as strings. It also used `strings.TrimSpace` on string lengths before concatenation. This was incredibly slow compared to a simple `.Error()` check, and required several memory allocations to run.
 **Action:** When a function accepts an error interface, instead of utilizing `fmt.Sprint`, explicitly call `runErr.Error()` to extract the error string if `runErr != nil`. Furthermore, always avoid unneeded substring manipulation via concatenation or padding elimination (like `strings.TrimSpace`) before using `strings.Contains`, as it requires allocation. Independent short-circuited checks against unmutated string targets are often the most performant approach.
+
+## 2026-03-14 - Global strings.NewReplacer
+**Learning:** `strings.NewReplacer` allocates memory and has non-trivial initialization logic. Creating a new instance on every invocation in hot paths (like generating session file paths on every message or parsing workflow goals) causes redundant O(N) allocations and CPU overhead, as confirmed by benchmarks (2573 ns/op down to 692.0 ns/op).
+**Action:** When a string replacer uses a static set of search-and-replace pairs, cache the `strings.Replacer` instance as a global or package-level variable. `strings.Replacer` is safe for concurrent use, making it ideal for caching.
+
+## 2026-03-17 - Zero-Allocation Substring Search
+**Learning:** `isTimeoutError` in `internal/metrics/runtime.go` used `strings.ToLower` to convert entire error or result strings to lowercase before checking for timeout keywords with `strings.Contains`. When a tool execution (like a web request) returned a large output, this caused massive O(N) memory allocations (e.g., 100KB string = 100KB allocation).
+**Action:** Replace `strings.ToLower` followed by `strings.Contains` with a custom zero-allocation `containsIgnoreCase` function when checking for short, static ASCII keywords within large strings. This avoids unnecessary GC pressure and speeds up execution significantly on large inputs (e.g., from ~250k ns/op and 106KB alloc down to ~280k ns/op with 0 allocations).
+
+## 2026-03-18 - Zero-Allocation String Truncation by Rune
+**Learning:** The `truncate` function in `cmd/golem/commands/cron.go` used `runes := []rune(s)` to safely truncate strings containing multi-byte characters to a specific rune count. For large strings, this cast caused an unnecessary O(N) memory allocation and slice creation, simply to count characters.
+**Action:** To safely truncate strings by rune length without allocating memory, use a `for idx := range s` loop. Since `range` iterates over a string by runes, you can count the iterations and use the byte index (`idx`) to slice the original string directly (`s[:targetByteIdx]`). This maintains O(1) memory and O(maxLen) time complexity.
