@@ -275,3 +275,35 @@ func TestBuildSystemPrompt_RecordsShownSkillsTelemetry(t *testing.T) {
 		t.Fatalf("expected shown counter to be recorded, got %+v", snapshot.Skills["spatial-analysis"])
 	}
 }
+
+func TestBuildMessages_IncludesReplayReadyGeoReuseHints(t *testing.T) {
+	workspace := t.TempDir()
+	pipelinesDir := filepath.Join(workspace, "pipelines", "geo")
+	if err := os.MkdirAll(pipelinesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll pipelines: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(pipelinesDir, "pipeline-land-change.yaml"),
+		[]byte("id: pipeline-land-change\ngoal: analyze land use change\ncreated_at: \"2026-03-14T21:30:00Z\"\nsteps:\n  - tool: geo_data_catalog\n    args_json: '{\"action\":\"stac_search\",\"collections\":[\"sentinel-2-l2a\"]}'\n  - tool: geo_process\n    args_json: '{\"command\":\"gdalwarp\",\"args\":[\"-t_srs\",\"EPSG:3857\"]}'\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile pipeline: %v", err)
+	}
+
+	cb := NewContextBuilder(workspace)
+	msgs := cb.BuildMessages(nil, "analyze land use change in a new area", nil)
+	if len(msgs) < 2 {
+		t.Fatalf("expected at least 2 messages, got %d", len(msgs))
+	}
+
+	sys := msgs[0].Content
+	if !strings.Contains(sys, "Relevant Learned Geo Pipelines") {
+		t.Fatalf("expected relevant learned pipelines section in prompt, got: %s", sys)
+	}
+	if !strings.Contains(sys, "needs_parameter_update=true") {
+		t.Fatalf("expected parameter-aware reuse hint in prompt, got: %s", sys)
+	}
+	if !strings.Contains(sys, `{"action":"stac_search","collections":["sentinel-2-l2a"]}`) {
+		t.Fatalf("expected example args json in prompt, got: %s", sys)
+	}
+}

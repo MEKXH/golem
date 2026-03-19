@@ -224,16 +224,22 @@ func (c *ContextBuilder) buildRelevantLearnedGeoPipelinesSection(query string) s
 		return ""
 	}
 
+	reuseCandidates := geopipeline.BuildReuseCandidates(matches)
+	if len(reuseCandidates) == 0 {
+		return ""
+	}
+
 	var sb strings.Builder
 	sb.WriteString("## Relevant Learned Geo Pipelines\n\n")
-	for _, match := range matches {
-		tools := make([]string, 0, len(match.Steps))
-		for _, step := range match.Steps {
-			if strings.TrimSpace(step.Tool) != "" {
-				tools = append(tools, step.Tool)
+	for _, candidate := range reuseCandidates {
+		sb.WriteString(fmt.Sprintf("- **%s**\n", candidate.Goal))
+		for _, step := range candidate.Steps {
+			sb.WriteString(fmt.Sprintf("  step=%s needs_parameter_update=%t", step.Tool, step.NeedsParameterUpdate))
+			if step.ExampleArgsJSON != "" {
+				sb.WriteString(fmt.Sprintf(" example_args=%s", step.ExampleArgsJSON))
 			}
+			sb.WriteString("\n")
 		}
-		sb.WriteString(fmt.Sprintf("- **%s**: %s\n", match.Goal, strings.Join(tools, " -> ")))
 	}
 	return strings.TrimSpace(sb.String())
 }
