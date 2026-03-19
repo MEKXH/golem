@@ -127,7 +127,7 @@ func runCronList(cmd *cobra.Command, args []string) error {
 
 	jobs := svc.ListJobs(true)
 	if len(jobs) == 0 {
-		fmt.Println("No scheduled jobs.")
+		fmt.Println("No scheduled jobs. Use 'golem cron add' to create one.")
 		return nil
 	}
 
@@ -372,8 +372,12 @@ func runCronNow(cmd *cobra.Command, args []string) error {
 }
 
 func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
-	return s[:maxLen-3] + "..."
+	if maxLen <= 3 {
+		return string(runes[:maxLen])
+	}
+	return string(runes[:maxLen-3]) + "..."
 }

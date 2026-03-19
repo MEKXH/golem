@@ -8,15 +8,11 @@ import (
 // TestContextBuilder_InvalidateCache_Selective verifies that InvalidateCache
 // only clears the cache when relevant files are modified.
 func TestContextBuilder_InvalidateCache_Selective(t *testing.T) {
-	// 1. Setup workspace and context builder
 	workspace := t.TempDir()
 	cb := NewContextBuilder(workspace)
 
-	// 2. Populate cache
-	// buildBaseSystemPromptParts populates cachedBaseParts
 	_ = cb.buildBaseSystemPromptParts()
 
-	// Verify cache is populated
 	cb.mu.RLock()
 	if cb.cachedBaseParts == nil {
 		cb.mu.RUnlock()
@@ -24,7 +20,6 @@ func TestContextBuilder_InvalidateCache_Selective(t *testing.T) {
 	}
 	cb.mu.RUnlock()
 
-	// 3. Invalidate with unrelated file (should NOT clear cache)
 	unrelatedFile := filepath.Join(workspace, "src", "main.go")
 	cb.InvalidateCache(unrelatedFile)
 
@@ -36,7 +31,6 @@ func TestContextBuilder_InvalidateCache_Selective(t *testing.T) {
 		cb.mu.RUnlock()
 	}
 
-	// 4. Invalidate with related file (IDENTITY.md) (should clear cache)
 	identityFile := filepath.Join(workspace, "IDENTITY.md")
 	cb.InvalidateCache(identityFile)
 
@@ -48,10 +42,8 @@ func TestContextBuilder_InvalidateCache_Selective(t *testing.T) {
 		cb.mu.RUnlock()
 	}
 
-	// Repopulate
 	_ = cb.buildBaseSystemPromptParts()
 
-	// 5. Invalidate with skill file (should clear cache)
 	skillFile := filepath.Join(workspace, "skills", "weather", "SKILL.md")
 	cb.InvalidateCache(skillFile)
 
@@ -63,10 +55,47 @@ func TestContextBuilder_InvalidateCache_Selective(t *testing.T) {
 		cb.mu.RUnlock()
 	}
 
-	// Repopulate
 	_ = cb.buildBaseSystemPromptParts()
 
-	// 6. Invalidate with empty path (force invalidation) (should clear cache)
+	codebookFile := filepath.Join(workspace, "geo-codebook", "postgis-core.yaml")
+	cb.InvalidateCache(codebookFile)
+
+	cb.mu.RLock()
+	if cb.cachedBaseParts != nil {
+		cb.mu.RUnlock()
+		t.Errorf("cache was NOT cleared for codebook file: %s", codebookFile)
+	} else {
+		cb.mu.RUnlock()
+	}
+
+	_ = cb.buildBaseSystemPromptParts()
+
+	fabricatedToolManifest := filepath.Join(workspace, "tools", "geo", "geo_sinuosity.yaml")
+	cb.InvalidateCache(fabricatedToolManifest)
+
+	cb.mu.RLock()
+	if cb.cachedBaseParts != nil {
+		cb.mu.RUnlock()
+		t.Errorf("cache was NOT cleared for fabricated geo tool manifest: %s", fabricatedToolManifest)
+	} else {
+		cb.mu.RUnlock()
+	}
+
+	_ = cb.buildBaseSystemPromptParts()
+
+	learnedPipelineFile := filepath.Join(workspace, "pipelines", "geo", "pipeline-1.yaml")
+	cb.InvalidateCache(learnedPipelineFile)
+
+	cb.mu.RLock()
+	if cb.cachedBaseParts != nil {
+		cb.mu.RUnlock()
+		t.Errorf("cache was NOT cleared for learned geo pipeline file: %s", learnedPipelineFile)
+	} else {
+		cb.mu.RUnlock()
+	}
+
+	_ = cb.buildBaseSystemPromptParts()
+
 	cb.InvalidateCache("")
 
 	cb.mu.RLock()

@@ -323,9 +323,7 @@ func (m model) renderMessage(msg *ChatMessage) string {
 					contentBuilder.WriteString(errStyle.Italic(true).Render(fmt.Sprintf("%v", t.Err)))
 				} else {
 					res := t.Result
-					if len(res) > 200 {
-						res = res[:200] + "..."
-					}
+					res = truncate(res, 200)
 					successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#2E8B57"))
 					contentBuilder.WriteString(successStyle.Render(" ✔ "))
 					contentBuilder.WriteString(successStyle.Italic(true).Render(res))
@@ -594,7 +592,18 @@ func (m model) View() string {
 
 	if !m.viewport.AtBottom() {
 		scrollIndicator := keyStyle.Copy().Background(lipgloss.Color("172")).Render("↓ Scrolled Up")
-		helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, scrollIndicator)
+
+		usedWidth := lipgloss.Width(helpView)
+		indicatorWidth := lipgloss.Width(scrollIndicator)
+
+		// Subtract the PaddingRight added by helpStyle (assumed to be 2) and leave some margin
+		spacerWidth := m.width - usedWidth - indicatorWidth - 2
+		if spacerWidth > 0 {
+			spacer := strings.Repeat(" ", spacerWidth)
+			helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, spacer, scrollIndicator)
+		} else {
+			helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, scrollIndicator)
+		}
 	}
 
 	helpView = helpStyle.Render(helpView)

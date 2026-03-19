@@ -178,6 +178,16 @@ Main file: `~/.golem/config.json`
       "provider": "openai",
       "model": "gpt-4o-mini-transcribe",
       "timeout_seconds": 30
+    },
+    "geo": {
+      "enabled": false,
+      "gdal_bin_dir": "",
+      "restrict_to_workspace": true,
+      "timeout_seconds": 120,
+      "postgis_dsn": "",
+      "query_timeout_seconds": 30,
+      "max_rows": 200,
+      "readonly": true
     }
   },
   "gateway": { "host": "0.0.0.0", "port": 18790, "token": "" },
@@ -267,6 +277,14 @@ Provider selection logic:
 | `tools.voice.provider` | string | `openai` | when enabled, must be `openai` |
 | `tools.voice.model` | string | `gpt-4o-mini-transcribe` | OpenAI-compatible model |
 | `tools.voice.timeout_seconds` | int | `30` | non-negative; `0` resets to `30` |
+| `tools.geo.enabled` | bool | `false` | registers Geo tools when enabled |
+| `tools.geo.gdal_bin_dir` | string | `""` | optional directory containing GDAL executables |
+| `tools.geo.restrict_to_workspace` | bool | `true` | blocks Geo file paths outside workspace |
+| `tools.geo.timeout_seconds` | int | `120` | non-negative; `0` resets to `120` |
+| `tools.geo.postgis_dsn` | string | `""` | enables `geo_spatial_query` when set |
+| `tools.geo.query_timeout_seconds` | int | `30` | non-negative; `0` resets to `30` |
+| `tools.geo.max_rows` | int | `200` | non-negative; `0` resets to `200` |
+| `tools.geo.readonly` | bool | `true` | uses read-only PostGIS transactions when possible |
 
 ## 5.6 `policy`, `mcp`
 
@@ -519,6 +537,25 @@ Registered by default:
 | `subagent` | `task`, `label`, route fields | Sync subagent task |
 | `workflow` | `goal`, `mode`, `subtasks`, `label` | Built-in orchestration for sequential/parallel subtask execution with per-step summary |
 | `mcp.<server>.<tool>` | MCP tool-specific JSON args | Dynamically registered from healthy MCP servers |
+
+Geo tools are registered only when `tools.geo.enabled=true`:
+
+| Tool | Core arguments | Behavior |
+| --- | --- | --- |
+| `geo_info` | `path` | Inspects a raster/vector file and returns format, CRS, extent, and size |
+| `geo_process` | `command`, `args` | Runs whitelisted GDAL/OGR commands inside workspace and timeout boundaries |
+| `geo_crs_detect` | `path` | Detects CRS, projection name, unit, and geographic/projected status |
+| `geo_format_convert` | `input_path`, `output_path`, `output_format` | Converts geospatial formats using `ogr2ogr` or `gdal_translate` |
+| `geo_data_catalog` | `action`, discovery args | Finds local Geo files or remote datasets via Overpass/STAC |
+| `geo_sql_codebook` | `action`, `intent`, `pattern`, `values` | Lists and renders reusable spatial SQL patterns from `geo-codebook/` |
+| `geo_spatial_query` | `action`, `sql` | Optional read-only PostGIS schema/query tool when `tools.geo.postgis_dsn` is configured |
+
+Geo workspace conventions:
+
+- `geo-codebook/` stores reusable spatial SQL patterns.
+- `tools/geo/` stores fabricated workspace Geo tools.
+- `pipelines/geo/` stores learned Geo tool sequences.
+- GDAL must be installed for `geo_info`, `geo_process`, `geo_crs_detect`, and `geo_format_convert`.
 
 Safety boundaries:
 

@@ -16,6 +16,8 @@
 Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.dev/) 和 [Eino](https://github.com/cloudwego/eino) 构建。
 它支持对话、工具调用、Shell 命令执行、文件读写、网页搜索与抓取、长期记忆、Cron 定时任务、多渠道后台服务，以及 Provider 认证登录与渠道语音转写。
 
+它也内置了专门的 Geo 垂直能力：面向工作区的 GDAL/PostGIS 工具链、学习到的 Geo pipeline 复用、fabricated Geo tool 脚手架，以及让地理空间工作流逐步沉淀的 skill telemetry 闭环。
+
 > **Golem (גולם)**：在犹太传说中，Golem 是由无生命物质塑造并被赋予行动能力的"仆从"。
 
 ## 文档导航
@@ -34,6 +36,7 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 - 既可本地交互（`golem chat`），也可后台常驻（`golem run`）。
 - 内置多渠道接入、Gateway API、Cron 调度、Heartbeat 探活和技能系统。
 - 内置认证命令、语音转写链路和可跨重启恢复的心跳路由。
+- 已形成独立的 Geo 垂直化能力，覆盖工作区 Geo 工具、learned pipeline、fabricated Geo tool 扩展点和确定性的自动进化基础设施。
 
 ## 架构概览
 
@@ -105,6 +108,7 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 - 策略守卫与审批流：`strict`/`relaxed`/`off`，支持 `off_ttl` 限时放开后自动回收
 - MCP 动态工具接入：以 `mcp.<server>.<tool>` 注册并复用同一策略/审批链路
 - 渠道外发可靠性策略（`channels.outbound`）：统一重试、限流、去重窗口和有界并发
+- 面向 Geo 工作流的 replay-ready pipeline 复用提示、dry-run fabricated tool 脚手架，以及低表现 skill 排序的 telemetry report
 
 ### 内置工具
 
@@ -117,9 +121,40 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 | `append_diary` | 追加每日日志 |
 | `web_search` | 网页搜索（有 Brave Key 优先使用 Brave） |
 | `web_fetch` | 抓取并提取网页内容 |
+| `geo_*` | 可选地理空间工具集，覆盖 GDAL/PostGIS 工作流、数据发现、坐标系检查、格式转换和空间 SQL |
 | `manage_cron` | 管理定时任务 |
 | `message` | 向渠道发送消息 |
 | `spawn` / `subagent` / `workflow` | 委托任务给子 Agent 与编排工作流 |
+
+### Geo 垂直化与自动进化
+
+当 `tools.geo.enabled=true` 时，Golem 启用的是一整套面向工作区的 Geo 执行面，而不只是零散的 GIS 命令集合。
+
+当前已实现的能力：
+
+- 注册 Geo 基础能力，覆盖数据检查、处理、CRS 检测、格式转换、数据发现以及可复用空间 SQL 检索。
+- 通过 learned pipeline 的 replay-ready 提示复用历史成功 Geo 工具序列，并附带示例参数和 `needs_parameter_update` 标记。
+- 通过 dry-run fabricated Geo tool scaffold，为缺失的空间能力生成可通过 validator 的工作区扩展骨架，再由人或 Agent 补实现。
+- 通过 `shown`、`selected`、`success`、`failure` skill telemetry 跟踪 Geo 相关技能使用情况，并生成把低表现技能排在前面的报告视图。
+
+自动进化闭环：
+
+- learned pipeline 存在 `pipelines/geo/`，并会在后续相似任务里以 parameter-aware reuse candidate 的形式重新注入 prompt。
+- fabricated Geo tool 存在 `tools/geo/`，现在可以先生成 dry-run manifest/script bundle，再进入具体实现。
+- skill telemetry 持久化在工作区状态里，并通过确定性的 report 视图输出，给 Agent 一个本地、可解释的 Geo skill 表现信号。
+
+基础 Geo 工具：
+
+- 核心工具：`geo_info`、`geo_process`、`geo_crs_detect`、`geo_format_convert`、`geo_data_catalog`、`geo_sql_codebook`
+- 可选 PostGIS 工具：配置 `tools.geo.postgis_dsn` 后启用 `geo_spatial_query`
+
+工作区约定与依赖：
+
+- `geo-codebook/`：存放可复用空间 SQL 模式。
+- `tools/geo/`：存放 fabricated workspace Geo tools 及其 dry-run scaffold 目标。
+- `pipelines/geo/`：存放学习到的 Geo 工具序列。
+- `state/skill_telemetry.json`：存放 skill telemetry 计数，并作为 report 视图的数据来源。
+- 文件处理类 Geo 工具依赖 GDAL；PostGIS 为可选能力。
 
 ### 支持的 LLM 提供商
 
@@ -398,6 +433,16 @@ golem skills search weather
       "provider": "openai",
       "model": "gpt-4o-mini-transcribe",
       "timeout_seconds": 30
+    },
+    "geo": {
+      "enabled": false,
+      "gdal_bin_dir": "",
+      "restrict_to_workspace": true,
+      "timeout_seconds": 120,
+      "postgis_dsn": "",
+      "query_timeout_seconds": 30,
+      "max_rows": 200,
+      "readonly": true
     }
   },
   "gateway": {
@@ -428,6 +473,17 @@ golem skills search weather
 - `timeout_seconds`：子任务超时（默认 `300`）
 - `retry`：每个子任务重试次数（默认 `1`，总尝试次数 = retry + 1）
 - `max_concurrency`：`spawn/subagent/workflow` 的并发上限（默认 `3`）
+
+`tools.geo` 运行时参数：
+
+- `enabled`：是否注册 Geo 工具
+- `gdal_bin_dir`：可选的 GDAL 可执行文件目录
+- `restrict_to_workspace`：限制 Geo 文件路径位于工作区内
+- `timeout_seconds`：GDAL 类工具超时
+- `postgis_dsn`：`geo_spatial_query` 使用的可选 PostGIS 连接串
+- `query_timeout_seconds`：PostGIS 查询超时
+- `max_rows`：空间查询结果的最大返回行数
+- `readonly`：尽量使用只读 PostGIS 事务
 
 `channels.outbound` 可靠性参数：
 

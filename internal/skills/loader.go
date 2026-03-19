@@ -79,7 +79,11 @@ func (l *Loader) LoadSkill(name string) (string, error) {
 
 // BuildSkillsSummary 生成所有已安装技能的格式化摘要字符串，通常用于注入到系统提示词 (System Prompt) 中。
 func (l *Loader) BuildSkillsSummary() string {
-	skills := l.ListSkills()
+	return BuildSkillsSummaryFor(l.ListSkills())
+}
+
+// BuildSkillsSummaryFor formats a prompt-ready summary for the given skill list.
+func BuildSkillsSummaryFor(skills []SkillInfo) string {
 	if len(skills) == 0 {
 		return ""
 	}

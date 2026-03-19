@@ -269,6 +269,48 @@ func TestValidate_VoiceNegativeTimeout(t *testing.T) {
 	}
 }
 
+func TestDefaultConfig_GeoQueryDefaults(t *testing.T) {
+	cfg := DefaultConfig()
+
+	if cfg.Tools.Geo.QueryTimeoutSeconds != 30 {
+		t.Fatalf("expected geo query_timeout_seconds=30, got %d", cfg.Tools.Geo.QueryTimeoutSeconds)
+	}
+	if cfg.Tools.Geo.MaxRows != 200 {
+		t.Fatalf("expected geo max_rows=200, got %d", cfg.Tools.Geo.MaxRows)
+	}
+	if !cfg.Tools.Geo.ReadOnly {
+		t.Fatal("expected geo readonly=true by default")
+	}
+}
+
+func TestValidate_GeoQueryDefaultsAndBounds(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Tools.Geo.QueryTimeoutSeconds = 0
+	cfg.Tools.Geo.MaxRows = 0
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("unexpected error applying geo defaults: %v", err)
+	}
+	if cfg.Tools.Geo.QueryTimeoutSeconds != 30 {
+		t.Fatalf("expected geo query_timeout_seconds default 30, got %d", cfg.Tools.Geo.QueryTimeoutSeconds)
+	}
+	if cfg.Tools.Geo.MaxRows != 200 {
+		t.Fatalf("expected geo max_rows default 200, got %d", cfg.Tools.Geo.MaxRows)
+	}
+
+	cfg = DefaultConfig()
+	cfg.Tools.Geo.QueryTimeoutSeconds = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for negative tools.geo.query_timeout_seconds")
+	}
+
+	cfg = DefaultConfig()
+	cfg.Tools.Geo.MaxRows = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected validation error for negative tools.geo.max_rows")
+	}
+}
+
 func TestDefaultConfig_PolicyDefaults(t *testing.T) {
 	cfg := DefaultConfig()
 

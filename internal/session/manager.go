@@ -136,11 +136,16 @@ func (m *Manager) Append(key string, msgs ...*Message) error {
 	}
 	defer f.Close()
 
-	enc := json.NewEncoder(f)
+	// Use a buffered writer to minimize disk I/O syscalls during multiple small appends.
+	bw := bufio.NewWriter(f)
+	enc := json.NewEncoder(bw)
 	for _, msg := range msgs {
 		if err := enc.Encode(msg); err != nil {
 			return err
 		}
+	}
+	if err := bw.Flush(); err != nil {
+		return err
 	}
 	return nil
 }

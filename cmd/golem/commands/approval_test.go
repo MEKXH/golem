@@ -54,7 +54,7 @@ func TestApprovalList_NoPending(t *testing.T) {
 			t.Fatalf("runApprovalList: %v", err)
 		}
 	})
-	if !strings.Contains(output, "No pending approvals.") {
+	if !strings.Contains(output, "No pending approvals. Pending requests will appear here when an agent proposes restricted actions.") {
 		t.Fatalf("expected no-pending message, got: %s", output)
 	}
 }

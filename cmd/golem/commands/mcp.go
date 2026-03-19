@@ -9,6 +9,7 @@ import (
 
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/mcp"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -65,34 +66,107 @@ func runMCPStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(cfg.MCP.Servers) == 0 {
-		fmt.Println("No MCP servers configured.")
+		fmt.Println("No MCP servers configured. Add them in ~/.golem/config.json under 'mcp.servers'.")
 		return nil
 	}
 
+	var (
+		wName   = 20
+		wStatus = 12
+		wTools  = 8
+		wMsg    = 30
+
+		colHeaderStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#8E4EC6")). // Purple
+				Bold(true).
+				MarginRight(1)
+
+		nameStyleBase = lipgloss.NewStyle().
+				Width(wName).
+				MarginRight(1)
+
+		statusStyleBase = lipgloss.NewStyle().
+				Width(wStatus).
+				MarginRight(1)
+
+		toolsStyleBase = lipgloss.NewStyle().
+				Width(wTools).
+				MarginRight(1)
+
+		msgStyleBase = lipgloss.NewStyle().
+				Width(wMsg).
+				MarginRight(1)
+
+		okColor       = lipgloss.Color("#2E8B57") // SeaGreen
+		errorColor    = lipgloss.Color("#FF0000") // Red
+		disabledColor = lipgloss.Color("241")     // Dark Gray
+		defaultColor  = lipgloss.Color("241")
+	)
+
 	fmt.Println("MCP servers:")
+	fmt.Println()
+
+	headers := lipgloss.JoinHorizontal(lipgloss.Top,
+		colHeaderStyle.Width(wName).Render("SERVER"),
+		colHeaderStyle.Width(wStatus).Render("STATUS"),
+		colHeaderStyle.Width(wTools).Render("TOOLS"),
+		colHeaderStyle.Width(wMsg).Render("MESSAGE"),
+	)
+	fmt.Printf("  %s\n", headers)
+
+	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).MarginRight(1)
+	separator := lipgloss.JoinHorizontal(lipgloss.Top,
+		sepStyle.Render(strings.Repeat("─", wName)),
+		sepStyle.Render(strings.Repeat("─", wStatus)),
+		sepStyle.Render(strings.Repeat("─", wTools)),
+		sepStyle.Render(strings.Repeat("─", wMsg)),
+	)
+	fmt.Printf("  %s\n", separator)
+
 	for _, name := range sortedMCPServerNames(cfg.MCP.Servers) {
 		serverCfg := cfg.MCP.Servers[name]
+
+		var sStatus string
+		var sTools string
+		var sMsg string
+		sColor := okColor
+
 		if !isConfigMCPServerEnabled(serverCfg) {
-			fmt.Printf("  %s: disabled\n", name)
-			continue
-		}
-
-		status, probeErr := probeServerWithTimeout(name, serverCfg)
-		if probeErr != nil {
-			fmt.Printf("  %s: degraded (%v)\n", name, probeErr)
-			continue
-		}
-
-		if status.Degraded || !status.Connected {
-			msg := strings.TrimSpace(status.Message)
-			if msg == "" {
-				msg = "unknown error"
+			sStatus = "disabled"
+			sTools = "-"
+			sMsg = ""
+			sColor = disabledColor
+		} else {
+			status, probeErr := probeServerWithTimeout(name, serverCfg)
+			if probeErr != nil {
+				sStatus = "degraded"
+				sTools = "-"
+				sMsg = fmt.Sprintf("%v", probeErr)
+				sColor = errorColor
+			} else if status.Degraded || !status.Connected {
+				sStatus = "degraded"
+				sTools = "-"
+				msg := strings.TrimSpace(status.Message)
+				if msg == "" {
+					msg = "unknown error"
+				}
+				sMsg = msg
+				sColor = errorColor
+			} else {
+				sStatus = "connected"
+				sTools = fmt.Sprintf("%d", status.ToolCount)
+				sMsg = ""
 			}
-			fmt.Printf("  %s: degraded (%s)\n", name, msg)
-			continue
 		}
 
-		fmt.Printf("  %s: connected (tools=%d)\n", name, status.ToolCount)
+		row := lipgloss.JoinHorizontal(lipgloss.Top,
+			nameStyleBase.Render(truncate(name, wName)),
+			statusStyleBase.Foreground(sColor).Render(sStatus),
+			toolsStyleBase.Foreground(defaultColor).Render(sTools),
+			msgStyleBase.Foreground(defaultColor).Render(truncate(sMsg, wMsg)),
+		)
+
+		fmt.Printf("  %s\n", row)
 	}
 
 	return nil
