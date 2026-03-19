@@ -194,3 +194,54 @@ func TestBuildMessages_UsesKeywordMemoryRecallWithStats(t *testing.T) {
 		t.Fatalf("expected keyword recall content in prompt, got: %s", sys)
 	}
 }
+
+func TestBuildMessages_IncludesRelevantLearnedGeoPipelinesForInput(t *testing.T) {
+	workspace := t.TempDir()
+	pipelinesDir := filepath.Join(workspace, "pipelines", "geo")
+	if err := os.MkdirAll(pipelinesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll pipelines: %v", err)
+	}
+
+	files := map[string]string{
+		"pipeline-land-change.yaml": `id: pipeline-land-change
+goal: analyze land use change
+created_at: "2026-03-14T21:30:00Z"
+steps:
+  - tool: geo_data_catalog
+    args_json: '{}'
+  - tool: geo_process
+    args_json: '{}'
+`,
+		"pipeline-river.yaml": `id: pipeline-river
+goal: analyze river sinuosity
+created_at: "2026-03-13T21:30:00Z"
+steps:
+  - tool: geo_info
+    args_json: '{}'
+  - tool: geo_sinuosity
+    args_json: '{}'
+`,
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(pipelinesDir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("WriteFile(%s) error: %v", name, err)
+		}
+	}
+
+	cb := NewContextBuilder(workspace)
+	msgs := cb.BuildMessages(nil, "analyze land use change in a new area", nil)
+	if len(msgs) < 2 {
+		t.Fatalf("expected at least 2 messages, got %d", len(msgs))
+	}
+
+	sys := msgs[0].Content
+	if !strings.Contains(sys, "Relevant Learned Geo Pipelines") {
+		t.Fatalf("expected relevant learned pipelines section in prompt, got: %s", sys)
+	}
+	if !strings.Contains(sys, "analyze land use change") {
+		t.Fatalf("expected matching learned pipeline in prompt, got: %s", sys)
+	}
+	if strings.Contains(sys, "analyze river sinuosity") {
+		t.Fatalf("did not expect unrelated learned pipeline in prompt, got: %s", sys)
+	}
+}

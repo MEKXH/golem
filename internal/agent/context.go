@@ -116,11 +116,18 @@ func (c *ContextBuilder) BuildSystemPrompt() string {
 		parts = append(parts, diary)
 	}
 
+	if pipelineSummary := c.buildLearnedGeoPipelineSummary(); pipelineSummary != "" {
+		parts = append(parts, pipelineSummary)
+	}
+
 	return strings.Join(parts, "\n\n")
 }
 
 func (c *ContextBuilder) buildSystemPromptForInput(query string) string {
 	parts := c.buildBaseSystemPromptParts()
+	if relevantPipelines := c.buildRelevantLearnedGeoPipelinesSection(query); relevantPipelines != "" {
+		parts = append(parts, relevantPipelines)
+	}
 	if recall := c.buildMemoryRecallSection(query); recall != "" {
 		parts = append(parts, recall)
 	}
@@ -169,10 +176,6 @@ func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
 		parts = append(parts, fabricatedSummary)
 	}
 
-	if pipelineSummary := geopipeline.NewRecorder(c.workspacePath).BuildSummary(); pipelineSummary != "" {
-		parts = append(parts, pipelineSummary)
-	}
-
 	c.cachedBaseParts = make([]string, len(parts))
 	copy(c.cachedBaseParts, parts)
 
@@ -208,6 +211,30 @@ func (c *ContextBuilder) buildRecentDiarySection() string {
 	}
 	return sb.String()
 }
+func (c *ContextBuilder) buildLearnedGeoPipelineSummary() string {
+	return geopipeline.NewRecorder(c.workspacePath).BuildSummary()
+}
+
+func (c *ContextBuilder) buildRelevantLearnedGeoPipelinesSection(query string) string {
+	matches, err := geopipeline.NewMatcher(c.workspacePath).Find(query, 3)
+	if err != nil || len(matches) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## Relevant Learned Geo Pipelines\n\n")
+	for _, match := range matches {
+		tools := make([]string, 0, len(match.Steps))
+		for _, step := range match.Steps {
+			if strings.TrimSpace(step.Tool) != "" {
+				tools = append(tools, step.Tool)
+			}
+		}
+		sb.WriteString(fmt.Sprintf("- **%s**: %s\n", match.Goal, strings.Join(tools, " -> ")))
+	}
+	return strings.TrimSpace(sb.String())
+}
+
 
 func (c *ContextBuilder) buildMemoryRecallSection(query string) string {
 	memMgr := memory.NewManager(c.workspacePath)
@@ -306,3 +333,5 @@ func (c *ContextBuilder) BuildMessages(history []*session.Message, current strin
 
 	return messages
 }
+
+
