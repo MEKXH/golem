@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/MEKXH/golem/internal/version"
@@ -69,6 +70,34 @@ func TestVersionEndpoint(t *testing.T) {
 	body := decodeJSON(t, rr.Body)
 	if body["version"] != version.Version {
 		t.Fatalf("expected version=%s, got %v", version.Version, body["version"])
+	}
+}
+
+func TestLandingPageServedFromWebUI(t *testing.T) {
+	h := NewHandler("", &mockChatProcessor{})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Golem WebUI") {
+		t.Fatalf("expected web ui index html, got %s", rr.Body.String())
+	}
+}
+
+func TestConsoleRouteFallsBackToSPAIndex(t *testing.T) {
+	h := NewHandler("", &mockChatProcessor{})
+	req := httptest.NewRequest(http.MethodGet, "/console", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "<div id=\"app\"></div>") {
+		t.Fatalf("expected SPA index fallback, got %s", rr.Body.String())
 	}
 }
 

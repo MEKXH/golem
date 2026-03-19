@@ -95,6 +95,11 @@ Server mode:
 golem run
 ```
 
+After the service starts:
+
+- `http://127.0.0.1:18790/` serves the landing page
+- `http://127.0.0.1:18790/console` serves the chat console
+
 ## 5. Full Configuration Reference
 
 Main file: `~/.golem/config.json`
@@ -394,13 +399,18 @@ Starts:
 - Agent loop
 - Message bus routing
 - Enabled channels
-- Gateway API server
+- Gateway API server and embedded WebUI
 - Cron service
 - Heartbeat service
 
 ```bash
 golem run
 ```
+
+After the service starts:
+
+- `http://127.0.0.1:18790/` serves the landing page
+- `http://127.0.0.1:18790/console` serves the chat console
 
 ## 7.5 `golem status`
 
@@ -594,11 +604,30 @@ Safety boundaries:
 
 Available in server mode (`golem run`):
 
+- `GET /` serves the embedded landing page
+- `GET /console` serves the embedded WebUI console
 - `GET /health`
 - `GET /version`
 - `POST /chat`
 
-## 10.1 `POST /chat` request
+## 10.1 WebUI
+
+The Gateway now serves an embedded Vue WebUI:
+
+- `/` is a marketing landing page focused on Golem, Geo verticalization, and auto-evolution
+- `/console` is a gateway-backed chat console that can call `POST /chat` directly
+- If `gateway.token` is set, paste the Bearer token into the console connection panel before sending prompts
+
+For local frontend work:
+
+```bash
+npm --prefix web install
+npm --prefix web run dev
+npm --prefix web run typecheck
+npm --prefix web run build:gateway
+```
+
+## 10.2 `POST /chat` request
 
 ```json
 {
@@ -721,3 +750,4 @@ go run ./cmd/golem chat "ping"
 - English runbook: `docs/operations/runbook.md`
 - Chinese runbook: `docs/operations/runbook.zh-CN.md`
 - Main overview: `README.md`
+

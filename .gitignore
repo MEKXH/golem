@@ -6,3 +6,6 @@ docs/analysis
 .vscode
 .claude
 CLAUDE.md
+node_modules/
+web/node_modules/
+web/dist/

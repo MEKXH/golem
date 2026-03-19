@@ -95,6 +95,11 @@ golem chat "ping"
 golem run
 ```
 
+服务启动后可直接访问：
+
+- `http://127.0.0.1:18790/`：营销首页
+- `http://127.0.0.1:18790/console`：聊天控制台
+
 ## 5. 完整配置说明
 
 主配置文件：`~/.golem/config.json`
@@ -394,13 +399,18 @@ golem chat "总结最近日志"
 - Agent Loop
 - 消息总线路由
 - 已启用渠道
-- Gateway API
+- Gateway API 与内嵌 WebUI
 - Cron 服务
 - Heartbeat 服务
 
 ```bash
 golem run
 ```
+
+服务启动后可直接访问：
+
+- `http://127.0.0.1:18790/`：营销首页
+- `http://127.0.0.1:18790/console`：聊天控制台
 
 ## 7.5 `golem status`
 
@@ -594,11 +604,30 @@ Geo 工作区约定：
 
 仅在 `golem run` 下可用：
 
+- `GET /`：返回内嵌营销首页
+- `GET /console`：返回内嵌 WebUI 控制台
 - `GET /health`
 - `GET /version`
 - `POST /chat`
 
-## 10.1 `POST /chat` 请求体
+## 10.1 WebUI
+
+Gateway 现在会托管一个内嵌 Vue WebUI：
+
+- `/` 是营销展示首页，突出 Golem、Geo 垂直化与自动进化能力
+- `/console` 是直连 `POST /chat` 的聊天控制台
+- 若设置了 `gateway.token`，先在控制台连接面板中填写 Bearer Token
+
+本地前端开发命令：
+
+```bash
+npm --prefix web install
+npm --prefix web run dev
+npm --prefix web run typecheck
+npm --prefix web run build:gateway
+```
+
+## 10.2 `POST /chat` 请求体
 
 ```json
 {
@@ -721,3 +750,4 @@ go run ./cmd/golem chat "ping"
 - 英文运维手册：`docs/operations/runbook.md`
 - 中文运维手册：`docs/operations/runbook.zh-CN.md`
 - 项目概览：`README.md`
+
