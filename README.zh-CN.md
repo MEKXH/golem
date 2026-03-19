@@ -14,7 +14,7 @@
 </div>
 
 Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.dev/) 和 [Eino](https://github.com/cloudwego/eino) 构建。
-它支持对话、工具调用、Shell 命令执行、文件读写、网页搜索与抓取、长期记忆、Cron 定时任务、多渠道后台服务，以及 Provider 认证登录与渠道语音转写。
+它支持对话、工具调用、Shell 命令执行、文件读写、网页搜索与抓取、长期记忆、Cron 定时任务、多渠道后台服务、内嵌 Vue WebUI，以及 Provider 认证登录与渠道语音转写。
 
 它也内置了专门的 Geo 垂直能力：面向工作区的 GDAL/PostGIS 工具链、学习到的 Geo pipeline 复用、fabricated Geo tool 脚手架，以及让地理空间工作流逐步沉淀的 skill telemetry 闭环。
 
@@ -89,7 +89,7 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 | **技能** | `internal/skills/` | 可扩展的 Markdown 提示词包 |
 | **Cron** | `internal/cron/` | 定时任务管理 |
 | **心跳** | `internal/heartbeat/` | 定期健康探测与状态回传 |
-| **网关** | `internal/gateway/` | HTTP API 服务器（`/health`、`/version`、`/chat`） |
+| **网关** | `internal/gateway/` | HTTP API 服务器与内嵌 WebUI（`/`、`/console`、`/health`、`/version`、`/chat`） |
 
 ## 核心能力
 
@@ -97,7 +97,7 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 
 - 终端 TUI 对话（`golem chat`）
 - 多渠道机器人服务（`golem run`）：Telegram、WhatsApp、Feishu、Discord、Slack、QQ、DingTalk、MaixCam
-- Gateway HTTP API（`/health`、`/version`、`/chat`）
+- Gateway HTTP API 与内嵌 WebUI（`/`、`/console`、`/health`、`/version`、`/chat`）
 
 ### 最新能力
 
@@ -108,6 +108,7 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 - 策略守卫与审批流：`strict`/`relaxed`/`off`，支持 `off_ttl` 限时放开后自动回收
 - MCP 动态工具接入：以 `mcp.<server>.<tool>` 注册并复用同一策略/审批链路
 - 渠道外发可靠性策略（`channels.outbound`）：统一重试、限流、去重窗口和有界并发
+- 内嵌 Vue WebUI：首页为营销展示页（`/`），控制台页（`/console`）直连 Gateway `/chat`
 - 面向 Geo 工作流的 replay-ready pipeline 复用提示、dry-run fabricated tool 脚手架，以及低表现 skill 排序的 telemetry report
 
 ### 内置工具
@@ -270,6 +271,15 @@ golem chat "分析当前目录结构"
 ```bash
 golem run
 ```
+
+### 6. 打开 WebUI
+
+当 `golem run` 启动后，可直接访问：
+
+- `http://127.0.0.1:18790/`：营销展示首页
+- `http://127.0.0.1:18790/console`：基于 Gateway 的聊天控制台
+
+如果配置了 `gateway.token`，先在控制台连接面板里填入 Bearer Token，再发送请求。
 
 ## CLI 命令总览
 
@@ -618,6 +628,18 @@ go vet ./...
 go build -o golem ./cmd/golem
 ```
 
+WebUI 开发：
+
+```bash
+npm --prefix web install
+npm --prefix web run dev
+npm --prefix web run typecheck
+npm --prefix web run build:gateway
+```
+
+`npm --prefix web run build:gateway` 会重新构建 Vue 前端，并把产物同步到 `internal/gateway/webui/` 供 Go embed。
+
 ## 许可证
 
 MIT
+

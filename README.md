@@ -6,7 +6,7 @@
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/MEKXH/golem?style=flat-square&logo=go)](https://go.dev/)
 [![Release](https://img.shields.io/github/v/release/MEKXH/golem?style=flat-square&logo=github)](https://github.com/MEKXH/golem/releases/latest)
-[![CI Status](https://img.shields.io/github/actions/workflow/status/MEKXH/golem/ci.yml?style=flat-square&logo=github-actions)](https://github.com/MEKXH/golem/actions/workflows/ci.yml)
+[![Listed on Shelldex](https://shelldex.com/badges/shelldex-badge.svg)](https://shelldex.com/projects/golem/)
 [![License](https://img.shields.io/github/license/MEKXH/golem?style=flat-square)](LICENSE)
 
 **Your AI agent. Your terminal. Your rules.**
@@ -14,7 +14,7 @@
 </div>
 
 Golem is a terminal-first personal AI assistant built with [Go](https://go.dev/) and [Eino](https://github.com/cloudwego/eino).
-It can chat, run tools, call shell commands, manage files, search/fetch web content, keep memory, schedule cron jobs, run as a background service across multiple channels, and support provider auth login plus channel audio transcription.
+It can chat, run tools, call shell commands, manage files, search/fetch web content, keep memory, schedule cron jobs, run as a background service across multiple channels, serve an embedded Vue WebUI, and support provider auth login plus channel audio transcription.
 
 It also ships with a dedicated Geo vertical: workspace-local GDAL/PostGIS tooling, learned Geo pipeline reuse, fabricated Geo tool scaffolding, and skill telemetry loops that make recurring geospatial workflows easier to reuse and extend.
 
@@ -89,7 +89,7 @@ It also ships with a dedicated Geo vertical: workspace-local GDAL/PostGIS toolin
 | **Skills** | `internal/skills/` | Extensible Markdown-based prompt packs |
 | **Cron** | `internal/cron/` | Scheduled job management |
 | **Heartbeat** | `internal/heartbeat/` | Periodic health probe and status reporting |
-| **Gateway** | `internal/gateway/` | HTTP API server (`/health`, `/version`, `/chat`) |
+| **Gateway** | `internal/gateway/` | HTTP API server plus embedded WebUI (`/`, `/console`, `/health`, `/version`, `/chat`) |
 
 ## Core Features
 
@@ -97,7 +97,7 @@ It also ships with a dedicated Geo vertical: workspace-local GDAL/PostGIS toolin
 
 - Terminal TUI chat (`golem chat`)
 - Multi-channel bot mode (`golem run`): Telegram, WhatsApp, Feishu, Discord, Slack, QQ, DingTalk, MaixCam
-- Gateway HTTP API (`/health`, `/version`, `/chat`)
+- Gateway HTTP API and embedded WebUI (`/`, `/console`, `/health`, `/version`, `/chat`)
 
 ### Latest Additions
 
@@ -106,6 +106,7 @@ It also ships with a dedicated Geo vertical: workspace-local GDAL/PostGIS toolin
 - Audio transcription in Telegram/Discord/Slack with fallback placeholders when transcription fails
 - File mutation tools `edit_file` and `append_file` for safer incremental edits
 - Outbound channel reliability policy (`channels.outbound`): retry, rate-limit, dedup window, and bounded send concurrency
+- Embedded Vue WebUI with a cinematic landing page at `/` and a gateway-backed chat console at `/console`
 - Replay-ready Geo pipeline reuse hints, dry-run Geo fabrication scaffolds, and skill telemetry reporting for low-performing Geo workflows
 
 ### Built-in Tools
@@ -268,6 +269,15 @@ golem chat "Analyze the current directory structure"
 ```bash
 golem run
 ```
+
+### 6. Open the Web UI
+
+Once `golem run` is active, open:
+
+- `http://127.0.0.1:18790/` for the marketing landing page
+- `http://127.0.0.1:18790/console` for the gateway-backed chat console
+
+If `gateway.token` is configured, paste the Bearer token into the console connection panel before sending requests.
 
 ## CLI Commands
 
@@ -529,6 +539,8 @@ Minimum required secrets:
 
 Available in server mode (`golem run`):
 
+- `GET /` serves the embedded marketing landing page
+- `GET /console` serves the embedded WebUI console
 - `GET /health`
 - `GET /version`
 - `POST /chat`
@@ -625,6 +637,18 @@ Build:
 go build -o golem ./cmd/golem
 ```
 
+WebUI development:
+
+```bash
+npm --prefix web install
+npm --prefix web run dev
+npm --prefix web run typecheck
+npm --prefix web run build:gateway
+```
+
+`npm --prefix web run build:gateway` rebuilds the Vue app and syncs the generated assets into `internal/gateway/webui/` for Go embedding.
+
 ## License
 
 MIT
+
