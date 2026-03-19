@@ -16,6 +16,25 @@ type TelemetryEntry struct {
 	Failure  int `json:"failure"`
 }
 
+// OutcomeCount returns the number of recorded success/failure outcomes.
+func (e TelemetryEntry) OutcomeCount() int {
+	return e.Success + e.Failure
+}
+
+// HasOutcomeData reports whether the entry has any success/failure observations.
+func (e TelemetryEntry) HasOutcomeData() bool {
+	return e.OutcomeCount() > 0
+}
+
+// SuccessRatio returns a coarse success ratio across recorded outcomes.
+func (e TelemetryEntry) SuccessRatio() float64 {
+	outcomes := e.OutcomeCount()
+	if outcomes == 0 {
+		return 0
+	}
+	return float64(e.Success) / float64(outcomes)
+}
+
 // TelemetrySnapshot is the persisted workspace skill telemetry state.
 type TelemetrySnapshot struct {
 	Path   string                    `json:"-"`
