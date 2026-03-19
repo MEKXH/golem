@@ -16,6 +16,8 @@
 Golem is a terminal-first personal AI assistant built with [Go](https://go.dev/) and [Eino](https://github.com/cloudwego/eino).
 It can chat, run tools, call shell commands, manage files, search/fetch web content, keep memory, schedule cron jobs, run as a background service across multiple channels, and support provider auth login plus channel audio transcription.
 
+It also ships with a dedicated Geo vertical: workspace-local GDAL/PostGIS tooling, learned Geo pipeline reuse, fabricated Geo tool scaffolding, and skill telemetry loops that make recurring geospatial workflows easier to reuse and extend.
+
 > **Golem (גולם)**: In Jewish folklore, a golem is an animated being made from inanimate matter, created to serve.
 
 ## Documentation
@@ -34,6 +36,7 @@ It can chat, run tools, call shell commands, manage files, search/fetch web cont
 - Works both interactively (`golem chat`) and as long-running service (`golem run`).
 - Built-in channels, gateway API, cron scheduler, heartbeat service, and skill system.
 - Built-in auth commands, voice transcription pipeline, and restart-safe heartbeat routing.
+- Dedicated Geo verticalization with workspace-local tools, learned pipelines, fabricated Geo tool hooks, and deterministic auto-evolution primitives.
 
 ## Architecture Overview
 
@@ -103,6 +106,7 @@ It can chat, run tools, call shell commands, manage files, search/fetch web cont
 - Audio transcription in Telegram/Discord/Slack with fallback placeholders when transcription fails
 - File mutation tools `edit_file` and `append_file` for safer incremental edits
 - Outbound channel reliability policy (`channels.outbound`): retry, rate-limit, dedup window, and bounded send concurrency
+- Replay-ready Geo pipeline reuse hints, dry-run Geo fabrication scaffolds, and skill telemetry reporting for low-performing Geo workflows
 
 ### Built-in Tools
 
@@ -120,18 +124,35 @@ It can chat, run tools, call shell commands, manage files, search/fetch web cont
 | `message` | Send messages to channels |
 | `spawn` / `subagent` / `workflow` | Delegate tasks to subagents and orchestrated workflows |
 
-### Geo Tooling
+### Geo Verticalization and Auto-Evolution
 
-When `tools.geo.enabled=true`, Golem registers Geo tools for workspace-local geospatial workflows:
+When `tools.geo.enabled=true`, Golem enables a workspace-local Geo execution surface instead of just exposing a few isolated GIS commands.
 
-- Baseline tools: `geo_info`, `geo_process`, `geo_crs_detect`, `geo_format_convert`, `geo_data_catalog`, `geo_sql_codebook`
+What it does now:
+
+- Registers a Geo baseline for inspection, processing, CRS detection, format conversion, dataset discovery, and reusable spatial SQL lookup.
+- Reuses previously successful Geo tool sequences through replay-ready learned pipeline hints, including example step arguments and `needs_parameter_update` markers.
+- Generates dry-run fabricated Geo tool scaffolds so missing spatial capabilities can be turned into validator-compliant workspace extensions before any script is filled in.
+- Tracks Geo-oriented skill usage through `shown`, `selected`, `success`, and `failure` telemetry, then builds reports that surface lower-performing skills first.
+
+Auto-evolution loops:
+
+- Learned pipelines live under `pipelines/geo/` and are matched back into future prompts as parameter-aware reuse candidates.
+- Fabricated Geo tools live under `tools/geo/` and can now be scaffolded as dry-run manifest/script bundles before implementation.
+- Skill telemetry is persisted in workspace state and summarized through a deterministic report view, giving the agent a coarse local signal about which Geo skills are underperforming.
+
+Baseline Geo tools:
+
+- Core tools: `geo_info`, `geo_process`, `geo_crs_detect`, `geo_format_convert`, `geo_data_catalog`, `geo_sql_codebook`
 - Optional PostGIS tool: `geo_spatial_query` when `tools.geo.postgis_dsn` is configured
-- Workspace knowledge and extension points:
-  - `geo-codebook/` for reusable spatial SQL patterns
-  - `tools/geo/` for fabricated workspace Geo tools
-  - `pipelines/geo/` for learned Geo tool sequences
 
-GDAL must be installed for file-processing tools. PostGIS access is optional.
+Workspace conventions and prerequisites:
+
+- `geo-codebook/` stores reusable spatial SQL patterns.
+- `tools/geo/` stores fabricated workspace Geo tools and dry-run scaffold targets.
+- `pipelines/geo/` stores learned Geo tool sequences.
+- `state/skill_telemetry.json` stores skill telemetry counters and feeds the report view.
+- GDAL must be installed for file-processing tools. PostGIS access is optional.
 
 ### LLM Providers
 
