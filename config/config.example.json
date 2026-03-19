@@ -82,6 +82,16 @@
       "provider": "openai",
       "model": "gpt-4o-mini-transcribe",
       "timeout_seconds": 30
+    },
+    "geo": {
+      "enabled": false,
+      "gdal_bin_dir": "",
+      "restrict_to_workspace": true,
+      "timeout_seconds": 120,
+      "postgis_dsn": "",
+      "query_timeout_seconds": 30,
+      "max_rows": 200,
+      "readonly": true
     }
   },
   "channels": {

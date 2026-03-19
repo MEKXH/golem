@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -13,9 +14,11 @@ import (
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/command"
 	"github.com/MEKXH/golem/internal/config"
+	"github.com/MEKXH/golem/internal/geopipeline"
 	"github.com/MEKXH/golem/internal/mcp"
 	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/session"
+	"github.com/MEKXH/golem/internal/skills"
 	"github.com/MEKXH/golem/internal/tools"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
@@ -181,6 +184,82 @@ func (l *Loop) RegisterDefaultTools(cfg *config.Config) error {
 	}
 	if info, err := workflowTool.Info(context.Background()); err == nil && info != nil && info.Name != "" {
 		registered = append(registered, info.Name)
+	}
+
+	if cfg.Tools.Geo.Enabled {
+		gdalBinDir := cfg.Tools.Geo.GdalBinDir
+		geoTimeout := cfg.Tools.Geo.TimeoutSeconds
+		geoRestrict := cfg.Tools.Geo.RestrictToWorkspace
+		postGISDSN := strings.TrimSpace(cfg.Tools.Geo.PostGISDSN)
+		geoToolFns := []func() (tool.InvokableTool, error){
+			func() (tool.InvokableTool, error) {
+				return tools.NewGeoInfoTool(gdalBinDir, l.workspacePath, geoRestrict)
+			},
+			func() (tool.InvokableTool, error) {
+				return tools.NewGeoProcessTool(gdalBinDir, l.workspacePath, geoTimeout, geoRestrict)
+			},
+			func() (tool.InvokableTool, error) {
+				return tools.NewGeoCrsDetectTool(gdalBinDir, l.workspacePath, geoRestrict)
+			},
+			func() (tool.InvokableTool, error) {
+				return tools.NewGeoFormatConvertTool(gdalBinDir, l.workspacePath, geoTimeout, geoRestrict)
+			},
+			func() (tool.InvokableTool, error) {
+				return tools.NewGeoDataCatalogTool(l.workspacePath, geoRestrict, geoTimeout)
+			},
+			func() (tool.InvokableTool, error) {
+				return tools.NewGeoSQLCodebookTool(l.workspacePath)
+			},
+		}
+		for _, fn := range geoToolFns {
+			t, err := fn()
+			if err != nil {
+				return err
+			}
+			if err := l.tools.Register(t); err != nil {
+				return err
+			}
+			if info, err := t.Info(context.Background()); err == nil && info != nil && info.Name != "" {
+				registered = append(registered, info.Name)
+			}
+		}
+		fabricatedTools, err := tools.LoadGeoFabricatedTools(l.workspacePath)
+		if err != nil {
+			return err
+		}
+		for _, fabricatedTool := range fabricatedTools {
+			if err := l.tools.Register(fabricatedTool); err != nil {
+				return err
+			}
+			if info, err := fabricatedTool.Info(context.Background()); err == nil && info != nil && info.Name != "" {
+				registered = append(registered, info.Name)
+			}
+		}
+		if postGISDSN != "" {
+			spatialQueryTool, err := tools.NewGeoSpatialQueryTool(
+				postGISDSN,
+				cfg.Tools.Geo.QueryTimeoutSeconds,
+				cfg.Tools.Geo.MaxRows,
+				cfg.Tools.Geo.ReadOnly,
+			)
+			if err != nil {
+				return err
+			}
+			if err := l.tools.Register(spatialQueryTool); err != nil {
+				return err
+			}
+			if info, err := spatialQueryTool.Info(context.Background()); err == nil && info != nil && info.Name != "" {
+				registered = append(registered, info.Name)
+			}
+		} else {
+			slog.Info("geo_spatial_query not registered", "reason", "tools.geo.postgis_dsn is empty")
+		}
+		slog.Info(
+			"geo tools registered",
+			"gdal_bin_dir", gdalBinDir,
+			"restrict_to_workspace", geoRestrict,
+			"spatial_query_enabled", postGISDSN != "",
+		)
 	}
 
 	if len(cfg.MCP.Servers) > 0 {
@@ -356,9 +435,18 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 
 	sess := l.sessions.GetOrCreate(msg.SessionKey())
 
+	selectedSkillName := ""
+	selectedSkills := skills.SelectSkillsForQuery(skills.NewLoader(l.workspacePath).ListSkills(), msg.Content)
+	if len(selectedSkills) == 1 {
+		selectedSkillName = selectedSkills[0].Name
+	}
+
 	messages := l.context.BuildMessages(sess.GetHistory(50), msg.Content, msg.Media)
 
 	var finalContent string
+	learnedGeoSteps := make([]geopipeline.Step, 0)
+	hasGeoActivity := false
+	hasGeoFailure := false
 
 	for i := 0; i < l.maxIterations; i++ {
 		if l.model == nil {
@@ -384,8 +472,10 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 		messages = append(messages, resp)
 
 		type toolResult struct {
-			index int
-			msg   *schema.Message
+			index   int
+			msg     *schema.Message
+			step    geopipeline.Step
+			success bool
 		}
 
 		resultChan := make(chan toolResult, len(resp.ToolCalls))
@@ -460,6 +550,11 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 						Content:    result,
 						ToolCallID: tc.ID,
 					},
+					step: geopipeline.Step{
+						Tool:     tc.Function.Name,
+						ArgsJSON: tc.Function.Arguments,
+					},
+					success: err == nil,
 				}
 			}(i, tc)
 		}
@@ -471,9 +566,30 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 		results := make([]*schema.Message, len(resp.ToolCalls))
 		for res := range resultChan {
 			results[res.index] = res.msg
+			if strings.HasPrefix(res.step.Tool, "geo_") {
+				hasGeoActivity = true
+				if res.success {
+					learnedGeoSteps = append(learnedGeoSteps, res.step)
+				} else {
+					hasGeoFailure = true
+				}
+			}
 		}
 
 		messages = append(messages, results...)
+	}
+
+	if len(learnedGeoSteps) > 0 && !hasGeoFailure {
+		recorder := geopipeline.NewRecorder(l.workspacePath)
+		if err := recorder.Save(msg.Content, learnedGeoSteps); err != nil {
+			slog.Warn("failed to save learned geo pipeline", "request_id", msg.RequestID, "error", err)
+		} else {
+			l.context.InvalidateCache(filepath.Join(l.workspacePath, "pipelines", "geo"))
+		}
+	}
+
+	if selectedSkillName != "" && hasGeoActivity {
+		_ = skills.NewTelemetryRecorder(l.workspacePath).RecordOutcome(selectedSkillName, !hasGeoFailure)
 	}
 
 	if finalContent == "" {

@@ -8,6 +8,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/MEKXH/golem/internal/geocodebook"
+	"github.com/MEKXH/golem/internal/geopipeline"
+	"github.com/MEKXH/golem/internal/geotoolfab"
 	"github.com/MEKXH/golem/internal/memory"
 	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/session"
@@ -76,6 +79,27 @@ func (c *ContextBuilder) InvalidateCache(changedPath string) {
 		c.cachedBaseParts = nil
 		return
 	}
+
+	codebookDir := filepath.Join(workspaceAbs, "geo-codebook")
+	rel, err = filepath.Rel(codebookDir, changedAbs)
+	if err == nil && !strings.HasPrefix(rel, "..") {
+		c.cachedBaseParts = nil
+		return
+	}
+
+	fabricatedToolsDir := filepath.Join(workspaceAbs, "tools", "geo")
+	rel, err = filepath.Rel(fabricatedToolsDir, changedAbs)
+	if err == nil && !strings.HasPrefix(rel, "..") {
+		c.cachedBaseParts = nil
+		return
+	}
+
+	learnedPipelinesDir := filepath.Join(workspaceAbs, "pipelines", "geo")
+	rel, err = filepath.Rel(learnedPipelinesDir, changedAbs)
+	if err == nil && !strings.HasPrefix(rel, "..") {
+		c.cachedBaseParts = nil
+		return
+	}
 }
 
 // BuildSystemPrompt 组装完整的系统提示词 (System Prompt)。
@@ -92,11 +116,21 @@ func (c *ContextBuilder) BuildSystemPrompt() string {
 		parts = append(parts, diary)
 	}
 
+	if pipelineSummary := c.buildLearnedGeoPipelineSummary(); pipelineSummary != "" {
+		parts = append(parts, pipelineSummary)
+	}
+
 	return strings.Join(parts, "\n\n")
 }
 
 func (c *ContextBuilder) buildSystemPromptForInput(query string) string {
 	parts := c.buildBaseSystemPromptParts()
+	if relevantPipelines := c.buildRelevantLearnedGeoPipelinesSection(query); relevantPipelines != "" {
+		parts = append(parts, relevantPipelines)
+	}
+	if relevantSkills := c.buildRelevantSkillsSection(query); relevantSkills != "" {
+		parts = append(parts, relevantSkills)
+	}
 	if recall := c.buildMemoryRecallSection(query); recall != "" {
 		parts = append(parts, recall)
 	}
@@ -133,8 +167,19 @@ func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
 	}
 
 	// 注入技能摘要
-	if skillsSummary := skills.NewLoader(c.workspacePath).BuildSkillsSummary(); skillsSummary != "" {
+	skillsLoader := skills.NewLoader(c.workspacePath)
+	installedSkills := skillsLoader.ListSkills()
+	if skillsSummary := skills.BuildSkillsSummaryFor(installedSkills); skillsSummary != "" {
 		parts = append(parts, skillsSummary)
+		_ = skills.NewTelemetryRecorder(c.workspacePath).RecordShown(installedSkills)
+	}
+
+	if codebookSummary, err := geocodebook.NewLoader(c.workspacePath).BuildSummary(); err == nil && codebookSummary != "" {
+		parts = append(parts, codebookSummary)
+	}
+
+	if fabricatedSummary := geotoolfab.NewLoader(c.workspacePath).BuildSummary(); fabricatedSummary != "" {
+		parts = append(parts, fabricatedSummary)
 	}
 
 	c.cachedBaseParts = make([]string, len(parts))
@@ -171,6 +216,55 @@ func (c *ContextBuilder) buildRecentDiarySection() string {
 		sb.WriteString(fmt.Sprintf("\n\n### %s\n%s", entry.Date, entry.Content))
 	}
 	return sb.String()
+}
+func (c *ContextBuilder) buildLearnedGeoPipelineSummary() string {
+	return geopipeline.NewRecorder(c.workspacePath).BuildSummary()
+}
+
+func (c *ContextBuilder) buildRelevantLearnedGeoPipelinesSection(query string) string {
+	matches, err := geopipeline.NewMatcher(c.workspacePath).Find(query, 3)
+	if err != nil || len(matches) == 0 {
+		return ""
+	}
+
+	reuseCandidates := geopipeline.BuildReuseCandidates(matches)
+	if len(reuseCandidates) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## Relevant Learned Geo Pipelines\n\n")
+	for _, candidate := range reuseCandidates {
+		sb.WriteString(fmt.Sprintf("- **%s**\n", candidate.Goal))
+		for _, step := range candidate.Steps {
+			sb.WriteString(fmt.Sprintf("  step=%s needs_parameter_update=%t", step.Tool, step.NeedsParameterUpdate))
+			if step.ExampleArgsJSON != "" {
+				sb.WriteString(fmt.Sprintf(" example_args=%s", step.ExampleArgsJSON))
+			}
+			sb.WriteString("\n")
+		}
+	}
+	return strings.TrimSpace(sb.String())
+}
+
+func (c *ContextBuilder) buildRelevantSkillsSection(query string) string {
+	installedSkills := skills.NewLoader(c.workspacePath).ListSkills()
+	selectedSkills := skills.SelectSkillsForQuery(installedSkills, query)
+	if len(selectedSkills) == 0 {
+		return ""
+	}
+
+	recorder := skills.NewTelemetryRecorder(c.workspacePath)
+	for _, skill := range selectedSkills {
+		_ = recorder.RecordSelected(skill.Name)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## Relevant Skills\n\n")
+	for _, skill := range selectedSkills {
+		sb.WriteString(fmt.Sprintf("- **%s**: %s\n", skill.Name, skill.Description))
+	}
+	return strings.TrimSpace(sb.String())
 }
 
 func (c *ContextBuilder) buildMemoryRecallSection(query string) string {
