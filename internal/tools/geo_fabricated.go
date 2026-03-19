@@ -18,6 +18,12 @@ type geoFabricatedTool struct {
 	def geotoolfab.Definition
 }
 
+type geoFabricatedInvocation struct {
+	payload string
+	args    []string
+	timeout time.Duration
+}
+
 // LoadGeoFabricatedTools loads workspace-defined geo tools and returns them as invokable tools.
 func LoadGeoFabricatedTools(workspacePath string) ([]tool.InvokableTool, error) {
 	defs, err := geotoolfab.NewLoader(workspacePath).Load()
@@ -38,25 +44,11 @@ func LoadGeoFabricatedTools(workspacePath string) ([]tool.InvokableTool, error) 
 
 // NewGeoFabricatedTool wraps a fabricated geo tool definition as an invokable tool.
 func NewGeoFabricatedTool(def geotoolfab.Definition) (tool.InvokableTool, error) {
-	if strings.TrimSpace(def.Name) == "" {
-		return nil, fmt.Errorf("fabricated geo tool name is required")
+	validated, err := geotoolfab.ValidateDefinition(def)
+	if err != nil {
+		return nil, err
 	}
-	if strings.TrimSpace(def.Description) == "" {
-		return nil, fmt.Errorf("fabricated geo tool %q description is required", def.Name)
-	}
-	if strings.TrimSpace(def.Runner) == "" {
-		return nil, fmt.Errorf("fabricated geo tool %q runner is required", def.Name)
-	}
-	if strings.TrimSpace(def.ScriptPath) == "" {
-		return nil, fmt.Errorf("fabricated geo tool %q script path is required", def.Name)
-	}
-	if def.TimeoutSeconds <= 0 {
-		def.TimeoutSeconds = 120
-	}
-	if def.Parameters == nil {
-		def.Parameters = map[string]geotoolfab.Parameter{}
-	}
-	return &geoFabricatedTool{def: def}, nil
+	return &geoFabricatedTool{def: validated}, nil
 }
 
 func (t *geoFabricatedTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
@@ -80,27 +72,17 @@ func (t *geoFabricatedTool) Info(ctx context.Context) (*schema.ToolInfo, error) 
 func (t *geoFabricatedTool) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
 	_ = opts
 
-	input, err := parseGeoFabricatedArguments(argumentsInJSON)
+	invocation, err := prepareGeoFabricatedInvocation(t.def, argumentsInJSON)
 	if err != nil {
 		return "", err
 	}
-	if err := validateGeoFabricatedArguments(input, t.def.Parameters); err != nil {
-		return "", err
-	}
 
-	payload := strings.TrimSpace(argumentsInJSON)
-	if payload == "" {
-		payload = "{}"
-	}
-
-	timeout := time.Duration(t.def.TimeoutSeconds) * time.Second
-	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, invocation.timeout)
 	defer cancel()
 
-	args := append(append([]string(nil), t.def.Args...), t.def.ScriptPath)
-	cmd := exec.CommandContext(timeoutCtx, t.def.Runner, args...)
+	cmd := exec.CommandContext(timeoutCtx, t.def.Runner, invocation.args...)
 	cmd.Dir = t.def.WorkingDir
-	cmd.Stdin = strings.NewReader(payload)
+	cmd.Stdin = strings.NewReader(invocation.payload)
 
 	var stdout strings.Builder
 	var stderr strings.Builder
@@ -186,4 +168,31 @@ func matchesGeoFabricatedType(value any, expected string) bool {
 	default:
 		return false
 	}
+}
+
+func prepareGeoFabricatedInvocation(def geotoolfab.Definition, argumentsInJSON string) (geoFabricatedInvocation, error) {
+	input, err := parseGeoFabricatedArguments(argumentsInJSON)
+	if err != nil {
+		return geoFabricatedInvocation{}, err
+	}
+	if err := validateGeoFabricatedArguments(input, def.Parameters); err != nil {
+		return geoFabricatedInvocation{}, err
+	}
+
+	payload := strings.TrimSpace(argumentsInJSON)
+	if payload == "" {
+		payload = "{}"
+	}
+
+	timeout := time.Duration(def.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 120 * time.Second
+	}
+
+	args := append(append([]string(nil), def.Args...), def.ScriptPath)
+	return geoFabricatedInvocation{
+		payload: payload,
+		args:    args,
+		timeout: timeout,
+	}, nil
 }

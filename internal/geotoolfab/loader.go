@@ -134,30 +134,10 @@ func (l *Loader) loadDefinition(workspacePath, sourcePath string) (Definition, e
 	}
 
 	name := strings.TrimSpace(raw.Name)
-	if !validToolNamePattern.MatchString(name) {
-		return Definition{}, fmt.Errorf("fabricated geo tool manifest %q must use a geo_* tool name, got %q", sourcePath, raw.Name)
-	}
-
-	description := strings.TrimSpace(raw.Description)
-	if description == "" {
-		return Definition{}, fmt.Errorf("fabricated geo tool manifest %q is missing description", sourcePath)
-	}
-
-	runner := strings.TrimSpace(raw.Runner)
-	if runner == "" {
-		runner = "python"
-	}
 
 	scriptPath, err := resolveWithinWorkspace(workspacePath, raw.Script)
 	if err != nil {
 		return Definition{}, fmt.Errorf("fabricated geo tool %q script path invalid: %w", name, err)
-	}
-	info, err := os.Stat(scriptPath)
-	if err != nil {
-		return Definition{}, fmt.Errorf("fabricated geo tool %q script path invalid: %w", name, err)
-	}
-	if info.IsDir() {
-		return Definition{}, fmt.Errorf("fabricated geo tool %q script path must be a file: %s", name, scriptPath)
 	}
 
 	workingDir := workspacePath
@@ -168,41 +148,23 @@ func (l *Loader) loadDefinition(workspacePath, sourcePath string) (Definition, e
 		}
 	}
 
-	parameters := make(map[string]Parameter, len(raw.Parameters))
-	for key, param := range raw.Parameters {
-		paramName := strings.TrimSpace(key)
-		if paramName == "" {
-			return Definition{}, fmt.Errorf("fabricated geo tool %q contains an empty parameter name", name)
-		}
-		paramType := normalizeParameterType(param.Type)
-		if !isSupportedParameterType(paramType) {
-			return Definition{}, fmt.Errorf("fabricated geo tool %q parameter %q has unsupported type %q", name, paramName, param.Type)
-		}
-		parameters[paramName] = Parameter{
-			Type:        paramType,
-			Description: strings.TrimSpace(param.Description),
-			Required:    param.Required,
-		}
-	}
-
-	timeoutSeconds := raw.TimeoutSeconds
-	if timeoutSeconds <= 0 {
-		timeoutSeconds = defaultTimeoutSeconds
-	}
-
-	return Definition{
+	validated, err := ValidateDefinition(Definition{
 		Name:           name,
-		Description:    description,
-		Runner:         runner,
+		Description:    raw.Description,
+		Runner:         raw.Runner,
 		ScriptPath:     scriptPath,
 		Args:           append([]string(nil), raw.Args...),
 		WorkingDir:     workingDir,
-		Parameters:     parameters,
-		TimeoutSeconds: timeoutSeconds,
+		Parameters:     raw.Parameters,
+		TimeoutSeconds: raw.TimeoutSeconds,
 		SourcePath:     sourcePath,
-	}, nil
-}
+	})
+	if err != nil {
+		return Definition{}, fmt.Errorf("validate fabricated geo tool %q from %q: %w", name, sourcePath, err)
+	}
 
+	return validated, nil
+}
 func resolveWithinWorkspace(workspacePath, rawPath string) (string, error) {
 	rawPath = strings.TrimSpace(rawPath)
 	if rawPath == "" {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MEKXH/golem/internal/geotoolfab"
 )
@@ -53,11 +54,20 @@ func TestGeoFabricatedTool_ExecutesRunnerWithJSONStdin(t *testing.T) {
 }
 
 func TestGeoFabricatedTool_RejectsMissingRequiredParameter(t *testing.T) {
+	workspace := t.TempDir()
+	scriptPath := filepath.Join(workspace, "tools", "geo", "scripts", "helper.py")
+	if err := os.MkdirAll(filepath.Dir(scriptPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(scriptPath, []byte("# helper placeholder\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
 	def := geotoolfab.Definition{
 		Name:        "geo_sinuosity",
 		Description: "Compute sinuosity ratio for a river centerline.",
 		Runner:      "python",
-		ScriptPath:  filepath.Join(t.TempDir(), "tools", "geo", "scripts", "helper.py"),
+		ScriptPath:  scriptPath,
 		Parameters: map[string]geotoolfab.Parameter{
 			"input_path": {Type: "string", Required: true, Description: "Path to the input line dataset."},
 		},
@@ -98,5 +108,62 @@ func TestGeoFabricatedToolHelperProcess(t *testing.T) {
 			t.Fatalf("Encode() error = %v", err)
 		}
 		os.Exit(0)
+	}
+}
+
+func TestPrepareGeoFabricatedInvocation_ValidatesArguments(t *testing.T) {
+	workspace := t.TempDir()
+	scriptPath := filepath.Join(workspace, "tools", "geo", "scripts", "helper.py")
+	if err := os.MkdirAll(filepath.Dir(scriptPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(scriptPath, []byte("# helper placeholder\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	_, err := prepareGeoFabricatedInvocation(geotoolfab.Definition{
+		Name:        "geo_sinuosity",
+		Description: "Compute sinuosity ratio for a river centerline.",
+		Runner:      "python",
+		ScriptPath:  scriptPath,
+		Parameters: map[string]geotoolfab.Parameter{
+			"input_path": {Type: "string", Required: true, Description: "Path to the input line dataset."},
+		},
+		TimeoutSeconds: 30,
+	}, `{}`)
+	if err == nil {
+		t.Fatal("expected argument validation error")
+	}
+}
+
+func TestPrepareGeoFabricatedInvocation_NormalizesEmptyPayload(t *testing.T) {
+	workspace := t.TempDir()
+	scriptPath := filepath.Join(workspace, "tools", "geo", "scripts", "helper.py")
+	if err := os.MkdirAll(filepath.Dir(scriptPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(scriptPath, []byte("# helper placeholder\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	invocation, err := prepareGeoFabricatedInvocation(geotoolfab.Definition{
+		Name:           "geo_sinuosity",
+		Description:    "Compute sinuosity ratio for a river centerline.",
+		Runner:         "python",
+		ScriptPath:     scriptPath,
+		Args:           []string{"-u"},
+		TimeoutSeconds: 15,
+	}, "")
+	if err != nil {
+		t.Fatalf("prepareGeoFabricatedInvocation() error = %v", err)
+	}
+	if invocation.payload != "{}" {
+		t.Fatalf("expected normalized empty payload, got %q", invocation.payload)
+	}
+	if len(invocation.args) != 2 || invocation.args[0] != "-u" || invocation.args[1] != scriptPath {
+		t.Fatalf("unexpected invocation args %+v", invocation.args)
+	}
+	if invocation.timeout != 15*time.Second {
+		t.Fatalf("expected 15 second timeout, got %s", invocation.timeout)
 	}
 }

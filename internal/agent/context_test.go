@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/MEKXH/golem/internal/skills"
 )
 
 func TestBuildSystemPrompt_IncludesRecentDiaries(t *testing.T) {
@@ -243,5 +245,33 @@ steps:
 	}
 	if strings.Contains(sys, "analyze river sinuosity") {
 		t.Fatalf("did not expect unrelated learned pipeline in prompt, got: %s", sys)
+	}
+}
+
+func TestBuildSystemPrompt_RecordsShownSkillsTelemetry(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workspace, "skills", "spatial-analysis"), 0o755); err != nil {
+		t.Fatalf("MkdirAll skill: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(workspace, "skills", "spatial-analysis", "SKILL.md"),
+		[]byte("---\nname: spatial-analysis\ndescription: \"workspace geo skill\"\n---\n\n# Spatial Analysis\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile skill: %v", err)
+	}
+
+	cb := NewContextBuilder(workspace)
+	prompt := cb.BuildSystemPrompt()
+	if !strings.Contains(prompt, "spatial-analysis") {
+		t.Fatalf("expected skills summary in prompt, got: %s", prompt)
+	}
+
+	snapshot, err := skills.NewTelemetryRecorder(workspace).Load()
+	if err != nil {
+		t.Fatalf("Load telemetry error: %v", err)
+	}
+	if snapshot.Skills["spatial-analysis"].Shown == 0 {
+		t.Fatalf("expected shown counter to be recorded, got %+v", snapshot.Skills["spatial-analysis"])
 	}
 }

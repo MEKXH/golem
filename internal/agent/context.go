@@ -164,8 +164,11 @@ func (c *ContextBuilder) buildBaseSystemPromptParts() []string {
 	}
 
 	// 注入技能摘要
-	if skillsSummary := skills.NewLoader(c.workspacePath).BuildSkillsSummary(); skillsSummary != "" {
+	skillsLoader := skills.NewLoader(c.workspacePath)
+	installedSkills := skillsLoader.ListSkills()
+	if skillsSummary := skills.BuildSkillsSummaryFor(installedSkills); skillsSummary != "" {
 		parts = append(parts, skillsSummary)
+		_ = skills.NewTelemetryRecorder(c.workspacePath).RecordShown(installedSkills)
 	}
 
 	if codebookSummary, err := geocodebook.NewLoader(c.workspacePath).BuildSummary(); err == nil && codebookSummary != "" {
@@ -234,7 +237,6 @@ func (c *ContextBuilder) buildRelevantLearnedGeoPipelinesSection(query string) s
 	}
 	return strings.TrimSpace(sb.String())
 }
-
 
 func (c *ContextBuilder) buildMemoryRecallSection(query string) string {
 	memMgr := memory.NewManager(c.workspacePath)
@@ -333,5 +335,3 @@ func (c *ContextBuilder) BuildMessages(history []*session.Message, current strin
 
 	return messages
 }
-
-
