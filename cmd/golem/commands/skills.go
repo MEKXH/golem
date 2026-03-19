@@ -48,12 +48,17 @@ func newSkillsInstallCmd() *cobra.Command {
 }
 
 func newSkillsRemoveCmd() *cobra.Command {
-	return &cobra.Command{
+	var yes bool
+
+	cmd := &cobra.Command{
 		Use:   "remove <name>",
 		Short: "Remove an installed skill",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runSkillsRemove,
 	}
+
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Skip confirmation prompt")
+	return cmd
 }
 
 func newSkillsShowCmd() *cobra.Command {
@@ -162,6 +167,18 @@ func runSkillsInstall(cmd *cobra.Command, args []string) error {
 }
 
 func runSkillsRemove(cmd *cobra.Command, args []string) error {
+	yes, _ := cmd.Flags().GetBool("yes")
+	if !yes {
+		fmt.Printf("Are you sure you want to remove skill '%s'? [y/N] ", args[0])
+		var response string
+		fmt.Scanln(&response)
+		response = strings.ToLower(strings.TrimSpace(response))
+		if response != "y" && response != "yes" {
+			fmt.Println("Skill removal cancelled.")
+			return nil
+		}
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
