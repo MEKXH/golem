@@ -117,9 +117,23 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 | `append_diary` | 追加每日日志 |
 | `web_search` | 网页搜索（有 Brave Key 优先使用 Brave） |
 | `web_fetch` | 抓取并提取网页内容 |
+| `geo_*` | 可选地理空间工具集，覆盖 GDAL/PostGIS 工作流、数据发现、坐标系检查、格式转换和空间 SQL |
 | `manage_cron` | 管理定时任务 |
 | `message` | 向渠道发送消息 |
 | `spawn` / `subagent` / `workflow` | 委托任务给子 Agent 与编排工作流 |
+
+### Geo 工具能力
+
+当 `tools.geo.enabled=true` 时，Golem 会注册面向工作区的 Geo 工具：
+
+- 基础工具：`geo_info`、`geo_process`、`geo_crs_detect`、`geo_format_convert`、`geo_data_catalog`、`geo_sql_codebook`
+- 可选 PostGIS 工具：配置 `tools.geo.postgis_dsn` 后启用 `geo_spatial_query`
+- 工作区扩展点：
+  - `geo-codebook/`：复用空间 SQL 模式
+  - `tools/geo/`：存放工作区自定义 Geo 工具
+  - `pipelines/geo/`：保存学习到的 Geo 工具序列
+
+文件处理类 Geo 工具依赖 GDAL；PostGIS 为可选能力。
 
 ### 支持的 LLM 提供商
 
@@ -398,6 +412,16 @@ golem skills search weather
       "provider": "openai",
       "model": "gpt-4o-mini-transcribe",
       "timeout_seconds": 30
+    },
+    "geo": {
+      "enabled": false,
+      "gdal_bin_dir": "",
+      "restrict_to_workspace": true,
+      "timeout_seconds": 120,
+      "postgis_dsn": "",
+      "query_timeout_seconds": 30,
+      "max_rows": 200,
+      "readonly": true
     }
   },
   "gateway": {
@@ -428,6 +452,17 @@ golem skills search weather
 - `timeout_seconds`：子任务超时（默认 `300`）
 - `retry`：每个子任务重试次数（默认 `1`，总尝试次数 = retry + 1）
 - `max_concurrency`：`spawn/subagent/workflow` 的并发上限（默认 `3`）
+
+`tools.geo` 运行时参数：
+
+- `enabled`：是否注册 Geo 工具
+- `gdal_bin_dir`：可选的 GDAL 可执行文件目录
+- `restrict_to_workspace`：限制 Geo 文件路径位于工作区内
+- `timeout_seconds`：GDAL 类工具超时
+- `postgis_dsn`：`geo_spatial_query` 使用的可选 PostGIS 连接串
+- `query_timeout_seconds`：PostGIS 查询超时
+- `max_rows`：空间查询结果的最大返回行数
+- `readonly`：尽量使用只读 PostGIS 事务
 
 `channels.outbound` 可靠性参数：
 

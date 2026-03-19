@@ -115,9 +115,23 @@ It can chat, run tools, call shell commands, manage files, search/fetch web cont
 | `append_diary` | Append daily notes |
 | `web_search` | Web search (Brave when API key exists; fallback available) |
 | `web_fetch` | Fetch and extract web page content |
+| `geo_*` | Optional geospatial toolset for GDAL/PostGIS workflows, dataset discovery, CRS inspection, format conversion, and spatial SQL |
 | `manage_cron` | Manage scheduled jobs |
 | `message` | Send messages to channels |
 | `spawn` / `subagent` / `workflow` | Delegate tasks to subagents and orchestrated workflows |
+
+### Geo Tooling
+
+When `tools.geo.enabled=true`, Golem registers Geo tools for workspace-local geospatial workflows:
+
+- Baseline tools: `geo_info`, `geo_process`, `geo_crs_detect`, `geo_format_convert`, `geo_data_catalog`, `geo_sql_codebook`
+- Optional PostGIS tool: `geo_spatial_query` when `tools.geo.postgis_dsn` is configured
+- Workspace knowledge and extension points:
+  - `geo-codebook/` for reusable spatial SQL patterns
+  - `tools/geo/` for fabricated workspace Geo tools
+  - `pipelines/geo/` for learned Geo tool sequences
+
+GDAL must be installed for file-processing tools. PostGIS access is optional.
 
 ### LLM Providers
 
@@ -396,6 +410,16 @@ Template file in repo: `config/config.example.json`
       "provider": "openai",
       "model": "gpt-4o-mini-transcribe",
       "timeout_seconds": 30
+    },
+    "geo": {
+      "enabled": false,
+      "gdal_bin_dir": "",
+      "restrict_to_workspace": true,
+      "timeout_seconds": 120,
+      "postgis_dsn": "",
+      "query_timeout_seconds": 30,
+      "max_rows": 200,
+      "readonly": true
     }
   },
   "gateway": {
@@ -426,6 +450,17 @@ Template file in repo: `config/config.example.json`
 - `timeout_seconds`: delegated subtask timeout (default `300`)
 - `retry`: retry count per subtask (default `1`, total attempts = retry + 1)
 - `max_concurrency`: max concurrent subtask executions across `spawn/subagent/workflow` (default `3`)
+
+`tools.geo` runtime values:
+
+- `enabled`: register Geo tools
+- `gdal_bin_dir`: optional GDAL executable directory
+- `restrict_to_workspace`: keep Geo file paths inside the workspace
+- `timeout_seconds`: GDAL-style tool timeout
+- `postgis_dsn`: optional PostGIS connection string for `geo_spatial_query`
+- `query_timeout_seconds`: PostGIS query timeout
+- `max_rows`: row cap for spatial query results
+- `readonly`: use read-only PostGIS transactions when supported
 
 `channels.outbound` reliability values:
 

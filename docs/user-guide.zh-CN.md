@@ -178,6 +178,16 @@ golem run
       "provider": "openai",
       "model": "gpt-4o-mini-transcribe",
       "timeout_seconds": 30
+    },
+    "geo": {
+      "enabled": false,
+      "gdal_bin_dir": "",
+      "restrict_to_workspace": true,
+      "timeout_seconds": 120,
+      "postgis_dsn": "",
+      "query_timeout_seconds": 30,
+      "max_rows": 200,
+      "readonly": true
     }
   },
   "gateway": { "host": "0.0.0.0", "port": 18790, "token": "" },
@@ -267,6 +277,14 @@ Provider 选择逻辑：
 | `tools.voice.provider` | string | `openai` | 启用时必须是 `openai` |
 | `tools.voice.model` | string | `gpt-4o-mini-transcribe` | OpenAI 兼容转写模型 |
 | `tools.voice.timeout_seconds` | int | `30` | 非负；`0` 会回填为 `30` |
+| `tools.geo.enabled` | bool | `false` | 开启后注册 Geo 工具 |
+| `tools.geo.gdal_bin_dir` | string | `""` | 可选 GDAL 可执行文件目录 |
+| `tools.geo.restrict_to_workspace` | bool | `true` | 限制 Geo 文件路径在工作区内 |
+| `tools.geo.timeout_seconds` | int | `120` | 非负；`0` 会回填为 `120` |
+| `tools.geo.postgis_dsn` | string | `""` | 设置后启用 `geo_spatial_query` |
+| `tools.geo.query_timeout_seconds` | int | `30` | 非负；`0` 会回填为 `30` |
+| `tools.geo.max_rows` | int | `200` | 非负；`0` 会回填为 `200` |
+| `tools.geo.readonly` | bool | `true` | 尽量使用只读 PostGIS 事务 |
 
 ## 5.6 `policy`、`mcp`
 
@@ -519,6 +537,25 @@ golem skills remove weather
 | `subagent` | `task`, `label`, route 参数 | 同步子 Agent |
 | `workflow` | `goal`, `mode`, `subtasks`, `label` | 内置编排：串/并行执行子任务并汇总每步结果 |
 | `mcp.<server>.<tool>` | MCP 工具定义对应的 JSON 参数 | 从健康 MCP 服务动态注册 |
+
+Geo 工具仅在 `tools.geo.enabled=true` 时注册：
+
+| 工具 | 核心参数 | 行为 |
+| --- | --- | --- |
+| `geo_info` | `path` | 检查栅格/矢量文件，返回格式、CRS、范围和大小 |
+| `geo_process` | `command`, `args` | 在工作区边界和超时限制内执行白名单 GDAL/OGR 命令 |
+| `geo_crs_detect` | `path` | 检测 CRS、投影名称、单位以及地理/投影属性 |
+| `geo_format_convert` | `input_path`, `output_path`, `output_format` | 使用 `ogr2ogr` 或 `gdal_translate` 转换地理格式 |
+| `geo_data_catalog` | `action` 及发现参数 | 发现本地 Geo 文件或通过 Overpass/STAC 查询远程数据 |
+| `geo_sql_codebook` | `action`, `intent`, `pattern`, `values` | 从 `geo-codebook/` 列出并渲染可复用空间 SQL 模式 |
+| `geo_spatial_query` | `action`, `sql` | 配置 `tools.geo.postgis_dsn` 后可用的只读 PostGIS 模式/查询工具 |
+
+Geo 工作区约定：
+
+- `geo-codebook/`：可复用空间 SQL 模式。
+- `tools/geo/`：工作区自定义 Geo 工具。
+- `pipelines/geo/`：学习到的 Geo 工具序列。
+- `geo_info`、`geo_process`、`geo_crs_detect`、`geo_format_convert` 依赖 GDAL。
 
 安全边界：
 

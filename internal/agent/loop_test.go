@@ -458,6 +458,7 @@ func TestRegisterDefaultTools_GeoSpatialQuerySkippedWithoutDSN(t *testing.T) {
 	}
 	if !slices.Contains(names, "geo_info") || !slices.Contains(names, "geo_process") ||
 		!slices.Contains(names, "geo_crs_detect") || !slices.Contains(names, "geo_format_convert") ||
+		!slices.Contains(names, "geo_data_catalog") ||
 		!slices.Contains(names, "geo_sql_codebook") {
 		t.Fatalf("expected baseline geo tools to stay registered, got: %v", names)
 	}
