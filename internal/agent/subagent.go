@@ -386,8 +386,12 @@ func (m *SubagentManager) normalizeWorkflow(req tools.WorkflowRequest) (tools.Wo
 	}, nil
 }
 
+// workflowGoalReplacer is cached globally to avoid O(N) allocation and
+// initialization overhead of strings.NewReplacer on every splitWorkflowGoal call.
+var workflowGoalReplacer = strings.NewReplacer("；", "\n", ";", "\n", "。", "\n", ".", "\n")
+
 func splitWorkflowGoal(goal string) []string {
-	replaced := strings.NewReplacer("；", "\n", ";", "\n", "。", "\n", ".", "\n").Replace(goal)
+	replaced := workflowGoalReplacer.Replace(goal)
 	lines := strings.Split(replaced, "\n")
 	out := make([]string, 0, len(lines))
 	for _, raw := range lines {

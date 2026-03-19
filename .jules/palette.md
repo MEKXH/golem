@@ -13,3 +13,7 @@
 ## 2026-03-12 - Multibyte String Truncation
 **Learning:** When truncating strings for UI display in Go (especially in CLIs where multi-byte characters like emojis or non-English text might appear), slicing by bytes (e.g. `s[:maxLen]`) can produce invalid UTF-8 characters and break rendering, causing ugly symbols in the terminal.
 **Action:** Always slice by runes by converting to `[]rune(s)` before calculating length or slicing, ensuring that multibyte characters are kept intact when truncating.
+
+## 2026-03-16 - Destructive Action Confirmation
+**Learning:** Destructive CLI commands, such as bulk credential deletion via `golem auth logout` (when executed without specifying a particular provider), risk causing unwanted data loss and frustration if executed accidentally.
+**Action:** Implemented a safety prompt (`[y/N]`) that safely aborts on any non-confirming input, alongside a `--yes` (`-y`) flag to bypass the prompt for scripts. This prevents accidental wipes without degrading power-user workflows.

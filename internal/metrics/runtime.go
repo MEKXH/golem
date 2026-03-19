@@ -333,25 +333,65 @@ func p95ProxyFromBuckets(buckets []int64, total int64) int64 {
 	return latencyBucketUpperBoundsMs[len(latencyBucketUpperBoundsMs)-1]
 }
 
+// containsIgnoreCase is a fast, zero-allocation helper that checks if a string
+// contains a specific lowercase English substring, avoiding strings.ToLower allocations.
+func containsIgnoreCase(s, substr string) bool {
+	n := len(substr)
+	if n == 0 {
+		return true
+	}
+	if len(s) < n {
+		return false
+	}
+
+	c0 := substr[0]
+	c0Upper := c0 - ('a' - 'A')
+	if c0 == ' ' {
+		c0Upper = ' '
+	}
+
+	for i := 0; i <= len(s)-n; i++ {
+		c := s[i]
+		if c != c0 && c != c0Upper {
+			continue
+		}
+
+		match := true
+		for j := 1; j < n; j++ {
+			c = s[i+j]
+			if c >= 'A' && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			if c != substr[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
+
 func isTimeoutError(runErr error, result string) bool {
 	if errors.Is(runErr, context.DeadlineExceeded) {
 		return true
 	}
 
 	if runErr != nil {
-		loweredErr := strings.ToLower(runErr.Error())
-		if strings.Contains(loweredErr, "deadline exceeded") ||
-			strings.Contains(loweredErr, "timeout") ||
-			strings.Contains(loweredErr, "timed out") {
+		errStr := runErr.Error()
+		if containsIgnoreCase(errStr, "deadline exceeded") ||
+			containsIgnoreCase(errStr, "timeout") ||
+			containsIgnoreCase(errStr, "timed out") {
 			return true
 		}
 	}
 
 	if result != "" {
-		loweredResult := strings.ToLower(result)
-		if strings.Contains(loweredResult, "deadline exceeded") ||
-			strings.Contains(loweredResult, "timeout") ||
-			strings.Contains(loweredResult, "timed out") {
+		if containsIgnoreCase(result, "deadline exceeded") ||
+			containsIgnoreCase(result, "timeout") ||
+			containsIgnoreCase(result, "timed out") {
 			return true
 		}
 	}

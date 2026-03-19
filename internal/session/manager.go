@@ -188,8 +188,12 @@ func (m *Manager) Reset(key string) {
 	os.Remove(m.sessionPath(key))
 }
 
+// sessionPathReplacer is cached globally to avoid O(N) allocation and
+// initialization overhead of strings.NewReplacer on every file I/O operation.
+var sessionPathReplacer = strings.NewReplacer(":", "_", "/", "_", "\\", "_")
+
 func (m *Manager) sessionPath(key string) string {
 	// 转换键值中的敏感字符以生成安全的文件名
-	safeKey := strings.NewReplacer(":", "_", "/", "_", "\\", "_").Replace(key)
+	safeKey := sessionPathReplacer.Replace(key)
 	return filepath.Join(m.dir, safeKey+".jsonl")
 }

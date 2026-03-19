@@ -371,13 +371,34 @@ func runCronNow(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// truncate trims a string to maxLen runes (not bytes).
+// It avoids O(N) memory allocation by iterating over runes rather than casting to []rune.
 func truncate(s string, maxLen int) string {
-	runes := []rune(s)
-	if len(runes) <= maxLen {
+	if maxLen <= 0 {
+		return ""
+	}
+	if len(s) <= maxLen {
 		return s
 	}
-	if maxLen <= 3 {
-		return string(runes[:maxLen])
+
+	var targetByteIdx int
+	count := 0
+	targetLen := maxLen
+	if maxLen > 3 {
+		targetLen = maxLen - 3
 	}
-	return string(runes[:maxLen-3]) + "..."
+
+	for i := range s {
+		if count == targetLen {
+			targetByteIdx = i
+		}
+		if count == maxLen {
+			if maxLen <= 3 {
+				return s[:i]
+			}
+			return s[:targetByteIdx] + "..."
+		}
+		count++
+	}
+	return s
 }
