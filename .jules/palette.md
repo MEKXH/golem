@@ -17,3 +17,7 @@
 ## 2026-03-16 - Destructive Action Confirmation
 **Learning:** Destructive CLI commands, such as bulk credential deletion via `golem auth logout` (when executed without specifying a particular provider), risk causing unwanted data loss and frustration if executed accidentally.
 **Action:** Implemented a safety prompt (`[y/N]`) that safely aborts on any non-confirming input, alongside a `--yes` (`-y`) flag to bypass the prompt for scripts. This prevents accidental wipes without degrading power-user workflows.
+
+## 2026-03-22 - TUI Character Count
+**Learning:** For terminal UI input areas with fixed character limits, users need visual feedback on their progress towards the limit to prevent unexpected truncation or submission failures.
+**Action:** Always display a dynamic character count (e.g., `X/Max`) prominently alongside input fields (like the Bubble Tea `textarea`) in the footer or directly below the field.
