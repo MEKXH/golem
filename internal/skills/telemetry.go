@@ -189,9 +189,12 @@ func skillQueryAliases(name string) []string {
 	return []string{alias}
 }
 
+// skillQueryReplacer is a shared strings.Replacer used by normalizeSkillQueryText.
+// Reusing a single Replacer avoids the initialization overhead of strings.NewReplacer on every call.
+var skillQueryReplacer = strings.NewReplacer("-", " ", "_", " ", "/", " ")
+
 func normalizeSkillQueryText(text string) string {
-	replacer := strings.NewReplacer("-", " ", "_", " ", "/", " ")
 	text = strings.ToLower(strings.TrimSpace(text))
-	text = replacer.Replace(text)
+	text = skillQueryReplacer.Replace(text)
 	return strings.Join(strings.Fields(text), " ")
 }

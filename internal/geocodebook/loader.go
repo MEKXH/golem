@@ -238,13 +238,16 @@ func (l *Loader) loadPatterns() ([]Pattern, error) {
 	return patterns, nil
 }
 
+// tokenizeReplacer is a shared strings.Replacer used to clean punctuation before tokenization.
+// Reusing a single Replacer avoids the initialization overhead of strings.NewReplacer on every call.
+var tokenizeReplacer = strings.NewReplacer(",", " ", ".", " ", "_", " ", "-", " ", "/", " ", "(", " ", ")", " ")
+
 func tokenize(input string) []string {
 	input = strings.ToLower(strings.TrimSpace(input))
 	if input == "" {
 		return nil
 	}
-	replacer := strings.NewReplacer(",", " ", ".", " ", "_", " ", "-", " ", "/", " ", "(", " ", ")", " ")
-	input = replacer.Replace(input)
+	input = tokenizeReplacer.Replace(input)
 	fields := strings.Fields(input)
 	seen := make(map[string]bool, len(fields))
 	tokens := make([]string, 0, len(fields))
