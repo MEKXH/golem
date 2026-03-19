@@ -128,6 +128,9 @@ func (c *ContextBuilder) buildSystemPromptForInput(query string) string {
 	if relevantPipelines := c.buildRelevantLearnedGeoPipelinesSection(query); relevantPipelines != "" {
 		parts = append(parts, relevantPipelines)
 	}
+	if relevantSkills := c.buildRelevantSkillsSection(query); relevantSkills != "" {
+		parts = append(parts, relevantSkills)
+	}
 	if recall := c.buildMemoryRecallSection(query); recall != "" {
 		parts = append(parts, recall)
 	}
@@ -240,6 +243,26 @@ func (c *ContextBuilder) buildRelevantLearnedGeoPipelinesSection(query string) s
 			}
 			sb.WriteString("\n")
 		}
+	}
+	return strings.TrimSpace(sb.String())
+}
+
+func (c *ContextBuilder) buildRelevantSkillsSection(query string) string {
+	installedSkills := skills.NewLoader(c.workspacePath).ListSkills()
+	selectedSkills := skills.SelectSkillsForQuery(installedSkills, query)
+	if len(selectedSkills) == 0 {
+		return ""
+	}
+
+	recorder := skills.NewTelemetryRecorder(c.workspacePath)
+	for _, skill := range selectedSkills {
+		_ = recorder.RecordSelected(skill.Name)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## Relevant Skills\n\n")
+	for _, skill := range selectedSkills {
+		sb.WriteString(fmt.Sprintf("- **%s**: %s\n", skill.Name, skill.Description))
 	}
 	return strings.TrimSpace(sb.String())
 }

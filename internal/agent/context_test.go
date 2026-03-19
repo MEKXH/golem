@@ -307,3 +307,39 @@ func TestBuildMessages_IncludesReplayReadyGeoReuseHints(t *testing.T) {
 		t.Fatalf("expected example args json in prompt, got: %s", sys)
 	}
 }
+
+func TestBuildMessages_RecordsSelectedSkillTelemetryForExplicitQueryMatch(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workspace, "skills", "spatial-analysis"), 0o755); err != nil {
+		t.Fatalf("MkdirAll skill: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(workspace, "skills", "spatial-analysis", "SKILL.md"),
+		[]byte("---\nname: spatial-analysis\ndescription: \"workspace geo skill\"\n---\n\n# Spatial Analysis\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile skill: %v", err)
+	}
+
+	cb := NewContextBuilder(workspace)
+	msgs := cb.BuildMessages(nil, "use spatial analysis to inspect this raster", nil)
+	if len(msgs) < 2 {
+		t.Fatalf("expected at least 2 messages, got %d", len(msgs))
+	}
+
+	sys := msgs[0].Content
+	if !strings.Contains(sys, "Relevant Skills") {
+		t.Fatalf("expected relevant skills section in system prompt, got: %s", sys)
+	}
+	if !strings.Contains(sys, "spatial-analysis") {
+		t.Fatalf("expected matched skill in relevant section, got: %s", sys)
+	}
+
+	snapshot, err := skills.NewTelemetryRecorder(workspace).Load()
+	if err != nil {
+		t.Fatalf("Load telemetry error: %v", err)
+	}
+	if snapshot.Skills["spatial-analysis"].Selected == 0 {
+		t.Fatalf("expected selected counter to be recorded, got %+v", snapshot.Skills["spatial-analysis"])
+	}
+}

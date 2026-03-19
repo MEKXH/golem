@@ -20,6 +20,9 @@ func TestBuildScaffold_GeneratesValidatorCompliantTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildScaffold() error = %v", err)
 	}
+	if scaffold.ToolName != "geo_sinuosity" {
+		t.Fatalf("expected normalized tool name, got %q", scaffold.ToolName)
+	}
 	if !strings.Contains(scaffold.ManifestBody, "name: geo_sinuosity") {
 		t.Fatalf("expected geo-prefixed manifest, got %s", scaffold.ManifestBody)
 	}
@@ -32,8 +35,8 @@ func TestBuildScaffold_GeneratesValidatorCompliantTool(t *testing.T) {
 	if !strings.Contains(scaffold.ScriptBody, "def main()") {
 		t.Fatalf("expected python script stub, got %s", scaffold.ScriptBody)
 	}
-	if _, err := ValidateDefinition(scaffold.Definition); err != nil {
-		t.Fatalf("expected scaffold definition to validate, got %v", err)
+	if !scaffold.ValidationPassed {
+		t.Fatal("expected scaffold to report validator success")
 	}
 }
 

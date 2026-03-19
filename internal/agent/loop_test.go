@@ -13,6 +13,7 @@ import (
 	"github.com/MEKXH/golem/internal/bus"
 	"github.com/MEKXH/golem/internal/config"
 	"github.com/MEKXH/golem/internal/session"
+	"github.com/MEKXH/golem/internal/skills"
 	"github.com/MEKXH/golem/internal/tools"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
@@ -606,5 +607,116 @@ func TestProcessForChannel_RecordsActivity(t *testing.T) {
 
 	if gotChannel != "telegram" || gotChatID != "chat-42" {
 		t.Fatalf("unexpected activity record: channel=%q chat=%q", gotChannel, gotChatID)
+	}
+}
+
+type geoFailureMockModel struct {
+	callCount int
+}
+
+func (m *geoFailureMockModel) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
+	m.callCount++
+	if m.callCount == 1 {
+		return &schema.Message{
+			Role:    schema.Assistant,
+			Content: "",
+			ToolCalls: []schema.ToolCall{{
+				ID: "geo_fail_call_1",
+				Function: schema.FunctionCall{
+					Name:      "geo_process",
+					Arguments: `{"command":"gdalwarp"}`,
+				},
+			}},
+		}, nil
+	}
+	return &schema.Message{Role: schema.Assistant, Content: "Geo run finished"}, nil
+}
+
+func (m *geoFailureMockModel) Stream(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.StreamReader[*schema.Message], error) {
+	return nil, nil
+}
+
+func (m *geoFailureMockModel) BindTools(toolInfos []*schema.ToolInfo) error {
+	return nil
+}
+
+type failingNamedTestTool struct {
+	name string
+}
+
+func (t *failingNamedTestTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{Name: t.name, Desc: "A failing named test tool"}, nil
+}
+
+func (t *failingNamedTestTool) InvokableRun(ctx context.Context, args string, opts ...tool.Option) (string, error) {
+	return "", fmt.Errorf("boom")
+}
+
+func TestProcessDirect_RecordsSkillTelemetrySuccessForSingleMatchedGeoSkill(t *testing.T) {
+	mockModel := &geoPipelineMockModel{}
+	loop := newTestLoop(t, mockModel, 10)
+
+	if err := os.MkdirAll(filepath.Join(loop.workspacePath, "skills", "spatial-analysis"), 0o755); err != nil {
+		t.Fatalf("MkdirAll skill: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(loop.workspacePath, "skills", "spatial-analysis", "SKILL.md"),
+		[]byte("---\nname: spatial-analysis\ndescription: \"workspace geo skill\"\n---\n\n# Spatial Analysis\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile skill: %v", err)
+	}
+
+	if err := loop.tools.Register(&namedTestTool{name: "geo_info"}); err != nil {
+		t.Fatalf("failed to register geo_info: %v", err)
+	}
+	if err := loop.tools.Register(&namedTestTool{name: "geo_sinuosity"}); err != nil {
+		t.Fatalf("failed to register geo_sinuosity: %v", err)
+	}
+
+	_, err := loop.ProcessDirect(context.Background(), "use spatial analysis to analyze river sinuosity")
+	if err != nil {
+		t.Fatalf("ProcessDirect returned error: %v", err)
+	}
+
+	snapshot, err := skills.NewTelemetryRecorder(loop.workspacePath).Load()
+	if err != nil {
+		t.Fatalf("Load telemetry error: %v", err)
+	}
+	if snapshot.Skills["spatial-analysis"].Success == 0 {
+		t.Fatalf("expected success counter to be recorded, got %+v", snapshot.Skills["spatial-analysis"])
+	}
+}
+
+func TestProcessDirect_RecordsSkillTelemetryFailureForSingleMatchedGeoSkill(t *testing.T) {
+	mockModel := &geoFailureMockModel{}
+	loop := newTestLoop(t, mockModel, 10)
+
+	if err := os.MkdirAll(filepath.Join(loop.workspacePath, "skills", "spatial-analysis"), 0o755); err != nil {
+		t.Fatalf("MkdirAll skill: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(loop.workspacePath, "skills", "spatial-analysis", "SKILL.md"),
+		[]byte("---\nname: spatial-analysis\ndescription: \"workspace geo skill\"\n---\n\n# Spatial Analysis\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile skill: %v", err)
+	}
+
+	if err := loop.tools.Register(&failingNamedTestTool{name: "geo_process"}); err != nil {
+		t.Fatalf("failed to register geo_process: %v", err)
+	}
+
+	_, err := loop.ProcessDirect(context.Background(), "use spatial analysis to reproject this raster")
+	if err != nil {
+		t.Fatalf("ProcessDirect returned error: %v", err)
+	}
+
+	snapshot, err := skills.NewTelemetryRecorder(loop.workspacePath).Load()
+	if err != nil {
+		t.Fatalf("Load telemetry error: %v", err)
+	}
+	if snapshot.Skills["spatial-analysis"].Failure == 0 {
+		t.Fatalf("expected failure counter to be recorded, got %+v", snapshot.Skills["spatial-analysis"])
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/MEKXH/golem/internal/mcp"
 	"github.com/MEKXH/golem/internal/metrics"
 	"github.com/MEKXH/golem/internal/session"
+	"github.com/MEKXH/golem/internal/skills"
 	"github.com/MEKXH/golem/internal/tools"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
@@ -434,10 +435,17 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 
 	sess := l.sessions.GetOrCreate(msg.SessionKey())
 
+	selectedSkillName := ""
+	selectedSkills := skills.SelectSkillsForQuery(skills.NewLoader(l.workspacePath).ListSkills(), msg.Content)
+	if len(selectedSkills) == 1 {
+		selectedSkillName = selectedSkills[0].Name
+	}
+
 	messages := l.context.BuildMessages(sess.GetHistory(50), msg.Content, msg.Media)
 
 	var finalContent string
 	learnedGeoSteps := make([]geopipeline.Step, 0)
+	hasGeoActivity := false
 	hasGeoFailure := false
 
 	for i := 0; i < l.maxIterations; i++ {
@@ -559,6 +567,7 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 		for res := range resultChan {
 			results[res.index] = res.msg
 			if strings.HasPrefix(res.step.Tool, "geo_") {
+				hasGeoActivity = true
 				if res.success {
 					learnedGeoSteps = append(learnedGeoSteps, res.step)
 				} else {
@@ -577,6 +586,10 @@ func (l *Loop) processMessage(ctx context.Context, msg *bus.InboundMessage) (*bu
 		} else {
 			l.context.InvalidateCache(filepath.Join(l.workspacePath, "pipelines", "geo"))
 		}
+	}
+
+	if selectedSkillName != "" && hasGeoActivity {
+		_ = skills.NewTelemetryRecorder(l.workspacePath).RecordOutcome(selectedSkillName, !hasGeoFailure)
 	}
 
 	if finalContent == "" {

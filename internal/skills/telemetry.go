@@ -136,3 +136,43 @@ func (r *TelemetryRecorder) path() string {
 	}
 	return filepath.Join(r.workspacePath, "state", "skill_telemetry.json")
 }
+
+// SelectSkillsForQuery returns explicitly referenced workspace skills for the given query.
+func SelectSkillsForQuery(skills []SkillInfo, query string) []SkillInfo {
+	normalizedQuery := normalizeSkillQueryText(query)
+	if normalizedQuery == "" {
+		return nil
+	}
+
+	selected := make([]SkillInfo, 0)
+	seen := make(map[string]bool)
+	for _, skill := range skills {
+		name := strings.TrimSpace(skill.Name)
+		if name == "" || seen[name] || skill.Source != "workspace" {
+			continue
+		}
+		for _, alias := range skillQueryAliases(name) {
+			if alias != "" && strings.Contains(normalizedQuery, alias) {
+				selected = append(selected, skill)
+				seen[name] = true
+				break
+			}
+		}
+	}
+	return selected
+}
+
+func skillQueryAliases(name string) []string {
+	alias := normalizeSkillQueryText(name)
+	if alias == "" {
+		return nil
+	}
+	return []string{alias}
+}
+
+func normalizeSkillQueryText(text string) string {
+	replacer := strings.NewReplacer("-", " ", "_", " ", "/", " ")
+	text = strings.ToLower(strings.TrimSpace(text))
+	text = replacer.Replace(text)
+	return strings.Join(strings.Fields(text), " ")
+}

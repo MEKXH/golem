@@ -18,11 +18,12 @@ type ScaffoldSpec struct {
 
 // Scaffold contains a dry-run fabricated geo tool skeleton.
 type Scaffold struct {
-	ManifestPath string
-	ScriptPath   string
-	ManifestBody string
-	ScriptBody   string
-	Definition   Definition
+	ToolName         string
+	ManifestPath     string
+	ScriptPath       string
+	ManifestBody     string
+	ScriptBody       string
+	ValidationPassed bool
 }
 
 // BuildScaffold creates a validator-compliant fabricated geo tool skeleton without writing files.
@@ -69,35 +70,44 @@ func BuildScaffold(workspacePath string, spec ScaffoldSpec) (*Scaffold, error) {
 
 	manifestPath := filepath.Join(workspacePath, "tools", "geo", toolName+".yaml")
 	scriptPath := filepath.Join(workspacePath, "tools", "geo", "scripts", toolName+".py")
-	tempDir, err := os.MkdirTemp("", "golem-geo-scaffold-")
-	if err != nil {
-		return nil, fmt.Errorf("create scaffold temp dir: %w", err)
-	}
-	tempScriptPath := filepath.Join(tempDir, toolName+".py")
-	if err := os.WriteFile(tempScriptPath, []byte(buildPythonScriptBody(toolName)), 0o644); err != nil {
-		return nil, fmt.Errorf("write scaffold temp script: %w", err)
-	}
+	scriptBody := buildPythonScriptBody(toolName)
 
-	def, err := ValidateDefinition(Definition{
-		Name:           toolName,
-		Description:    description,
-		Runner:         runner,
-		ScriptPath:     tempScriptPath,
-		WorkingDir:     tempDir,
-		Parameters:     normalizedParams,
-		TimeoutSeconds: defaultTimeoutSeconds,
-	})
-	if err != nil {
+	if err := validateScaffoldDefinition(toolName, description, runner, normalizedParams, scriptBody); err != nil {
 		return nil, err
 	}
 
 	return &Scaffold{
-		ManifestPath: manifestPath,
-		ScriptPath:   scriptPath,
-		ManifestBody: buildManifestBody(toolName, description, runner, normalizedParams),
-		ScriptBody:   buildPythonScriptBody(toolName),
-		Definition:   def,
+		ToolName:         toolName,
+		ManifestPath:     manifestPath,
+		ScriptPath:       scriptPath,
+		ManifestBody:     buildManifestBody(toolName, description, runner, normalizedParams),
+		ScriptBody:       scriptBody,
+		ValidationPassed: true,
 	}, nil
+}
+
+func validateScaffoldDefinition(name, description, runner string, parameters map[string]Parameter, scriptBody string) error {
+	tempDir, err := os.MkdirTemp("", "golem-geo-scaffold-")
+	if err != nil {
+		return fmt.Errorf("create scaffold temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	tempScriptPath := filepath.Join(tempDir, name+".py")
+	if err := os.WriteFile(tempScriptPath, []byte(scriptBody), 0o644); err != nil {
+		return fmt.Errorf("write scaffold temp script: %w", err)
+	}
+
+	_, err = ValidateDefinition(Definition{
+		Name:           name,
+		Description:    description,
+		Runner:         runner,
+		ScriptPath:     tempScriptPath,
+		WorkingDir:     tempDir,
+		Parameters:     parameters,
+		TimeoutSeconds: defaultTimeoutSeconds,
+	})
+	return err
 }
 
 func normalizeScaffoldToolName(name string) string {

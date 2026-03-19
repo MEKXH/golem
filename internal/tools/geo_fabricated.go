@@ -24,6 +24,16 @@ type geoFabricatedInvocation struct {
 	timeout time.Duration
 }
 
+// GeoFabricationDryRun summarizes a scaffolded fabricated geo tool without writing files.
+type GeoFabricationDryRun struct {
+	ToolName         string
+	ManifestPath     string
+	ScriptPath       string
+	ManifestBody     string
+	ScriptBody       string
+	ValidationPassed bool
+}
+
 // LoadGeoFabricatedTools loads workspace-defined geo tools and returns them as invokable tools.
 func LoadGeoFabricatedTools(workspacePath string) ([]tool.InvokableTool, error) {
 	defs, err := geotoolfab.NewLoader(workspacePath).Load()
@@ -40,6 +50,22 @@ func LoadGeoFabricatedTools(workspacePath string) ([]tool.InvokableTool, error) 
 		result = append(result, toolImpl)
 	}
 	return result, nil
+}
+
+// BuildGeoFabricationDryRun packages a validator-checked fabricated geo scaffold for prompt use.
+func BuildGeoFabricationDryRun(workspacePath string, spec geotoolfab.ScaffoldSpec) (GeoFabricationDryRun, error) {
+	scaffold, err := geotoolfab.BuildScaffold(workspacePath, spec)
+	if err != nil {
+		return GeoFabricationDryRun{}, err
+	}
+	return GeoFabricationDryRun{
+		ToolName:         scaffold.ToolName,
+		ManifestPath:     scaffold.ManifestPath,
+		ScriptPath:       scaffold.ScriptPath,
+		ManifestBody:     scaffold.ManifestBody,
+		ScriptBody:       scaffold.ScriptBody,
+		ValidationPassed: scaffold.ValidationPassed,
+	}, nil
 }
 
 // NewGeoFabricatedTool wraps a fabricated geo tool definition as an invokable tool.

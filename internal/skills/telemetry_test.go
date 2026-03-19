@@ -59,3 +59,16 @@ func TestTelemetryRecorder_RecordShownDeduplicatesWithinOneCall(t *testing.T) {
 		t.Fatalf("expected deduplicated shown count, got %+v", snapshot.Skills["spatial-analysis"])
 	}
 }
+
+func TestSelectSkillsForQuery_MatchesExplicitWorkspaceSkillReference(t *testing.T) {
+	selected := SelectSkillsForQuery([]SkillInfo{
+		{Name: "spatial-analysis", Description: "workspace geo skill", Source: "workspace"},
+		{Name: "weather", Description: "builtin skill", Source: "builtin"},
+	}, "Use spatial analysis to inspect this raster")
+	if len(selected) != 1 {
+		t.Fatalf("expected exactly one selected skill, got %+v", selected)
+	}
+	if selected[0].Name != "spatial-analysis" {
+		t.Fatalf("expected spatial-analysis to be selected, got %+v", selected[0])
+	}
+}

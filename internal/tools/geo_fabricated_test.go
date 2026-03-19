@@ -167,3 +167,33 @@ func TestPrepareGeoFabricatedInvocation_NormalizesEmptyPayload(t *testing.T) {
 		t.Fatalf("expected 15 second timeout, got %s", invocation.timeout)
 	}
 }
+
+func TestBuildGeoFabricationDryRun_PackagesScaffold(t *testing.T) {
+	workspace := t.TempDir()
+	dryRun, err := BuildGeoFabricationDryRun(workspace, geotoolfab.ScaffoldSpec{
+		Name:        "sinuosity",
+		Description: "Compute sinuosity ratio for a river centerline.",
+		Runner:      "python",
+		Parameters: map[string]geotoolfab.Parameter{
+			"input_path": {Type: "string", Required: true, Description: "Input line dataset path."},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildGeoFabricationDryRun() error = %v", err)
+	}
+	if !dryRun.ValidationPassed {
+		t.Fatal("expected dry-run fabrication bundle to report a valid scaffold")
+	}
+	if filepath.Base(dryRun.ManifestPath) != "geo_sinuosity.yaml" {
+		t.Fatalf("unexpected manifest path %q", dryRun.ManifestPath)
+	}
+	if filepath.Base(dryRun.ScriptPath) != "geo_sinuosity.py" {
+		t.Fatalf("unexpected script path %q", dryRun.ScriptPath)
+	}
+	if !strings.Contains(dryRun.ManifestBody, "name: geo_sinuosity") {
+		t.Fatalf("expected manifest body to include normalized tool name, got %s", dryRun.ManifestBody)
+	}
+	if !strings.Contains(dryRun.ScriptBody, "def main()") {
+		t.Fatalf("expected script body to include python stub, got %s", dryRun.ScriptBody)
+	}
+}
