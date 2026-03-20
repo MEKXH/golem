@@ -359,7 +359,8 @@ a {
 .console-layout {
   grid-template-columns: 320px minmax(0, 1fr);
   align-items: stretch;
-  min-height: min(72vh, 760px);
+  height: calc(100vh - 180px);
+  min-height: 500px;
 }
 
 .console-side-card,
@@ -411,15 +412,16 @@ a {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  overflow: hidden;
 }
 
 .timeline-panel {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   padding: 20px;
-  min-height: 420px;
   flex: 1 1 auto;
-  align-content: start;
+  overflow-y: auto;
 }
 
 .chat-entry {
@@ -454,7 +456,7 @@ a {
 
 .composer-panel textarea {
   resize: vertical;
-  min-height: 132px;
+  min-height: 80px;
 }
 
 .console-subtitle {
@@ -521,6 +523,11 @@ a {
   }
 
   .console-layout {
+    height: auto;
     min-height: auto;
+  }
+
+  .console-main-card {
+    overflow: visible;
   }
 }

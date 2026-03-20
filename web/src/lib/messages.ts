@@ -8,27 +8,27 @@ export const messages = {
     localeEnglish: 'EN',
     localeChinese: '中文',
     landing: {
-      eyebrow: 'Terminal-native. Geo-capable. Auto-evolving.',
-      title: 'Golem turns your Gateway into a vivid, workspace-aware control surface.',
+      eyebrow: 'Terminal-native. Tools & Geo. Multi-channel.',
+      title: 'Golem turns your personal AI assistant into a vivid, workspace-aware control surface.',
       copy:
-        'Operate chat, tools, Geo workflows, and learned execution paths from a product-grade web interface built for people who want both signal and atmosphere.',
+        'Operate chat, tool execution, persistent memory, and multi-channel workflows from a product-grade web interface built for people who want both signal and atmosphere.',
       enterConsole: 'Enter Console',
-      seeGeo: 'See Geo + Auto-Evolution',
+      seeGeo: 'See Capabilities',
       heroCards: [
         {
-          label: 'Gateway',
-          title: 'health · version · chat',
-          body: 'One front door into the existing Go backend.',
+          label: 'Assistant',
+          title: 'shell · files · web · memory',
+          body: 'A true agent loop with robust tool execution and long-term memory.',
+        },
+        {
+          label: 'Integration',
+          title: 'cron · multi-channel · gateway',
+          body: 'Scheduled tasks, multi-platform bots, and a unified HTTP API.',
         },
         {
           label: 'Geo',
           title: 'GDAL · PostGIS · pipelines',
-          body: 'Workspace-native spatial execution instead of disconnected tools.',
-        },
-        {
-          label: 'Evolution',
-          title: 'reuse · scaffold · telemetry',
-          body: 'Successful workflows leave artifacts the next run can actually use.',
+          body: 'Workspace-native spatial execution and learned tool scaffolding.',
         },
       ],
       capability: {
@@ -41,7 +41,7 @@ export const messages = {
           },
           {
             title: 'Workspace Context',
-            body: 'Surface the system as an instrument panel instead of burying it behind raw terminal commands.',
+            body: 'Surface the system as an instrument panel with model-agnostic provider flexibility.',
           },
           {
             title: 'Geo Vertical',
@@ -123,27 +123,27 @@ export const messages = {
     localeEnglish: 'EN',
     localeChinese: '中文',
     landing: {
-      eyebrow: '终端原生。Geo 加持。持续进化。',
-      title: 'Golem 把你的 Gateway 变成一个有氛围、感知工作区的控制界面。',
+      eyebrow: '终端原生。全能工具。多渠道融合。',
+      title: 'Golem 把你的个人 AI 助手变成一个有氛围、感知工作区的控制界面。',
       copy:
-        '在一个成品级 WebUI 里操作对话、工具、Geo 工作流和学习到的执行路径，兼顾密度、信号感与可用性。',
+        '在一个成品级 WebUI 里操作对话、工具执行、长期记忆和多渠道工作流，兼顾密度、信号感与可用性。',
       enterConsole: '进入控制台',
-      seeGeo: '查看 Geo + 自动进化',
+      seeGeo: '查看核心能力',
       heroCards: [
         {
-          label: 'Gateway',
-          title: 'health · version · chat',
-          body: '用一个前门接入现有 Go 后端。',
+          label: 'Assistant',
+          title: 'shell · files · web · memory',
+          body: '真正的 Agent 循环，具备强大的工具执行能力与持久化长期记忆。',
+        },
+        {
+          label: 'Integration',
+          title: 'cron · multi-channel · gateway',
+          body: '支持定时任务调度、多渠道机器人接入以及统一的 HTTP 网关。',
         },
         {
           label: 'Geo',
           title: 'GDAL · PostGIS · pipelines',
-          body: '把空间数据执行面放进工作区，而不是零散工具集合。',
-        },
-        {
-          label: 'Evolution',
-          title: 'reuse · scaffold · telemetry',
-          body: '成功的工作流会留下下一次真能复用的痕迹。',
+          body: '集成工作区原生空间数据执行面与学习到的 Geo pipeline 演化。',
         },
       ],
       capability: {
@@ -152,11 +152,11 @@ export const messages = {
         items: [
           {
             title: '操作型对话',
-            body: '通过和自动化、集成共用的 Gateway 与 Agent 交互。',
+            body: '通过和自动化、集成共用的 Gateway 与具备多模型切换能力的 Agent 交互。',
           },
           {
             title: '工作区上下文',
-            body: '把系统从裸终端命令堆，提升成可读的仪表面板。',
+            body: '把系统从零散的终端命令堆，提升成兼具长期记忆与执行闭环的仪表面板。',
           },
           {
             title: 'Geo 垂直能力',
