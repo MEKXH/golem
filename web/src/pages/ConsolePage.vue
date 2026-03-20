@@ -28,6 +28,7 @@ import ChatTimeline from '../components/console/ChatTimeline.vue'
 import ComposerPanel from '../components/console/ComposerPanel.vue'
 import ConnectionPanel from '../components/console/ConnectionPanel.vue'
 import ConsoleTopbar from '../components/console/ConsoleTopbar.vue'
+import { useLocale } from '../lib/locale'
 import { fetchHealth, fetchVersion, sendChat } from '../lib/api'
 import type { ChatEntry, GatewaySettings, HealthState, VersionState } from '../types'
 
@@ -41,20 +42,35 @@ const settings = ref<GatewaySettings>({
 })
 const versionState = ref<VersionState | null>(null)
 const healthState = ref<HealthState | null>(null)
-const entries = ref<ChatEntry[]>([
-  {
-    id: 'system-intro',
-    role: 'system',
-    title: 'Console Ready',
-    body: 'Check Gateway connectivity, inspect version, then send a prompt through the existing /chat API.',
-    meta: 'idle',
-  },
-])
+const { copy, locale } = useLocale()
+const consoleCopy = computed(() => copy.value.console)
+const entries = ref<ChatEntry[]>([])
 const draft = ref('Analyze the current workspace and tell me what changed in the Geo stack.')
 const isChecking = ref(false)
 const isSending = ref(false)
 
 const healthStatus = computed(() => healthState.value?.status ?? 'unknown')
+
+function buildIntroEntry(): ChatEntry {
+  return {
+    id: 'system-intro',
+    role: 'system',
+    title: consoleCopy.value.timeline.introTitle,
+    body: consoleCopy.value.timeline.introBody,
+    meta: consoleCopy.value.timeline.introMeta,
+  }
+}
+
+function ensureIntroEntry() {
+  if (entries.value.length === 0) {
+    entries.value = [buildIntroEntry()]
+    return
+  }
+  const firstEntry = entries.value[0]
+  if (firstEntry?.id === 'system-intro') {
+    entries.value = [buildIntroEntry(), ...entries.value.slice(1)]
+  }
+}
 
 function appendEntry(entry: ChatEntry) {
   entries.value = [...entries.value, entry]
@@ -80,7 +96,7 @@ async function checkGateway() {
     appendEntry({
       id: randomId('system'),
       role: 'system',
-      title: 'Gateway Check Passed',
+      title: consoleCopy.value.timeline.gatewayCheckPassedTitle,
       body: `Health is ${health.status}. Connected version is ${version.version}.`,
       meta: `health ${health.request_id}`,
     })
@@ -88,9 +104,9 @@ async function checkGateway() {
     appendEntry({
       id: randomId('error'),
       role: 'error',
-      title: 'Gateway Check Failed',
+      title: consoleCopy.value.timeline.gatewayCheckFailedTitle,
       body: error instanceof Error ? error.message : 'Unknown connection error',
-      meta: 'check failed',
+      meta: consoleCopy.value.timeline.checkMeta,
     })
   } finally {
     isChecking.value = false
@@ -106,7 +122,7 @@ async function submitPrompt() {
   appendEntry({
     id: randomId('user'),
     role: 'user',
-    title: 'Prompt',
+    title: consoleCopy.value.timeline.promptTitle,
     body: message,
     meta: settings.value.sessionId,
   })
@@ -124,7 +140,7 @@ async function submitPrompt() {
     appendEntry({
       id: randomId('assistant'),
       role: 'assistant',
-      title: 'Response',
+      title: consoleCopy.value.timeline.responseTitle,
       body: response.response,
       meta: response.request_id,
     })
@@ -132,9 +148,9 @@ async function submitPrompt() {
     appendEntry({
       id: randomId('error'),
       role: 'error',
-      title: 'Request Failed',
+      title: consoleCopy.value.timeline.requestFailedTitle,
       body: error instanceof Error ? error.message : 'Unknown request failure',
-      meta: 'chat error',
+      meta: consoleCopy.value.timeline.chatMeta,
     })
   } finally {
     isSending.value = false
@@ -142,6 +158,7 @@ async function submitPrompt() {
 }
 
 watch(settings, saveSettings, { deep: true })
+watch(locale, ensureIntroEntry)
 
 onMounted(() => {
   const stored = localStorage.getItem(storageKey)
@@ -152,5 +169,6 @@ onMounted(() => {
       localStorage.removeItem(storageKey)
     }
   }
+  ensureIntroEntry()
 })
 </script>

@@ -1,14 +1,17 @@
 <template>
   <form class="composer-panel" @submit.prevent="$emit('submit-prompt')">
-    <textarea :value="modelValue" rows="5" placeholder="Send a prompt to the Gateway chat endpoint." @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"></textarea>
+    <textarea :value="modelValue" rows="5" :placeholder="consoleCopy.composer.placeholder" @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"></textarea>
     <div class="composer-actions">
-      <button class="button button-primary" type="submit" :disabled="isSending">{{ isSending ? 'Sending...' : 'Send Prompt' }}</button>
-      <button class="button button-ghost" type="button" :disabled="isChecking" @click="$emit('check-gateway')">{{ isChecking ? 'Checking...' : 'Check Gateway' }}</button>
+      <button class="button button-primary" type="submit" :disabled="isSending">{{ isSending ? consoleCopy.composer.sending : consoleCopy.composer.send }}</button>
+      <button class="button button-ghost" type="button" :disabled="isChecking" @click="$emit('check-gateway')">{{ isChecking ? consoleCopy.composer.checking : consoleCopy.composer.check }}</button>
     </div>
   </form>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useLocale } from '../../lib/locale'
+
 defineProps<{
   modelValue: string
   isSending: boolean
@@ -20,4 +23,7 @@ defineEmits<{
   'submit-prompt': []
   'check-gateway': []
 }>()
+
+const { copy } = useLocale()
+const consoleCopy = computed(() => copy.value.console)
 </script>

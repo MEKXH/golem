@@ -1,25 +1,23 @@
 <template>
   <section id="geo-evolution" class="geo-section">
     <div class="section-heading section-heading-wide">
-      <p class="eyebrow">Geo Verticalization and Auto-Evolution</p>
-      <h2>Not a GIS button. A reusable execution loop.</h2>
-      <p>
-        Golem's Geo stack already knows how to inspect, transform, discover, and query spatial data. The WebUI turns that into a visible product surface and makes the evolution loops legible.
-      </p>
+      <p class="eyebrow">{{ landing.geo.eyebrow }}</p>
+      <h2>{{ landing.geo.title }}</h2>
+      <p>{{ landing.geo.copy }}</p>
     </div>
     <div class="geo-grid">
-      <article class="geo-panel">
-        <h3>Replay-ready reuse</h3>
-        <p>Learned Geo pipelines can come back as prompt-time reuse hints with example args and parameter update markers.</p>
-      </article>
-      <article class="geo-panel">
-        <h3>Dry-run fabrication</h3>
-        <p>Missing Geo capabilities can be scaffolded into manifest and script targets before implementation starts.</p>
-      </article>
-      <article class="geo-panel">
-        <h3>Skill telemetry</h3>
-        <p>Shown, selected, success, and failure signals produce local reports that expose underperforming Geo skills first.</p>
+      <article v-for="panel in landing.geo.panels" :key="panel.title" class="geo-panel">
+        <h3>{{ panel.title }}</h3>
+        <p>{{ panel.body }}</p>
       </article>
     </div>
   </section>
 </template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useLocale } from '../../lib/locale'
+
+const { copy } = useLocale()
+const landing = computed(() => copy.value.landing)
+</script>

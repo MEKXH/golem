@@ -1,23 +1,26 @@
 <template>
   <header class="console-topbar">
-    <div>
-      <p class="eyebrow">Console</p>
-      <h1>Gateway Control Surface</h1>
-      <p class="console-subtitle">Connect to health, version, and chat from one operator-grade workspace.</p>
+    <div class="console-topbar-copy">
+      <p class="eyebrow">{{ consoleCopy.eyebrow }}</p>
+      <h1>{{ consoleCopy.title }}</h1>
+      <p class="console-subtitle">{{ consoleCopy.subtitle }}</p>
     </div>
-    <div class="topbar-pills">
+    <div class="console-topbar-actions">
       <span class="status-pill" :class="statusClass">{{ healthStatus }}</span>
       <span v-if="versionState !== null" class="status-pill status-pill-neutral">{{ versionState.version }}</span>
+      <LocaleSwitch />
       <button class="button button-ghost button-compact" type="button" :disabled="isChecking" @click="$emit('refresh')">
-        {{ isChecking ? 'Checking...' : 'Refresh Gateway' }}
+        {{ isChecking ? consoleCopy.refreshing : consoleCopy.refresh }}
       </button>
-      <RouterLink class="button button-ghost button-compact" to="/">Back to Landing</RouterLink>
+      <RouterLink class="button button-ghost button-compact" to="/">{{ consoleCopy.backToLanding }}</RouterLink>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import LocaleSwitch from '../LocaleSwitch.vue'
+import { useLocale } from '../../lib/locale'
 import type { VersionState } from '../../types'
 
 const props = defineProps<{
@@ -29,6 +32,9 @@ const props = defineProps<{
 defineEmits<{
   refresh: []
 }>()
+
+const { copy } = useLocale()
+const consoleCopy = computed(() => copy.value.console)
 
 const statusClass = computed(() => {
   if (props.healthStatus === 'ok') {
