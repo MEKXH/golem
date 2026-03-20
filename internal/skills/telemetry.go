@@ -189,9 +189,10 @@ func skillQueryAliases(name string) []string {
 	return []string{alias}
 }
 
+var skillQueryReplacer = strings.NewReplacer("-", " ", "_", " ", "/", " ")
+
 func normalizeSkillQueryText(text string) string {
-	replacer := strings.NewReplacer("-", " ", "_", " ", "/", " ")
 	text = strings.ToLower(strings.TrimSpace(text))
-	text = replacer.Replace(text)
+	text = skillQueryReplacer.Replace(text)
 	return strings.Join(strings.Fields(text), " ")
 }
