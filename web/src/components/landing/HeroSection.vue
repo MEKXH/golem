@@ -1,34 +1,46 @@
 <template>
   <section class="hero-section">
     <div class="hero-grid">
-      <div>
-        <p class="eyebrow">Terminal-native. Geo-capable. Auto-evolving.</p>
-        <h1 class="hero-title">Golem turns your Gateway into a vivid, workspace-aware control surface.</h1>
-        <p class="hero-copy">
-          Operate chat, tools, Geo workflows, and learned execution paths from a product-grade web interface built for people who want both signal and atmosphere.
-        </p>
+      <div class="hero-copy-column">
+        <div class="hero-toolbar">
+          <p class="eyebrow">{{ landing.eyebrow }}</p>
+          <LocaleSwitch />
+        </div>
+        <h1 class="hero-title">{{ landing.title }}</h1>
+        <p class="hero-copy">{{ landing.copy }}</p>
         <div class="hero-actions">
-          <RouterLink class="button button-primary" to="/console">Enter Console</RouterLink>
-          <a class="button button-ghost" href="#geo-evolution">See Geo + Auto-Evolution</a>
+          <RouterLink class="button button-primary" to="/console">{{ landing.enterConsole }}</RouterLink>
+          <a class="button button-ghost" href="#geo-evolution">{{ landing.seeGeo }}</a>
         </div>
       </div>
-      <div class="hero-card-stack">
-        <article class="signal-card signal-card-primary">
-          <span class="signal-label">Gateway</span>
-          <strong>health · version · chat</strong>
-          <p>One front door into the existing Go backend.</p>
-        </article>
-        <article class="signal-card">
-          <span class="signal-label">Geo</span>
-          <strong>GDAL · PostGIS · pipelines</strong>
-          <p>Workspace-native spatial execution instead of disconnected tools.</p>
-        </article>
-        <article class="signal-card signal-card-accent">
-          <span class="signal-label">Evolution</span>
-          <strong>reuse · scaffold · telemetry</strong>
-          <p>Successful workflows leave artifacts the next run can actually use.</p>
-        </article>
+      <div class="hero-card-stage">
+        <div class="hero-card-stack">
+          <article class="signal-card signal-card-primary">
+            <span class="signal-label">{{ landing.heroCards[0].label }}</span>
+            <strong>{{ landing.heroCards[0].title }}</strong>
+            <p>{{ landing.heroCards[0].body }}</p>
+          </article>
+          <article class="signal-card">
+            <span class="signal-label">{{ landing.heroCards[1].label }}</span>
+            <strong>{{ landing.heroCards[1].title }}</strong>
+            <p>{{ landing.heroCards[1].body }}</p>
+          </article>
+          <article class="signal-card signal-card-accent">
+            <span class="signal-label">{{ landing.heroCards[2].label }}</span>
+            <strong>{{ landing.heroCards[2].title }}</strong>
+            <p>{{ landing.heroCards[2].body }}</p>
+          </article>
+        </div>
       </div>
     </div>
   </section>
 </template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import LocaleSwitch from '../LocaleSwitch.vue'
+import { useLocale } from '../../lib/locale'
+
+const { copy } = useLocale()
+const landing = computed(() => copy.value.landing)
+</script>

@@ -1,10 +1,18 @@
 <template>
   <section class="cta-section">
     <div class="cta-card">
-      <p class="eyebrow">Ready</p>
-      <h2>Go from narrative to operator mode in one click.</h2>
-      <p>Use the console to point at your Gateway, validate the connection, and start sending prompts immediately.</p>
-      <RouterLink class="button button-primary" to="/console">Open Control Console</RouterLink>
+      <p class="eyebrow">{{ landing.cta.eyebrow }}</p>
+      <h2>{{ landing.cta.title }}</h2>
+      <p>{{ landing.cta.copy }}</p>
+      <RouterLink class="button button-primary" to="/console">{{ landing.cta.action }}</RouterLink>
     </div>
   </section>
 </template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useLocale } from '../../lib/locale'
+
+const { copy } = useLocale()
+const landing = computed(() => copy.value.landing)
+</script>

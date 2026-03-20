@@ -1,25 +1,23 @@
 <template>
   <section class="capability-section">
     <div class="section-heading">
-      <p class="eyebrow">Core Surface</p>
-      <h2>One interface for the parts that actually matter.</h2>
+      <p class="eyebrow">{{ landing.capability.eyebrow }}</p>
+      <h2>{{ landing.capability.title }}</h2>
     </div>
     <div class="capability-grid">
-      <article class="capability-card">
-        <span class="capability-index">01</span>
-        <h3>Operational Chat</h3>
-        <p>Talk to the agent through the same Gateway your automations and integrations already use.</p>
-      </article>
-      <article class="capability-card">
-        <span class="capability-index">02</span>
-        <h3>Workspace Context</h3>
-        <p>Surface the system as an instrument panel instead of burying it behind raw terminal commands.</p>
-      </article>
-      <article class="capability-card">
-        <span class="capability-index">03</span>
-        <h3>Geo Vertical</h3>
-        <p>Promote spatial data discovery, codebooks, fabricated tools, and learned pipelines to first-class UI concepts.</p>
+      <article v-for="(item, index) in landing.capability.items" :key="item.title" class="capability-card">
+        <span class="capability-index">{{ `0${index + 1}` }}</span>
+        <h3>{{ item.title }}</h3>
+        <p>{{ item.body }}</p>
       </article>
     </div>
   </section>
 </template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useLocale } from '../../lib/locale'
+
+const { copy } = useLocale()
+const landing = computed(() => copy.value.landing)
+</script>

@@ -9,19 +9,24 @@
     </article>
     <article v-if="isSending" class="chat-entry chat-entry-system">
       <div>
-        <strong>Sending</strong>
-        <p>The Gateway request is in flight.</p>
+        <strong>{{ consoleCopy.timeline.sendingTitle }}</strong>
+        <p>{{ consoleCopy.timeline.sendingBody }}</p>
       </div>
-      <span>pending</span>
+      <span>{{ consoleCopy.timeline.sendingMeta }}</span>
     </article>
   </section>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useLocale } from '../../lib/locale'
 import type { ChatEntry } from '../../types'
 
 defineProps<{
   entries: ChatEntry[]
   isSending: boolean
 }>()
+
+const { copy } = useLocale()
+const consoleCopy = computed(() => copy.value.console)
 </script>
