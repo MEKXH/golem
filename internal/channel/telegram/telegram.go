@@ -24,6 +24,10 @@ var (
 	boldStarRe   = regexp.MustCompile(`\*\*(.+?)\*\*`)
 	boldUnderRe  = regexp.MustCompile(`__(.+?)__`)
 	codeInlineRe = regexp.MustCompile("`([^`]+)`")
+
+	// htmlEscapeReplacer replaces multiple strings.ReplaceAll calls with a single-pass evaluation,
+	// reducing memory allocations and improving performance when escaping HTML characters.
+	htmlEscapeReplacer = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 )
 
 const (
@@ -198,9 +202,7 @@ func renderMessageHTML(content string) string {
 }
 
 func markdownToHTML(text string) string {
-	text = strings.ReplaceAll(text, "&", "&amp;")
-	text = strings.ReplaceAll(text, "<", "&lt;")
-	text = strings.ReplaceAll(text, ">", "&gt;")
+	text = htmlEscapeReplacer.Replace(text)
 	text = boldStarRe.ReplaceAllString(text, "<b>$1</b>")
 	text = boldUnderRe.ReplaceAllString(text, "<b>$1</b>")
 	text = codeInlineRe.ReplaceAllString(text, "<code>$1</code>")
