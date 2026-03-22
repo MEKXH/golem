@@ -17,3 +17,7 @@
 ## 2026-03-16 - Destructive Action Confirmation
 **Learning:** Destructive CLI commands, such as bulk credential deletion via `golem auth logout` (when executed without specifying a particular provider), risk causing unwanted data loss and frustration if executed accidentally.
 **Action:** Implemented a safety prompt (`[y/N]`) that safely aborts on any non-confirming input, alongside a `--yes` (`-y`) flag to bypass the prompt for scripts. This prevents accidental wipes without degrading power-user workflows.
+
+## 2026-03-24 - Dynamic ARIA Labels in Vue
+**Learning:** Screen readers cannot infer the purpose of an input element from a Vue dynamic `placeholder` alone. Hardcoding an `aria-label` string disrupts existing `vue-i18n` workflows and creates translation drift.
+**Action:** When adding accessible names to form inputs in Vue, bind the `aria-label` attribute directly to the existing translation token (e.g., `:aria-label="consoleCopy.composer.placeholder"`) to maintain accessibility without duplicating translation efforts.
