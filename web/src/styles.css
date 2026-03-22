@@ -167,8 +167,13 @@ a {
   cursor: pointer;
 }
 
-.button:hover {
+.button:hover:not(:disabled) {
   transform: translateY(-2px);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .button-primary {
