@@ -2,22 +2,22 @@
 
 English version: [docs/user-guide.md](user-guide.md)
 
-本文档是 Golem 的完整使用与运维手册，覆盖当前版本的全部配置项、功能能力和操作流程。
+本文档是 Golem（面向地理信息行业的垂直 AI Agent）的完整使用与运维手册，覆盖当前版本的全部配置项、功能能力和操作流程。
 
 ## 1. Golem 是什么
 
-Golem 是一个终端优先的个人 AI 助手，基于 Go + Eino 构建，支持：
+Golem 是一个**面向地理信息行业的垂直 AI Agent**，基于 Go + Eino 构建。它在自然语言交互与专业 GIS 工作流之间架起桥梁，通过 **WebUI**、**终端 TUI** 和 **IM 渠道**三种方式使复杂的 GDAL/PostGIS 操作变得触手可及。
 
-- 交互式对话（`golem chat`）
-- 常驻多渠道服务（`golem run`）
-- 可调用工具的 Agent 循环（文件、Shell、记忆、网页、Cron、消息、子 Agent、workflow）
-- 策略守卫模式（`strict`/`relaxed`/`off`）与 `off_ttl` 到期回收
-- 高风险工具审批流（`golem approval list|approve|reject`）
+核心能力：
+
+- **Geo 原生工具集**：面向工作区的 GDAL/PostGIS 工具链，覆盖数据检查、处理、CRS 检测、格式转换、数据发现和空间 SQL
+- **自我进化**：learned pipeline 复用、fabricated tool 脚手架、skill telemetry 持续改进闭环
+- **审批与安全治理**：策略守卫模式（`strict`/`relaxed`/`off`）、审批流、审计追踪、工作区限制和 PostGIS 只读模式
+- **三种接入方式**：交互式 TUI（`golem chat`）、多渠道 IM 机器人 + WebUI（`golem run`）、Gateway HTTP API
+- 可调用工具的 Agent 循环（文件、Shell、记忆、网页、Cron、Geo、消息、子 Agent、workflow）
 - MCP 动态工具注册（`mcp.<server>.<tool>`）与故障隔离降级
-- 策略决策与工具执行审计日志
 - 关键词感知记忆召回与来源可观测字段（`recall_count`、`hit_sources`）
 - 技能系统（工作区/全局/内置）
-- Gateway HTTP API
 - 认证存储（Token/OAuth 登录）
 - Telegram/Discord/Slack 音频转写
 - 心跳探活并回传到最近活跃会话
@@ -69,6 +69,10 @@ golem init
 | `<workspace>/state/approvals.json` | 审批请求持久化 |
 | `<workspace>/state/audit.jsonl` | 追加写入的审计日志 |
 | `<workspace>/state/runtime_metrics.json` | 运行时指标快照（工具/通道/记忆召回摘要） |
+| `<workspace>/state/skill_telemetry.json` | Geo skill telemetry 计数器 |
+| `<workspace>/geo-codebook/` | 可复用空间 SQL 模式 |
+| `<workspace>/tools/geo/` | fabricated Geo 工具 |
+| `<workspace>/pipelines/geo/` | 学习到的 Geo 工具序列 |
 
 `<workspace>` 由 `agents.defaults.workspace_mode` 决定：
 
@@ -88,6 +92,8 @@ golem chat "ping"
 ```
 
 最小要求：至少配置一个 provider key（或执行 `golem auth login`），并在对外可访问的 staging/production 场景设置 `GOLEM_GATEWAY_TOKEN`。
+
+启用 Geo 工具需将 `tools.geo.enabled` 设为 `true`，并可选配置 `gdal_bin_dir` 和 `postgis_dsn`。
 
 服务模式：
 
@@ -614,7 +620,7 @@ Geo 工作区约定：
 
 Gateway 现在会托管一个内嵌 Vue WebUI：
 
-- `/` 是营销展示首页，突出 Golem、Geo 垂直化与自动进化能力
+- `/` 是产品首页，展示 Golem 的 Geo 垂直化能力和自我进化特性
 - `/console` 是直连 `POST /chat` 的聊天控制台
 - 若设置了 `gateway.token`，先在控制台连接面板中填写 Bearer Token
 
@@ -737,12 +743,19 @@ go run ./cmd/golem chat "ping"
 | gateway `/chat` 返回 `401` | 缺失或错误 Bearer token | 修正 `Authorization` 请求头 |
 | 无 heartbeat 消息 | 尚无活跃会话/心跳关闭/会话过期 | 先收一条普通消息并检查 heartbeat 配置 |
 | 语音转写不生效 | 未启用 voice 或缺少 OpenAI 凭据 | 开启 `tools.voice` 并配置 OpenAI key/token |
+| Geo 工具未注册 | `tools.geo.enabled` 为 `false` | 在配置中设置 `tools.geo.enabled=true` |
+| `geo_process` 执行失败 | 未安装 GDAL 或 `gdal_bin_dir` 路径错误 | 安装 GDAL 并验证二进制路径 |
+| `geo_spatial_query` 不可用 | `postgis_dsn` 为空 | 配置 `tools.geo.postgis_dsn` 为有效的 PostGIS 连接串 |
+| Geo 文件路径被拒绝 | `restrict_to_workspace` 拦截了工作区外路径 | 将数据移入工作区或将 `restrict_to_workspace` 设为 `false` |
 
 ## 15. 安全建议
 
 - 保护好 `~/.golem/auth.json` 与 `~/.golem/config.json`。
 - 对外暴露 Gateway 前务必配置 `gateway.token`。
 - 在共享或高风险环境中保持 `tools.exec.restrict_to_workspace=true`。
+- 保持 `tools.geo.restrict_to_workspace=true`，防止 Geo 工具访问工作区外文件。
+- 保持 `tools.geo.readonly=true`，防止对 PostGIS 的非预期写操作。
+- 处理敏感空间数据的生产环境，建议使用 `policy.mode=strict` 并将 `exec` 和 `geo_spatial_query` 加入 `require_approval` 列表。
 - 为渠道配置 `allow_from`，避免未授权来源。
 
 ## 16. 相关文档

@@ -2,22 +2,22 @@
 
 Chinese version: [docs/user-guide.zh-CN.md](user-guide.zh-CN.md)
 
-This document is the complete operator and user guide for Golem. It covers all current configuration keys, features, and operations from initialization to production-style running.
+This document is the complete operator and user guide for Golem — a vertical AI Agent for the geospatial industry. It covers all configuration keys, features, and operations from initialization to production deployment.
 
 ## 1. What Golem Is
 
-Golem is a terminal-first personal AI assistant built with Go and Eino. It supports:
+Golem is a **vertical AI Agent for the geospatial industry**, built with Go and Eino. It bridges natural-language interaction and professional GIS workflows, making complex GDAL/PostGIS operations accessible through three modes: **WebUI**, **terminal TUI**, and **IM channels**.
 
-- Interactive chat (`golem chat`)
-- Long-running multi-channel service (`golem run`)
-- Tool-using agent loop (file, shell, memory, web, cron, messaging, subagent, workflow)
-- Policy guard modes (`strict`/`relaxed`/`off`) with optional off TTL rollback
-- Approval workflow for high-risk tools (`golem approval list|approve|reject`)
+Core capabilities:
+
+- **Geo-native toolset**: workspace-local GDAL/PostGIS tools for inspection, processing, CRS detection, format conversion, dataset discovery, and spatial SQL
+- **Self-evolution**: learned pipeline reuse, fabricated tool scaffolding, and skill telemetry for continuous improvement
+- **Approval & security governance**: policy guard modes (`strict`/`relaxed`/`off`), approval workflow, audit trail, workspace restriction, and PostGIS readonly mode
+- **Three access modes**: interactive TUI (`golem chat`), multi-channel IM bot + WebUI (`golem run`), and Gateway HTTP API
+- Tool-using agent loop (file, shell, memory, web, cron, geo, messaging, subagent, workflow)
 - MCP dynamic tool registration (`mcp.<server>.<tool>`) with degraded-server isolation
-- Audit trail for policy decisions and tool execution
 - Keyword-aware memory recall with source-level observability (`recall_count`, `hit_sources`)
 - Skills system (workspace/global/builtin)
-- Gateway HTTP API
 - Auth store with token/OAuth login
 - Voice transcription for Telegram/Discord/Slack audio input
 - Heartbeat probe delivery to latest active session
@@ -69,6 +69,10 @@ This creates config/workspace basics and builtin skills.
 | `<workspace>/state/approvals.json` | Approval request store |
 | `<workspace>/state/audit.jsonl` | Append-only audit trail |
 | `<workspace>/state/runtime_metrics.json` | Runtime metrics snapshot (tool/channel/memory-recall summary) |
+| `<workspace>/state/skill_telemetry.json` | Geo skill telemetry counters |
+| `<workspace>/geo-codebook/` | Reusable spatial SQL patterns |
+| `<workspace>/tools/geo/` | Fabricated workspace Geo tools |
+| `<workspace>/pipelines/geo/` | Learned Geo tool sequences |
 
 `<workspace>` is resolved by `agents.defaults.workspace_mode`:
 
@@ -88,6 +92,8 @@ golem chat "ping"
 ```
 
 At minimum, fill one provider key (or run `golem auth login`) and set `GOLEM_GATEWAY_TOKEN` for network-exposed staging/production deployments.
+
+To enable Geo tools, set `tools.geo.enabled=true` and optionally configure `gdal_bin_dir` and `postgis_dsn`.
 
 Server mode:
 
@@ -614,7 +620,7 @@ Available in server mode (`golem run`):
 
 The Gateway now serves an embedded Vue WebUI:
 
-- `/` is a marketing landing page focused on Golem, Geo verticalization, and auto-evolution
+- `/` is the landing page showcasing Golem's Geo vertical capabilities and self-evolution features
 - `/console` is a gateway-backed chat console that can call `POST /chat` directly
 - If `gateway.token` is set, paste the Bearer token into the console connection panel before sending prompts
 
@@ -737,12 +743,19 @@ go run ./cmd/golem chat "ping"
 | gateway `/chat` returns `401` | missing/invalid bearer token | set correct `Authorization` header |
 | no heartbeat output | no active session yet or heartbeat disabled/stale | send one normal message first, verify heartbeat config |
 | voice transcription not active | voice disabled or missing OpenAI credentials | enable `tools.voice` and provide OpenAI key/token |
+| Geo tools not registered | `tools.geo.enabled` is `false` | set `tools.geo.enabled=true` in config |
+| `geo_process` fails | GDAL not installed or `gdal_bin_dir` wrong | install GDAL and verify the binary path |
+| `geo_spatial_query` not available | `postgis_dsn` is empty | configure `tools.geo.postgis_dsn` with a valid PostGIS connection string |
+| Geo file path rejected | `restrict_to_workspace` blocks external paths | move data into workspace or set `restrict_to_workspace=false` |
 
 ## 15. Security Notes
 
 - Keep `~/.golem/auth.json` and `~/.golem/config.json` private.
 - Set `gateway.token` before exposing gateway outside localhost.
 - Keep `tools.exec.restrict_to_workspace=true` in shared or risky environments.
+- Keep `tools.geo.restrict_to_workspace=true` to prevent Geo tools from accessing files outside workspace.
+- Keep `tools.geo.readonly=true` to prevent unintended PostGIS writes.
+- Use `policy.mode=strict` with `require_approval` including `exec` and `geo_spatial_query` for production environments handling sensitive spatial data.
 - Review channel `allow_from` to avoid unauthorized senders.
 
 ## 16. Related Docs

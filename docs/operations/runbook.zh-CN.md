@@ -2,14 +2,15 @@
 
 ## 适用范围
 
-本手册覆盖以下场景的日常运维和一线故障处理：
+本手册覆盖 Golem（面向地理信息行业的垂直 AI Agent）以下场景的日常运维和一线故障处理：
 
 - `golem run` 服务模式
-- Gateway HTTP API（`/health`、`/version`、`/chat`）
+- Gateway HTTP API（`/health`、`/version`、`/chat`）与内嵌 WebUI
+- Geo 工具执行（GDAL/PostGIS 工作流）
 - Heartbeat 服务（定时探测与回传）
-- Telegram/Discord/Slack 等通道联动
+- IM 渠道集成（Telegram、Discord、Slack 等）
 - Provider/Model 连通性
-- 工具执行与记忆子系统
+- 工具执行、审批/审计与记忆子系统
 - 容器化部署（`Dockerfile` / `docker-compose.yml`）
 
 ## 快速健康检查
@@ -109,6 +110,52 @@
    - `heartbeat service started`
    - `heartbeat dispatched`
    - `heartbeat run failed`
+
+### 9. Geo 工具执行失败
+
+症状：
+
+- `geo_process`、`geo_info`、`geo_crs_detect` 或 `geo_format_convert` 返回错误
+- Agent 报告 "GDAL not found" 或命令超时
+
+处理步骤：
+
+1. 确认配置中 `tools.geo.enabled=true`。
+2. 确认 GDAL 已安装且可访问：在宿主机运行 `gdalinfo --version`。
+3. 若 GDAL 不在 `$PATH` 上，配置 `tools.geo.gdal_bin_dir` 指向 GDAL 可执行文件目录。
+4. 检查 `tools.geo.timeout_seconds` —— 大规模栅格操作可能需要更长超时。
+5. 检查 `tools.geo.restrict_to_workspace` —— 若为 `true`，所有输入输出路径必须在工作区内。
+6. 检索日志中的工作区边界违规或命令白名单拒绝记录。
+
+### 10. PostGIS 空间查询问题
+
+症状：
+
+- `geo_spatial_query` 工具未注册
+- 空间查询返回连接错误或超时
+
+处理步骤：
+
+1. 确认 `tools.geo.postgis_dsn` 已设置为有效的 PostgreSQL/PostGIS 连接串。
+2. 从 Golem 主机测试连通性：`psql "<dsn>" -c "SELECT PostGIS_Version();"`。
+3. 超时问题请增大 `tools.geo.query_timeout_seconds`。
+4. 行数截断问题请增大 `tools.geo.max_rows`。
+5. 确认 `tools.geo.readonly=true`（除非确实需要写入）。
+6. 若使用 `policy.mode=strict`，确保 `geo_spatial_query` 的审批请求已通过 `golem approval approve` 处理。
+
+### 11. Fabricated Geo 工具或 Pipeline 问题
+
+症状：
+
+- `tools/geo/` 下的 fabricated 工具验证失败
+- `pipelines/geo/` 下的 learned pipeline 未被匹配复用
+
+处理步骤：
+
+1. 检查 `tools/geo/` 中是否存在格式错误的 manifest 或脚本文件。
+2. 确认 `state/skill_telemetry.json` 正在被更新。
+3. pipeline 匹配问题请检查 `pipelines/geo/*.json`，确认参数模式与当前请求对齐。
+4. 检索日志中的 fabrication scaffold 生成或 pipeline hint 注入消息。
 
 ## 日志与观测建议
 

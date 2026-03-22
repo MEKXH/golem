@@ -2,14 +2,15 @@
 
 ## Scope
 
-This runbook covers routine operations and first-response troubleshooting for:
+This runbook covers routine operations and first-response troubleshooting for Golem — a vertical AI Agent for the geospatial industry:
 
 - `golem run` server mode
-- Gateway HTTP API (`/health`, `/version`, `/chat`)
+- Gateway HTTP API (`/health`, `/version`, `/chat`) and embedded WebUI
+- Geo tool execution (GDAL/PostGIS workflows)
 - Heartbeat service (scheduled health probe and callback)
-- Telegram channel integration
+- IM channel integrations (Telegram, Discord, Slack, etc.)
 - Provider/model connectivity
-- Tool execution and memory subsystem
+- Tool execution, approval/audit, and memory subsystem
 - Containerized deployment (`Dockerfile` / `docker-compose.yml`)
 
 ## Quick Health Checklist
@@ -131,6 +132,46 @@ Actions:
    - `heartbeat dispatched`
    - `heartbeat run failed`
 5. If needed, reduce `heartbeat.max_idle_minutes` for stricter recency control or increase it for long-idle scenarios.
+
+### 9. Geo Tool Execution Failures
+
+Symptoms:
+- `geo_process`, `geo_info`, `geo_crs_detect`, or `geo_format_convert` returns errors
+- Agent reports "GDAL not found" or command timeout
+
+Actions:
+1. Confirm `tools.geo.enabled=true` in config.
+2. Verify GDAL is installed and accessible: run `gdalinfo --version` on the host.
+3. If GDAL is not on `$PATH`, set `tools.geo.gdal_bin_dir` to the directory containing GDAL executables.
+4. Check `tools.geo.timeout_seconds` — large raster operations may need a higher value.
+5. Verify `tools.geo.restrict_to_workspace` — if `true`, all input/output paths must be inside the workspace.
+6. Check logs for workspace boundary violations or command whitelist rejections.
+
+### 10. PostGIS Spatial Query Issues
+
+Symptoms:
+- `geo_spatial_query` tool is not registered
+- Spatial queries return connection errors or timeouts
+
+Actions:
+1. Confirm `tools.geo.postgis_dsn` is set to a valid PostgreSQL/PostGIS connection string.
+2. Test connectivity from the Golem host: `psql "<dsn>" -c "SELECT PostGIS_Version();"`.
+3. For timeout issues, increase `tools.geo.query_timeout_seconds`.
+4. For row-limit truncation, increase `tools.geo.max_rows`.
+5. Confirm `tools.geo.readonly=true` if write access is not intended.
+6. If using `policy.mode=strict`, ensure `geo_spatial_query` approval requests are handled via `golem approval approve`.
+
+### 11. Fabricated Geo Tool or Pipeline Issues
+
+Symptoms:
+- Fabricated tools under `tools/geo/` fail validation
+- Learned pipelines under `pipelines/geo/` are not matched for reuse
+
+Actions:
+1. Check `tools/geo/` for malformed manifest or script files.
+2. Verify skill telemetry in `state/skill_telemetry.json` is being updated.
+3. For pipeline matching issues, inspect `pipelines/geo/*.json` and confirm parameter patterns align with current requests.
+4. Review logs for fabrication scaffold generation or pipeline hint injection messages.
 
 ## Logging Guidance
 
