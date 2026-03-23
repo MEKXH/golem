@@ -29,7 +29,6 @@ var (
 	htmlScriptRe    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
 	htmlStyleRe     = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
 	htmlTagRe       = regexp.MustCompile(`(?s)<[^>]+>`)
-	htmlSpaceRe     = regexp.MustCompile(`\s+`)
 	ddgResultLinkRe = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
 )
 
@@ -350,6 +349,6 @@ func htmlToText(input string) string {
 	s = htmlStyleRe.ReplaceAllString(s, " ")
 	s = htmlTagRe.ReplaceAllString(s, " ")
 	s = html.UnescapeString(s)
-	s = htmlSpaceRe.ReplaceAllString(s, " ")
+	s = strings.Join(strings.Fields(s), " ")
 	return strings.TrimSpace(s)
 }
