@@ -24,3 +24,7 @@
 ## 2026-03-30 - Disabled Button Visual State
 **Learning:** When using global classes like `.button` with hover animations (e.g., `transform: translateY`), simply adding a `:disabled` property in Vue templates isn't enough. Without explicit CSS targeting, the button remains visually active and animates on hover, confusing users.
 **Action:** When styling buttons, explicitly restrict hover effects using `:not(:disabled)` and ensure a visual disabled state is defined globally (e.g., `opacity: 0.5` and `cursor: not-allowed`) so that all buttons uniformly communicate unavailability.
+
+## 2026-04-12 - Empty Input Submission State
+**Learning:** Users can feel confused if a submit button appears active but silently fails or does nothing when clicked with empty input. Providing immediate visual feedback by disabling the button clarifies that an action requires input.
+**Action:** Always disable submit buttons on forms (like chat composers) when the required input fields are empty, ensuring the UI accurately reflects the current allowable actions.
