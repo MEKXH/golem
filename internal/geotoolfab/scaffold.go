@@ -110,10 +110,11 @@ func validateScaffoldDefinition(name, description, runner string, parameters map
 	return err
 }
 
+var scaffoldToolNameReplacer = strings.NewReplacer("-", "_", " ", "_")
+
 func normalizeScaffoldToolName(name string) string {
 	name = strings.ToLower(strings.TrimSpace(name))
-	name = strings.ReplaceAll(name, "-", "_")
-	name = strings.ReplaceAll(name, " ", "_")
+	name = scaffoldToolNameReplacer.Replace(name)
 	name = strings.TrimPrefix(name, "geo_")
 	if name == "" {
 		name = "tool"
