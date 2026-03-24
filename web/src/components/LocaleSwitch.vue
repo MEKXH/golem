@@ -1,9 +1,10 @@
 <template>
-  <div class="locale-switch" :aria-label="copy.localeLabel">
+  <div class="locale-switch" role="group" :aria-label="copy.localeLabel">
     <button
       class="locale-switch-button"
       :class="{ 'locale-switch-button-active': activeLocale === 'en' }"
       type="button"
+      :aria-pressed="activeLocale === 'en'"
       @click="setLocale('en')"
     >
       {{ copy.localeEnglish }}
@@ -12,6 +13,7 @@
       class="locale-switch-button"
       :class="{ 'locale-switch-button-active': activeLocale === 'zh-CN' }"
       type="button"
+      :aria-pressed="activeLocale === 'zh-CN'"
       @click="setLocale('zh-CN')"
     >
       {{ copy.localeChinese }}
