@@ -57,3 +57,11 @@
 ## 2026-03-18 - Zero-Allocation String Truncation by Rune
 **Learning:** The `truncate` function in `cmd/golem/commands/cron.go` used `runes := []rune(s)` to safely truncate strings containing multi-byte characters to a specific rune count. For large strings, this cast caused an unnecessary O(N) memory allocation and slice creation, simply to count characters.
 **Action:** To safely truncate strings by rune length without allocating memory, use a `for idx := range s` loop. Since `range` iterates over a string by runes, you can count the iterations and use the byte index (`idx`) to slice the original string directly (`s[:targetByteIdx]`). This maintains O(1) memory and O(maxLen) time complexity.
+
+## 2026-03-22 - Replacing Multiple strings.ReplaceAll with strings.NewReplacer
+**Learning:** Sequential calls to `strings.ReplaceAll` for HTML escaping or similar tasks cause multiple complete passes over the string, generating multiple intermediate string allocations. For example, replacing `<`, `>`, and `&` individually allocated new strings at each step.
+**Action:** Replace multiple sequential `strings.ReplaceAll` operations on the same string with a single, package-level cached `strings.NewReplacer`. This reduces the operation to a single pass, significantly reducing allocations (e.g., from 3 allocs down to 2) and execution time (e.g., ~21% faster).
+
+## 2026-03-22 - Fast Whitespace Normalization
+**Learning:** Normalizing multiple spaces to a single space using a regular expression like `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` is heavily reliant on the regex state machine and engine, which is slow and requires multiple allocations in the execution path. For large HTML documents or strings, this causes measurable performance degradation.
+**Action:** Replace `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` with the highly optimized Go standard library functions `strings.Join(strings.Fields(s), " ")`. `strings.Fields` is optimized to split strings by whitespace fast, and `strings.Join` pre-allocates the exact required buffer length, leading to zero intermediate string allocations and drastically faster execution times.

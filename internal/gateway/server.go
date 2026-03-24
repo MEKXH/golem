@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -79,6 +81,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // NewHandler 创建并配置网关的路由处理器。
 func NewHandler(token string, processor ChatProcessor) http.Handler {
 	mux := http.NewServeMux()
+	webUI, webUIErr := webUIFS()
 
 	// 健康检查接口
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +117,6 @@ func NewHandler(token string, processor ChatProcessor) http.Handler {
 			writeError(w, requestID, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
 		}
-		// 如果配置了令牌，则校验 Bearer Token
 		if strings.TrimSpace(token) != "" && !isAuthorized(r, token) {
 			writeError(w, requestID, http.StatusUnauthorized, "unauthorized", "missing or invalid bearer token")
 			return
@@ -173,7 +175,43 @@ func NewHandler(token string, processor ChatProcessor) http.Handler {
 			"request_id": requestID,
 		})
 	})
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		serveWebUI(w, r, webUI, webUIErr)
+	})
+
 	return mux
+}
+
+func serveWebUI(w http.ResponseWriter, r *http.Request, webUI fs.FS, webUIErr error) {
+	if webUIErr != nil || webUI == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.NotFound(w, r)
+		return
+	}
+
+	cleanPath := path.Clean(r.URL.Path)
+	if cleanPath == "." {
+		cleanPath = "/"
+	}
+	if cleanPath == "/" || !strings.Contains(path.Base(cleanPath), ".") {
+		serveEmbeddedIndexHTML(w, webUI)
+		return
+	}
+	http.FileServer(http.FS(webUI)).ServeHTTP(w, r)
+}
+
+func serveEmbeddedIndexHTML(w http.ResponseWriter, webUI fs.FS) {
+	body, err := fs.ReadFile(webUI, "index.html")
+	if err != nil {
+		http.Error(w, "web ui index not found", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(body)
 }
 
 func isAuthorized(r *http.Request, expected string) bool {

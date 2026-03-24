@@ -423,9 +423,10 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+var keyNormalizerReplacer = strings.NewReplacer("_", "", "-", "")
+
 func normalizeKey(input string) string {
-	input = strings.ReplaceAll(input, "_", "")
-	input = strings.ReplaceAll(input, "-", "")
+	input = keyNormalizerReplacer.Replace(input)
 	return strings.ToLower(input)
 }
 

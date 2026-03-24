@@ -9,14 +9,13 @@
 [![CI Status](https://img.shields.io/github/actions/workflow/status/MEKXH/golem/ci.yml?style=flat-square&logo=github-actions)](https://github.com/MEKXH/golem/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/MEKXH/golem?style=flat-square)](LICENSE)
 
-**你的 AI Agent，你的终端，你的规则。**
+**会自我进化的时空数据分析 Agent —— 你的私人 GIS 分析师。**
 
 </div>
 
-Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.dev/) 和 [Eino](https://github.com/cloudwego/eino) 构建。
-它支持对话、工具调用、Shell 命令执行、文件读写、网页搜索与抓取、长期记忆、Cron 定时任务、多渠道后台服务，以及 Provider 认证登录与渠道语音转写。
+Golem 是一个**面向地理信息行业的垂直 AI Agent**，基于 [Go](https://go.dev/) 和 [Eino](https://github.com/cloudwego/eino) 构建。它在自然语言交互与专业 GIS 工作流之间架起桥梁，将复杂的 GDAL/PostGIS 操作转化为对话式请求，通过 **WebUI**、**终端 TUI** 或**任意 IM 渠道**即可使用。
 
-它也内置了专门的 Geo 垂直能力：面向工作区的 GDAL/PostGIS 工具链、学习到的 Geo pipeline 复用、fabricated Geo tool 脚手架，以及让地理空间工作流逐步沉淀的 skill telemetry 闭环。
+与通用聊天壳子不同，Golem 内置了真正的 Agent 循环（最多 20 轮工具调用）、面向工作区的 GDAL/PostGIS 工具链、学习到的 pipeline 复用、fabricated tool 脚手架，以及 skill telemetry 闭环 —— 所有操作均受内置审批与审计框架治理。
 
 > **Golem (גולם)**：在犹太传说中，Golem 是由无生命物质塑造并被赋予行动能力的"仆从"。
 
@@ -30,50 +29,144 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 
 ## 为什么选择 Golem
 
-- 单一二进制，零运行时依赖膨胀（无需 Python/Node/Docker）。
-- 模型提供商解耦，通过统一的 OpenAI 兼容层切换。
-- 真正的 Agent 循环，支持工具调用，不是纯聊天壳子。
-- 既可本地交互（`golem chat`），也可后台常驻（`golem run`）。
-- 内置多渠道接入、Gateway API、Cron 调度、Heartbeat 探活和技能系统。
-- 内置认证命令、语音转写链路和可跨重启恢复的心跳路由。
-- 已形成独立的 Geo 垂直化能力，覆盖工作区 Geo 工具、learned pipeline、fabricated Geo tool 扩展点和确定性的自动进化基础设施。
+地理信息行业长期受困于**工具碎片化、学习曲线陡峭、重复性工作流**。现有 GeoAI 方案要么锁死在桌面 GIS 平台内（QGIS/ArcGIS 插件），要么局限于 Jupyter Notebook，要么缺乏自主执行能力。
+
+Golem 提供了独特的组合方案：
+
+| 行业痛点 | Golem 的解决方式 |
+|---|---|
+| GDAL 命令难记难用 | 自然语言 → GDAL 命令编排 |
+| PostGIS 空间 SQL 容易写错 | 经验证的空间 SQL Codebook，模式匹配优先 |
+| 坐标系混乱是日常噩梦 | 自动检测 CRS、智能投影选择、常见错误预警 |
+| 分析工作流反复手工执行 | learned pipeline 复用，参数化重放 |
+| 缺失工具需要写脚本 | fabricated tool 脚手架 —— Agent 运行时自动生成新 Geo 工具 |
+| GIS 工具对非专业人员门槛高 | 三种接入方式：WebUI / TUI / IM 渠道（Telegram、Slack 等） |
+| 生产数据上的工具执行有风险 | 内置审批门控、策略执行和审计追踪 |
+
+## 核心差异化能力
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       Golem 架构                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  第四层：自主进化层                                                │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐     │
+│  │ Tool         │ │ Skill        │ │ Pipeline             │     │
+│  │ Fabrication  │ │ Telemetry    │ │ Learning             │     │
+│  │ (自动生成    │ │ (跟踪并      │ │ (重放成功的          │     │
+│  │  新工具)     │ │  持续改进)   │ │  Geo 序列)           │     │
+│  └──────────────┘ └──────────────┘ └──────────────────────┘     │
+│                                                                  │
+│  第三层：领域知识层                                                │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐     │
+│  │ Spatial SQL  │ │ CRS          │ │ Data Catalog         │     │
+│  │ Codebook     │ │ Intelligence │ │ Connector            │     │
+│  └──────────────┘ └──────────────┘ └──────────────────────┘     │
+│                                                                  │
+│  第二层：GIS 工具层                                               │
+│  ┌─────┐ ┌──────┐ ┌──────┐ ┌───────┐ ┌─────────────────┐      │
+│  │GDAL │ │Post  │ │CRS   │ │格式   │ │数据目录         │      │
+│  │/OGR │ │GIS   │ │检测  │ │转换   │ │& SQL Codebook   │      │
+│  └─────┘ └──────┘ └──────┘ └───────┘ └─────────────────┘      │
+│                                                                  │
+│  第一层：Agent 引擎                                               │
+│  ┌──────┐ ┌──────┐ ┌─────┐ ┌──────┐ ┌─────┐ ┌──────────┐      │
+│  │Agent │ │工具  │ │消息 │ │Cron  │ │记忆 │ │审批      │      │
+│  │ 循环 │ │注册  │ │总线 │ │      │ │     │ │& 审计    │      │
+│  └──────┘ └──────┘ └─────┘ └──────┘ └─────┘ └──────────┘      │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 1. Geo 原生工具集
+
+当 `tools.geo.enabled=true` 时，Golem 注册一整套面向工作区的 Geo 执行面：
+
+| 工具 | 说明 |
+|---|---|
+| `geo_info` | 检查空间数据集 —— 格式、范围、图层数、要素数 |
+| `geo_process` | GDAL/OGR 处理 —— 裁剪、合并、重投影、栅格化等 |
+| `geo_crs_detect` | 从坐标值范围、元数据或 EPSG 推断自动检测 CRS |
+| `geo_format_convert` | Shapefile、GeoJSON、GeoPackage、GeoTIFF 等格式互转 |
+| `geo_data_catalog` | 在工作区或远程目录中发现数据集 |
+| `geo_sql_codebook` | 查询经验证的空间 SQL 模式，支持参数替换 |
+| `geo_spatial_query` | 执行 PostGIS 空间 SQL（需配置 `postgis_dsn`） |
+
+工作区约定：
+- `geo-codebook/` —— 可复用空间 SQL 模式
+- `tools/geo/` —— fabricated Geo 工具及 dry-run 脚手架
+- `pipelines/geo/` —— 学习到的 Geo 工具序列
+- 文件处理类 Geo 工具依赖 GDAL；PostGIS 为可选能力
+
+### 2. 自我进化能力
+
+现有 GeoAI 竞品中，没有一个同时具备以下三项能力：
+
+**Learned Pipeline 复用** —— 当 Geo 工具序列执行成功后，会作为 replay-ready pipeline 保存到 `pipelines/geo/`。在后续相似请求中，Agent 将学到的序列以 parameter-aware reuse candidate 的形式注入 prompt，缩短执行时间并提升可靠性。
+
+**Fabricated Tool 脚手架** —— 当 Agent 遇到没有匹配工具的空间任务时，会在 `tools/geo/` 下生成 dry-run manifest/script bundle。脚手架通过 validator 检查后，可由人或 Agent 补充实现，然后注册为一等 Geo 工具。
+
+**Skill Telemetry** —— 每个 Geo skill 跟踪 `shown`、`selected`、`success`、`failure` 计数器。确定性的 report 视图将低表现技能排在前面，给 Agent 一个本地、可解释的持续改进信号。
+
+### 3. 审批、策略与安全治理
+
+Golem 将安全作为一等能力，而非事后补丁：
+
+| 能力 | 说明 |
+|---|---|
+| **策略模式** | `strict` / `relaxed` / `off` —— 控制哪些工具在执行前需要审批 |
+| **审批门控** | 敏感工具（如 `exec`、`geo_spatial_query`）在 `strict` 模式下需要人工显式审批 |
+| **限时放开** | `off_ttl` 允许限时放宽策略，到期自动回收 |
+| **审计追踪** | 所有工具执行记录写入 `state/audit.jsonl`，附带完整请求上下文 |
+| **审批状态** | 待审批/已通过/已驳回请求记录在 `state/approvals.json` |
+| **CLI 管理** | `golem approval list/approve/reject` 支持带外审批流 |
+| **工作区限制** | Geo 文件操作和 Shell 命令可限制在工作区边界内 |
+| **PostGIS 只读** | 空间查询默认使用只读事务 |
+
+这使得 Golem 适用于空间数据涉及隐私、商业秘密或合规要求的生产环境。
+
+### 4. 三种接入方式 —— 降低使用门槛
+
+Golem 支持三种接入方式，让专业 GIS 能力同时服务技术人员和业务用户：
+
+```
+┌──────────┐     ┌──────────┐     ┌──────────────────────────┐
+│  WebUI   │     │ 终端     │     │   IM 渠道                │
+│  /       │     │ TUI      │     │  Telegram, Discord,      │
+│  /console│     │ golem    │     │  Slack, 飞书, WhatsApp,  │
+│          │     │ chat     │     │  QQ, 钉钉, MaixCam      │
+└────┬─────┘     └────┬─────┘     └──────────┬───────────────┘
+     │                │                       │
+     └────────────────┼───────────────────────┘
+                      ▼
+              ┌───────────────┐
+              │  Golem Agent  │
+              │  引擎         │
+              └───────────────┘
+```
+
+- **WebUI**（`golem run`）—— 首页 `/` 展示产品介绍，`/console` 提供聊天控制台。终端用户无需安装任何软件，分享一个 URL 即可开始空间分析。
+- **终端 TUI**（`golem chat`）—— 全功能终端界面，适合偏好命令行工作流的 GIS 专业人员。
+- **IM 渠道**（`golem run`）—— 接入 Telegram、Discord、Slack、飞书、WhatsApp、QQ、钉钉或 MaixCam。城市规划师、外业人员和非技术干系人，可以在他们日常使用的 App 中直接发起空间分析请求。
+
+## 内置工具
+
+| 工具 | 说明 |
+|---|---|
+| `exec` | 执行 Shell 命令（支持限制在工作区内） |
+| `read_file` / `write_file` / `edit_file` / `append_file` | 在工作区中读取/写入/编辑/追加文件 |
+| `list_dir` | 列出目录内容 |
+| `read_memory` / `write_memory` | 读写长期记忆 |
+| `append_diary` | 追加每日日志 |
+| `web_search` | 网页搜索（有 Brave Key 优先使用 Brave） |
+| `web_fetch` | 抓取并提取网页内容 |
+| `geo_*` | 地理空间工具集 —— GDAL/PostGIS 工作流、CRS、格式转换、空间 SQL |
+| `manage_cron` | 管理定时任务 |
+| `message` | 向渠道发送消息 |
+| `spawn` / `subagent` / `workflow` | 委托任务给子 Agent 与编排工作流 |
 
 ## 架构概览
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                           Golem 架构图                               │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌──────────────┐     ┌──────────────┐     ┌──────────────────┐    │
-│  │   渠道层     │     │   Agent      │     │     提供商       │    │
-│  │ (Telegram,   │────▶│   循环       │────▶│ (Claude, OpenAI, │    │
-│  │  Discord,    │     │              │     │  DeepSeek...)    │    │
-│  │  Slack...)   │     └──────┬───────┘     └──────────────────┘    │
-│  └──────────────┘            │                                       │
-│         │                    │                                       │
-│         ▼                    ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │                         消息总线                             │    │
-│  │              (入站/出站异步消息队列)                          │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                              │                                       │
-│         ┌────────────────────┼────────────────────┐                 │
-│         ▼                    ▼                    ▼                 │
-│  ┌─────────────┐     ┌─────────────┐     ┌─────────────────┐       │
-│  │   会话      │     │   技能      │     │     工具        │       │
-│  │  (历史)     │     │  (提示词)   │     │(exec, file, web)│       │
-│  └─────────────┘     └─────────────┘     └─────────────────┘       │
-│         │                    │                    │                 │
-│         └────────────────────┼────────────────────┘                 │
-│                              ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │                      支持服务层                              │    │
-│  │    (记忆 | Cron | 心跳 | 网关 | 技能)                       │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
 
 ### 核心组件
 
@@ -84,81 +177,46 @@ Golem 是一个以终端为中心的个人 AI 助手，基于 [Go](https://go.de
 | **渠道系统** | `internal/channel/` | 多平台集成（Telegram、Discord、Slack 等） |
 | **提供商** | `internal/provider/` | 通过 Eino OpenAI 封装层统一 LLM 接口 |
 | **会话** | `internal/session/` | 持久化 JSONL 格式对话历史 |
-| **工具** | `internal/tools/` | 内置工具：文件、Shell、记忆、网页、Cron、消息、子 Agent、workflow |
+| **工具** | `internal/tools/` | 内置工具：文件、Shell、记忆、网页、Cron、Geo、消息、子 Agent、workflow |
 | **记忆** | `internal/memory/` | 长期记忆与每日日记系统 |
 | **技能** | `internal/skills/` | 可扩展的 Markdown 提示词包 |
 | **Cron** | `internal/cron/` | 定时任务管理 |
 | **心跳** | `internal/heartbeat/` | 定期健康探测与状态回传 |
-| **网关** | `internal/gateway/` | HTTP API 服务器（`/health`、`/version`、`/chat`） |
+| **网关** | `internal/gateway/` | HTTP API 服务器与内嵌 WebUI |
 
-## 核心能力
+### 数据流
 
-### 交互方式
-
-- 终端 TUI 对话（`golem chat`）
-- 多渠道机器人服务（`golem run`）：Telegram、WhatsApp、Feishu、Discord、Slack、QQ、DingTalk、MaixCam
-- Gateway HTTP API（`/health`、`/version`、`/chat`）
-
-### 最新能力
-
-- 认证命令：`golem auth login`、`golem auth logout`、`golem auth status`
-- Heartbeat 目标会话持久化：重启后自动恢复最近活跃的渠道/会话路由
-- Telegram / Discord / Slack 音频消息自动转写，失败时回退占位文本，不阻断主流程
-- 文件增量编辑工具：`edit_file` 与 `append_file`
-- 策略守卫与审批流：`strict`/`relaxed`/`off`，支持 `off_ttl` 限时放开后自动回收
-- MCP 动态工具接入：以 `mcp.<server>.<tool>` 注册并复用同一策略/审批链路
-- 渠道外发可靠性策略（`channels.outbound`）：统一重试、限流、去重窗口和有界并发
-- 面向 Geo 工作流的 replay-ready pipeline 复用提示、dry-run fabricated tool 脚手架，以及低表现 skill 排序的 telemetry report
-
-### 内置工具
-
-| 工具 | 说明 |
-| --- | --- |
-| `exec` | 执行 Shell 命令（支持限制在工作区内） |
-| `read_file` / `write_file` / `edit_file` / `append_file` | 在工作区中读取/写入/编辑/追加文件 |
-| `list_dir` | 列出目录内容 |
-| `read_memory` / `write_memory` | 读写长期记忆 |
-| `append_diary` | 追加每日日志 |
-| `web_search` | 网页搜索（有 Brave Key 优先使用 Brave） |
-| `web_fetch` | 抓取并提取网页内容 |
-| `geo_*` | 可选地理空间工具集，覆盖 GDAL/PostGIS 工作流、数据发现、坐标系检查、格式转换和空间 SQL |
-| `manage_cron` | 管理定时任务 |
-| `message` | 向渠道发送消息 |
-| `spawn` / `subagent` / `workflow` | 委托任务给子 Agent 与编排工作流 |
-
-### Geo 垂直化与自动进化
-
-当 `tools.geo.enabled=true` 时，Golem 启用的是一整套面向工作区的 Geo 执行面，而不只是零散的 GIS 命令集合。
-
-当前已实现的能力：
-
-- 注册 Geo 基础能力，覆盖数据检查、处理、CRS 检测、格式转换、数据发现以及可复用空间 SQL 检索。
-- 通过 learned pipeline 的 replay-ready 提示复用历史成功 Geo 工具序列，并附带示例参数和 `needs_parameter_update` 标记。
-- 通过 dry-run fabricated Geo tool scaffold，为缺失的空间能力生成可通过 validator 的工作区扩展骨架，再由人或 Agent 补实现。
-- 通过 `shown`、`selected`、`success`、`failure` skill telemetry 跟踪 Geo 相关技能使用情况，并生成把低表现技能排在前面的报告视图。
-
-自动进化闭环：
-
-- learned pipeline 存在 `pipelines/geo/`，并会在后续相似任务里以 parameter-aware reuse candidate 的形式重新注入 prompt。
-- fabricated Geo tool 存在 `tools/geo/`，现在可以先生成 dry-run manifest/script bundle，再进入具体实现。
-- skill telemetry 持久化在工作区状态里，并通过确定性的 report 视图输出，给 Agent 一个本地、可解释的 Geo skill 表现信号。
-
-基础 Geo 工具：
-
-- 核心工具：`geo_info`、`geo_process`、`geo_crs_detect`、`geo_format_convert`、`geo_data_catalog`、`geo_sql_codebook`
-- 可选 PostGIS 工具：配置 `tools.geo.postgis_dsn` 后启用 `geo_spatial_query`
-
-工作区约定与依赖：
-
-- `geo-codebook/`：存放可复用空间 SQL 模式。
-- `tools/geo/`：存放 fabricated workspace Geo tools 及其 dry-run scaffold 目标。
-- `pipelines/geo/`：存放学习到的 Geo 工具序列。
-- `state/skill_telemetry.json`：存放 skill telemetry 计数，并作为 report 视图的数据来源。
-- 文件处理类 Geo 工具依赖 GDAL；PostGIS 为可选能力。
-
-### 支持的 LLM 提供商
-
-OpenRouter、Claude、OpenAI、DeepSeek、Gemini、Ark、Qianfan、Qwen、Ollama。
+```
+用户输入 (WebUI / TUI / Telegram / Discord / Slack...)
+         │
+         ▼
+    渠道层 (接收并验证消息)
+         │
+         ▼
+    Bus.PublishInbound() ──▶ 消息总线.inbound
+         │
+         ▼
+    Agent 循环 (处理消息)
+         │
+    ┌────┴────┐
+    ▼         ▼         ▼
+会话   上下文    LLM 生成
+(历史) 构建器   (绑定工具)
+              │           │
+              │           ▼
+              │      工具执行
+              │      (Geo 工具、Shell、文件...)
+              │           │
+              └─────┬─────┘
+                    ▼
+         Bus.PublishOutbound()
+                    │
+                    ▼
+         渠道管理器 (路由)
+                    │
+                    ▼
+         渠道.Send() ──▶ 用户
+```
 
 ### 子 Agent 系统
 
@@ -168,8 +226,6 @@ Golem 支持将任务委托给子 Agent 并行处理：
 - **`subagent`**：同步子 Agent，阻塞直到完成，直接返回结果
 - **`workflow`**：内置工作流编排（拆解任务、串/并行执行子任务、汇总每步结果）
 
-以上模式都使用独立会话，并传播原始渠道/会话信息以便结果回传。
-
 ### 记忆系统
 
 双层记忆架构：
@@ -177,9 +233,9 @@ Golem 支持将任务委托给子 Agent 并行处理：
 1. **长期记忆**：单个 `MEMORY.md` 文件存储持久知识
 2. **每日日记**：`YYYY-MM-DD.md` 文件存储带时间戳的日记条目
 
-### Heartbeat 探活
+### 支持的 LLM 提供商
 
-在服务模式启用后，系统可以定期执行健康探测，并向最近活跃会话回传心跳结果。最近活跃目标会持久化到工作区状态文件中，服务重启后仍可恢复投递路由。
+OpenRouter、Claude、OpenAI、DeepSeek、Gemini、Ark、Qianfan、Qwen、Ollama。
 
 ## 安装
 
@@ -205,8 +261,6 @@ golem init
 
 ### 2. 使用示例配置模板
 
-使用仓库内模板作为起点：
-
 ```bash
 cp config/config.example.json ~/.golem/config.json
 ```
@@ -219,223 +273,68 @@ Copy-Item config/config.example.json "$HOME/.golem/config.json"
 
 然后编辑 `~/.golem/config.json`，至少填入一个 provider 的 key（例如 `providers.openai.api_key`）。
 
-建议同时基于模板创建环境变量文件（用于 local/staging/production 隔离）：
+启用 Geo 工具需将 `tools.geo.enabled` 设为 `true`，并可选配置 `gdal_bin_dir` 和 `postgis_dsn`。
+
+建议基于模板创建环境变量文件：
 
 ```bash
 cp .env.example .env.local
 ```
 
-PowerShell:
-
-```powershell
-Copy-Item .env.example .env.local
-```
-
-在 `.env.local` 中补齐必填密钥（至少一个 provider key；若网关对外暴露则必须设置 `GOLEM_GATEWAY_TOKEN`）。
-
-可选（使用 token/OAuth 认证存储）：
-
-```bash
-golem auth login --provider openai --token "$OPENAI_API_KEY"
-```
-
-### 3. 运行 smoke 检查
-
-```bash
-make smoke
-```
-
-如果本机没有 `make`：
-
-```bash
-go test ./...
-go run ./cmd/golem status
-go run ./cmd/golem chat "ping"
-```
-
-### 4. 开始对话
+### 3. 开始对话
 
 ```bash
 golem chat
 ```
 
-单次调用：
+单次空间分析：
 
 ```bash
-golem chat "分析当前目录结构"
+golem chat "检查当前目录下所有 Shapefile 的坐标系"
 ```
 
-### 5. 启动服务模式
+### 4. 启动服务模式（WebUI + IM 渠道）
 
 ```bash
 golem run
 ```
 
+访问：
+- `http://127.0.0.1:18790/`：产品首页
+- `http://127.0.0.1:18790/console`：聊天控制台
+
 ## CLI 命令总览
 
 | 命令 | 说明 |
-| --- | --- |
+|---|---|
 | `golem init` | 初始化配置和工作区 |
 | `golem chat [message]` | 启动 TUI 对话或单次发送消息 |
-| `golem run` | 启动服务模式 |
-| `golem status [--json]` | 查看系统状态摘要（文本或 JSON） |
-| `golem auth login --provider <name> [--token <token> \| --device-code \| --browser]` | 通过 token 或 OAuth 保存 provider 凭据 |
-| `golem auth logout [--provider <name>]` | 删除指定 provider 凭据，或删除全部凭据 |
-| `golem auth status` | 查看当前认证凭据状态 |
-| `golem channels list` | 列出已配置渠道 |
-| `golem channels status` | 查看渠道详细状态 |
-| `golem channels start <channel>` | 在配置中启用渠道 |
-| `golem channels stop <channel>` | 在配置中停用渠道 |
-| `golem cron list` | 列出定时任务 |
-| `golem cron add -n <name> -m <msg> [--every <sec> \| --cron <expr> \| --at <ts>]` | 新增定时任务 |
-| `golem cron run <job_id>` | 立即执行任务 |
-| `golem cron remove <job_id>` | 删除任务 |
-| `golem cron enable <job_id>` | 启用任务 |
-| `golem cron disable <job_id>` | 禁用任务 |
-| `golem approval list` | 列出待审批请求 |
-| `golem approval approve <id> --by <name> [--note <text>]` | 通过审批请求 |
-| `golem approval reject <id> --by <name> [--note <text>]` | 驳回审批请求 |
-| `golem skills list` | 列出已安装技能 |
-| `golem skills install <owner/repo>` | 从 GitHub 安装技能 |
-| `golem skills remove <name>` | 删除技能 |
-| `golem skills show <name>` | 查看技能内容 |
-| `golem skills search [keyword]` | 搜索远程技能索引 |
-
-## 认证说明
-
-认证信息存储在 `~/.golem/auth.json`。当配置文件中的 provider key 为空时，Provider 会优先使用认证存储中的 token 作为调用凭据。
-
-示例：
-
-```bash
-golem auth login --provider openai --device-code
-golem auth status
-golem auth logout --provider openai
-```
-
-## Cron 调度
-
-支持三种任务类型：
-
-- `--every <seconds>`：固定间隔执行
-- `--cron "<expr>"`：标准 5 段 cron 表达式
-- `--at "<RFC3339>"`：一次性执行
-
-示例：
-
-```bash
-golem cron add -n "hourly-check" -m "检查系统状态并汇报" --every 3600
-golem cron add -n "morning-brief" -m "给我一份晨间简报" --cron "0 9 * * *"
-golem cron add -n "meeting-reminder" -m "提醒我参加团队会议" --at "2026-02-14T09:00:00Z"
-```
-
-## 技能系统
-
-技能是会注入到 Agent 提示词中的 Markdown 指令包。
-
-加载优先级：
-
-1. `workspace/skills`
-2. `~/.golem/skills`
-3. 内置技能目录（默认 `~/.golem/builtin-skills`，可通过 `GOLEM_BUILTIN_SKILLS_DIR` 覆盖）
-
-从 GitHub 安装：
-
-```bash
-golem skills install owner/repo
-```
-
-搜索远程技能：
-
-```bash
-golem skills search
-golem skills search weather
-```
+| `golem run` | 启动服务模式（WebUI + IM 渠道） |
+| `golem status [--json]` | 查看系统状态摘要 |
+| `golem auth login/logout/status` | 管理 Provider 认证凭据 |
+| `golem channels list/status/start/stop` | 管理 IM 渠道 |
+| `golem cron list/add/run/remove/enable/disable` | 管理定时任务 |
+| `golem approval list/approve/reject` | 管理工具执行审批 |
+| `golem skills list/install/remove/show/search` | 管理技能包 |
 
 ## 配置说明
 
 主配置文件：`~/.golem/config.json`
-  
 仓库模板文件：`config/config.example.json`
+
+关键配置段：
 
 ```json
 {
   "agents": {
     "defaults": {
-      "workspace_mode": "default",
-      "workspace": "",
       "model": "anthropic/claude-sonnet-4-5",
-      "max_tokens": 8192,
-      "temperature": 0.7,
       "max_tool_iterations": 20
-    },
-    "subagent": {
-      "timeout_seconds": 300,
-      "retry": 1,
-      "max_concurrency": 3
-    }
-  },
-  "channels": {
-    "telegram": {
-      "enabled": false,
-      "token": "",
-      "allow_from": []
-    },
-    "outbound": {
-      "max_concurrent_sends": 16,
-      "retry_max_attempts": 3,
-      "retry_base_backoff_ms": 200,
-      "retry_max_backoff_ms": 2000,
-      "rate_limit_per_second": 20,
-      "dedup_window_seconds": 30
-    }
-  },
-  "providers": {
-    "claude": {
-      "api_key": ""
-    },
-    "openai": {
-      "api_key": ""
-    },
-    "ollama": {
-      "base_url": "http://localhost:11434"
-    }
-  },
-  "policy": {
-    "mode": "strict",
-    "off_ttl": "",
-    "allow_persistent_off": false,
-    "require_approval": ["exec"]
-  },
-  "mcp": {
-    "servers": {
-      "localfs": {
-        "enabled": true,
-        "transport": "stdio",
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
-      }
     }
   },
   "tools": {
-    "exec": {
-      "timeout": 60,
-      "restrict_to_workspace": true
-    },
-    "web": {
-      "search": {
-        "api_key": "",
-        "max_results": 5
-      }
-    },
-    "voice": {
-      "enabled": false,
-      "provider": "openai",
-      "model": "gpt-4o-mini-transcribe",
-      "timeout_seconds": 30
-    },
     "geo": {
-      "enabled": false,
+      "enabled": true,
       "gdal_bin_dir": "",
       "restrict_to_workspace": true,
       "timeout_seconds": 120,
@@ -445,53 +344,17 @@ golem skills search weather
       "readonly": true
     }
   },
+  "policy": {
+    "mode": "strict",
+    "require_approval": ["exec"]
+  },
   "gateway": {
     "host": "0.0.0.0",
     "port": 18790,
     "token": ""
-  },
-  "heartbeat": {
-    "enabled": true,
-    "interval": 30,
-    "max_idle_minutes": 720
-  },
-  "log": {
-    "level": "info",
-    "file": ""
   }
 }
 ```
-
-`workspace_mode` 可选值：
-
-- `default`：使用 `~/.golem/workspace`
-- `cwd`：使用当前工作目录
-- `path`：使用 `agents.defaults.workspace` 指定路径
-
-`agents.subagent` 运行时参数：
-
-- `timeout_seconds`：子任务超时（默认 `300`）
-- `retry`：每个子任务重试次数（默认 `1`，总尝试次数 = retry + 1）
-- `max_concurrency`：`spawn/subagent/workflow` 的并发上限（默认 `3`）
-
-`tools.geo` 运行时参数：
-
-- `enabled`：是否注册 Geo 工具
-- `gdal_bin_dir`：可选的 GDAL 可执行文件目录
-- `restrict_to_workspace`：限制 Geo 文件路径位于工作区内
-- `timeout_seconds`：GDAL 类工具超时
-- `postgis_dsn`：`geo_spatial_query` 使用的可选 PostGIS 连接串
-- `query_timeout_seconds`：PostGIS 查询超时
-- `max_rows`：空间查询结果的最大返回行数
-- `readonly`：尽量使用只读 PostGIS 事务
-
-`channels.outbound` 可靠性参数：
-
-- `max_concurrent_sends`：外发最大并发（默认 `16`）
-- `retry_max_attempts`：可重试渠道的最大尝试次数（默认 `3`）
-- `retry_base_backoff_ms` / `retry_max_backoff_ms`：指数退避区间（毫秒）
-- `rate_limit_per_second`：全局外发速率限制（默认 `20`）
-- `dedup_window_seconds`：同 `channel+chat_id+request_id` 去重窗口（默认 `30`）
 
 `policy.mode` 可选值：
 
@@ -499,90 +362,16 @@ golem skills search weather
 - `relaxed`：允许执行，不触发审批
 - `off`：关闭策略检查（建议搭配 `off_ttl` 仅限时放开）
 
-审批与审计状态文件：
-
-- `<workspace>/state/approvals.json`
-- `<workspace>/state/audit.jsonl`
+完整配置参考请查看[使用手册](docs/user-guide.zh-CN.md)。
 
 ### 环境变量
 
 所有配置项支持 `GOLEM_` 前缀：
 
 ```bash
-export GOLEM_PROVIDERS_OPENROUTER_APIKEY="your-key"
 export GOLEM_PROVIDERS_CLAUDE_APIKEY="your-key"
-export GOLEM_LOG_LEVEL=debug
-```
-
-推荐按环境拆分文件：
-
-- `.env.local`：本地开发
-- `.env.staging`：预发布联调
-- `.env.production`：生产部署
-
-可从 `.env.example` 复制，并保持 `policy.mode=strict`、`policy.allow_persistent_off=false` 作为安全默认值。
-
-最小必填密钥：
-
-- 至少一个 provider API key（或使用 `golem auth login --provider <name>`）。
-- 对外网络可访问的 staging/production 场景必须配置 `GOLEM_GATEWAY_TOKEN`。
-
-## Gateway API
-
-服务模式（`golem run`）下可用：
-
-- `GET /health`
-- `GET /version`
-- `POST /chat`
-
-`POST /chat` 请求示例：
-
-```json
-{
-  "message": "总结最新日志",
-  "session_id": "ops-room",
-  "sender_id": "api-client"
-}
-```
-
-如果配置了 `gateway.token`，请求头需携带：
-
-```text
-Authorization: Bearer <token>
-```
-
-## 数据流
-
-```
-用户输入 (CLI/Telegram/Discord/Slack...)
-         │
-         ▼
-    渠道层 (接收并验证消息)
-         │
-         ▼
-    Bus.PublishInbound() ──▶ 消息总线.inbound
-         │
-         ▼
-    Agent 循环 (处理消息)
-         │
-    ┌────┴────┐
-    ▼         ▼         ▼
-会话   上下文    LLM 生成
-(历史) 构建器   (绑定工具)
-              │           │
-              │           ▼
-              │      工具执行
-              │      (工具调用)
-              │           │
-              └─────┬─────┘
-                    ▼
-         Bus.PublishOutbound()
-                    │
-                    ▼
-         渠道管理器 (路由)
-                    │
-                    ▼
-         渠道.Send() ──▶ 用户
+export GOLEM_TOOLS_GEO_ENABLED=true
+export GOLEM_GATEWAY_TOKEN="your-token"
 ```
 
 ## 引导文件
@@ -604,19 +393,66 @@ Agent 的系统提示词由以下文件构建（在工作区中搜索）：
 
 ## 开发
 
-提交前建议执行：
+```bash
+make build
+make test
+make lint
+make smoke
+```
+
+如果本机没有 `make`：
 
 ```bash
 go test ./...
 go test -race ./...
 go vet ./...
-```
-
-构建：
-
-```bash
 go build -o golem ./cmd/golem
 ```
+
+WebUI 开发：
+
+```bash
+npm --prefix web install
+npm --prefix web run dev
+npm --prefix web run build:gateway
+```
+
+## 项目路线图
+
+### 第一阶段 —— Geo 基础能力（已完成）
+
+- [x] 核心 Geo 工具集：`geo_info`、`geo_process`、`geo_crs_detect`、`geo_format_convert`、`geo_data_catalog`、`geo_sql_codebook`
+- [x] 可选 PostGIS 空间查询工具
+- [x] learned pipeline 复用（replay-ready 提示）
+- [x] dry-run fabricated tool 脚手架
+- [x] skill telemetry 跟踪与报告
+- [x] 审批门控与审计追踪
+- [x] 三种接入方式：WebUI、TUI、IM 渠道
+- [x] 多 Provider LLM 支持（OpenRouter、Claude、OpenAI、DeepSeek、Gemini 等）
+
+### 第二阶段 —— 领域知识深化（进行中）
+
+- [ ] 空间 SQL Codebook 扩充至 30+ 经验证的 PostGIS 查询模式
+- [ ] CRS 智能化：面积/距离分析时的自动投影选择、CGCS2000 与 WGS84 混淆预警
+- [ ] 数据目录连接器：OSM Overpass API、Sentinel STAC API、本地文件系统扫描
+- [ ] GIS 专用技能包：空间分析、遥感影像处理、数据 ETL 管线
+- [ ] Geo tool fabrication v2：Agent 生成的 Python 脚本自动注册为工作区工具
+
+### 第三阶段 —— 工作流编排与企业级能力
+
+- [ ] Pipeline 编排：参数化重放、条件分支、失败恢复
+- [ ] 空间触发器 Cron：「当此 AOI 影像更新时，运行变化检测」
+- [ ] 通过 IM 渠道投递地图/GeoJSON 附件
+- [ ] 基于角色的空间数据访问控制
+- [ ] 多 Agent 分幅并行处理大规模栅格数据
+- [ ] WebUI 中的 Geo pipeline 健康看板
+
+### 第四阶段 —— 社区与生态
+
+- [ ] 社区工具市场：通过 GitHub 分享和安装 fabricated Geo 工具
+- [ ] 多模态空间认知：卫星影像语义解析集成到分析工作流
+- [ ] 行业垂直技能包：城市规划、电网巡检、交通分析
+- [ ] 可解释的空间推理视图：地图动画和剖面图展示 Agent 中间推理过程
 
 ## 许可证
 

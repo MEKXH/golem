@@ -590,20 +590,28 @@ func (m model) View() string {
 		descStyle.Render("Quit"),
 	)
 
+	charCount := fmt.Sprintf("%d/%d", m.textarea.Length(), m.textarea.CharLimit)
+	charCountView := descStyle.Render(charCount)
+
+	var rightElements string
 	if !m.viewport.AtBottom() {
 		scrollIndicator := keyStyle.Copy().Background(lipgloss.Color("172")).Render("↓ Scrolled Up")
+		// Adding a separator between indicator and character count
+		rightElements = lipgloss.JoinHorizontal(lipgloss.Top, scrollIndicator, separator, charCountView)
+	} else {
+		rightElements = charCountView
+	}
 
-		usedWidth := lipgloss.Width(helpView)
-		indicatorWidth := lipgloss.Width(scrollIndicator)
+	usedWidth := lipgloss.Width(helpView)
+	rightElementsWidth := lipgloss.Width(rightElements)
 
-		// Subtract the PaddingRight added by helpStyle (assumed to be 2) and leave some margin
-		spacerWidth := m.width - usedWidth - indicatorWidth - 2
-		if spacerWidth > 0 {
-			spacer := strings.Repeat(" ", spacerWidth)
-			helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, spacer, scrollIndicator)
-		} else {
-			helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, scrollIndicator)
-		}
+	// Subtract the PaddingRight added by helpStyle (assumed to be 2) and leave some margin
+	spacerWidth := m.width - usedWidth - rightElementsWidth - 2
+	if spacerWidth > 0 {
+		spacer := strings.Repeat(" ", spacerWidth)
+		helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, spacer, rightElements)
+	} else {
+		helpView = lipgloss.JoinHorizontal(lipgloss.Top, helpView, " ", rightElements)
 	}
 
 	helpView = helpStyle.Render(helpView)
