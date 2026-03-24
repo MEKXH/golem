@@ -15,7 +15,7 @@
 
 Golem 是一个**面向地理信息行业的垂直 AI Agent**，基于 [Go](https://go.dev/) 和 [Eino](https://github.com/cloudwego/eino) 构建。它在自然语言交互与专业 GIS 工作流之间架起桥梁，将复杂的 GDAL/PostGIS 操作转化为对话式请求，通过 **WebUI**、**终端 TUI** 或**任意 IM 渠道**即可使用。
 
-与通用聊天壳子不同，Golem 内置了真正的 Agent 循环（最多 20 轮工具调用）、面向工作区的 GDAL/PostGIS 工具链、学习到的 pipeline 复用、fabricated tool 脚手架，以及 skill telemetry 闭环 —— 所有操作均受内置审批与审计框架治理。
+与通用聊天机器人问答助手不同，Golem 内置了真正的 Agent 循环、面向工作区的 GDAL/PostGIS 工具链、学习到的 pipeline 复用、fabricated tool 脚手架，以及 skill telemetry  —— 所有操作均受内置审批与审计框架治理。
 
 > **Golem (גולם)**：在犹太传说中，Golem 是由无生命物质塑造并被赋予行动能力的"仆从"。
 
