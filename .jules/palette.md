@@ -28,3 +28,7 @@
 ## 2026-04-12 - Empty Input Submission State
 **Learning:** Users can feel confused if a submit button appears active but silently fails or does nothing when clicked with empty input. Providing immediate visual feedback by disabling the button clarifies that an action requires input.
 **Action:** Always disable submit buttons on forms (like chat composers) when the required input fields are empty, ensuring the UI accurately reflects the current allowable actions.
+
+## 2026-04-14 - Custom Toggle Button Accessibility
+**Learning:** A group of toggle buttons (like a Locale switcher `[EN | 中]`) that changes state dynamically needs explicit ARIA attributes to be understandable to screen reader users. The visual active state (e.g., a darker background) is not automatically conveyed to assistive technologies.
+**Action:** For custom toggle button groups in Vue, wrap the group in an element with `role="group"` (and optionally `aria-label`) to denote the relationship, and use the dynamically bound `:aria-pressed="condition"` attribute on individual buttons so screen readers announce which option is currently active.
