@@ -143,10 +143,15 @@ func (l *Loader) RenderPattern(name string, values map[string]string) (*Rendered
 		resolved[key] = value
 	}
 
-	sql := found.Template
+	// Bolt: Replaced the O(N) sequential strings.ReplaceAll inside a loop with a single-pass
+	// strings.NewReplacer. This avoids multiple intermediate string allocations and prevents
+	// unpredictable cascading replacements when replacing overlapping template variables.
+	replacements := make([]string, 0, len(resolved)*2)
 	for key, value := range resolved {
-		sql = strings.ReplaceAll(sql, "{{"+key+"}}", value)
+		replacements = append(replacements, "{{"+key+"}}", value)
 	}
+	sql := strings.NewReplacer(replacements...).Replace(found.Template)
+
 	if strings.Contains(sql, "{{") {
 		return nil, fmt.Errorf("unresolved placeholders remain in rendered SQL")
 	}
