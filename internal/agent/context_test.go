@@ -137,6 +137,9 @@ func TestBuildSystemPrompt_IncludesGeoToolFabricationGuide(t *testing.T) {
 	if !strings.Contains(prompt, "tools/geo/scripts/") || !strings.Contains(prompt, "tools/geo/<tool_name>.yaml") {
 		t.Fatalf("expected fabrication file paths in prompt, got: %s", prompt)
 	}
+	if !strings.Contains(prompt, "The manifest `name` and `<tool_name>` filename must both start with `geo_`") {
+		t.Fatalf("expected explicit geo_ naming rule in prompt, got: %s", prompt)
+	}
 	if !strings.Contains(prompt, "geo_sinuosity") {
 		t.Fatalf("expected installed fabricated tool in prompt, got: %s", prompt)
 	}

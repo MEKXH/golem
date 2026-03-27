@@ -107,7 +107,8 @@ func (l *Loader) BuildSummary() string {
 	var sb strings.Builder
 	sb.WriteString("## Geo Tool Fabrication\n\n")
 	sb.WriteString("- When a reusable spatial capability is missing, create a script under `tools/geo/scripts/` and a manifest under `tools/geo/<tool_name>.yaml`.\n")
-	sb.WriteString("- Fabricated geo tools must use `geo_` names and declare `name`, `description`, `runner`, `script`, and `parameters`.\n")
+	sb.WriteString("- The manifest `name` and `<tool_name>` filename must both start with `geo_`; never invent fabricated geo tool names like `local_scan_strict` without the prefix.\n")
+	sb.WriteString("- Fabricated geo tools must declare `name`, `description`, `runner`, `script`, and `parameters`.\n")
 	sb.WriteString("- Fabricated geo tools receive their arguments as JSON on stdin and are auto-registered on the next agent startup.\n")
 
 	defs, err := l.Load()

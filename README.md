@@ -151,6 +151,16 @@ Golem can be accessed through three modes, making professional GIS capabilities 
 - **Terminal TUI** (`golem chat`) — Full-featured terminal interface for GIS professionals who prefer command-line workflows.
 - **IM Channels** (`golem run`) — Connect Telegram, Discord, Slack, Feishu, WhatsApp, QQ, DingTalk, or MaixCam. Urban planners, field workers, and non-technical stakeholders can request spatial analysis from the apps they already use.
 
+Example surfaces:
+
+**Terminal TUI**
+
+![Golem Terminal TUI](public/TUI_test.png)
+
+**Telegram IM Channel**
+
+![Golem Telegram Channel](public/IM_tg_Test.jpg)
+
 ## Built-in Tools
 
 | Tool                                                     | Description                                                                      |

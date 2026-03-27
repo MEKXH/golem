@@ -150,6 +150,16 @@ Golem 支持三种接入方式，让专业 GIS 能力同时服务技术人员和
 - **终端 TUI**（`golem chat`）—— 全功能终端界面，适合偏好命令行工作流的 GIS 专业人员。
 - **IM 渠道**（`golem run`）—— 接入 Telegram、Discord、Slack、飞书、WhatsApp、QQ、钉钉或 MaixCam。城市规划师、外业人员和非技术干系人，可以在他们日常使用的 App 中直接发起空间分析请求。
 
+界面示例：
+
+**终端 TUI**
+
+![Golem 终端 TUI](public/TUI_test.png)
+
+**Telegram IM 渠道**
+
+![Golem Telegram 渠道](public/IM_tg_Test.jpg)
+
 ## 内置工具
 
 | 工具 | 说明 |
