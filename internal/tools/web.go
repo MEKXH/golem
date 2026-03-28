@@ -26,9 +26,6 @@ const (
 )
 
 var (
-	htmlScriptRe    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	htmlStyleRe     = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	htmlTagRe       = regexp.MustCompile(`(?s)<[^>]+>`)
 	ddgResultLinkRe = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
 )
 
@@ -344,11 +341,66 @@ func NewWebFetchTool() (tool.InvokableTool, error) {
 	return utils.InferTool("web_fetch", "Fetch content from a URL", impl.execute)
 }
 
+// htmlToText extracts plain text from an HTML string by stripping out tags,
+// scripts, and styles. This is implemented as a fast, single-pass character
+// iteration using strings.Builder to avoid the significant overhead and memory
+// allocations of regular expressions (e.g., regexp.MustCompile and ReplaceAllString).
 func htmlToText(input string) string {
-	s := htmlScriptRe.ReplaceAllString(input, " ")
-	s = htmlStyleRe.ReplaceAllString(s, " ")
-	s = htmlTagRe.ReplaceAllString(s, " ")
-	s = html.UnescapeString(s)
-	s = strings.Join(strings.Fields(s), " ")
-	return strings.TrimSpace(s)
+	var buf strings.Builder
+	buf.Grow(len(input))
+
+	i := 0
+	for i < len(input) {
+		if input[i] == '<' {
+			// Fast check for <script> and <style> tags to skip their contents
+			if i+7 <= len(input) && strings.EqualFold(input[i:i+7], "<script") {
+				endIdx := -1
+				for j := i + 7; j+9 <= len(input); j++ {
+					if input[j] == '<' && strings.EqualFold(input[j:j+9], "</script>") {
+						endIdx = j + 9
+						break
+					}
+				}
+				if endIdx != -1 {
+					buf.WriteByte(' ')
+					i = endIdx
+					continue
+				}
+			}
+
+			if i+6 <= len(input) && strings.EqualFold(input[i:i+6], "<style") {
+				endIdx := -1
+				for j := i + 6; j+8 <= len(input); j++ {
+					if input[j] == '<' && strings.EqualFold(input[j:j+8], "</style>") {
+						endIdx = j + 8
+						break
+					}
+				}
+				if endIdx != -1 {
+					buf.WriteByte(' ')
+					i = endIdx
+					continue
+				}
+			}
+
+			endIdx := -1
+			for j := i + 1; j < len(input); j++ {
+				if input[j] == '>' {
+					endIdx = j + 1
+					break
+				}
+			}
+			if endIdx != -1 {
+				buf.WriteByte(' ')
+				i = endIdx
+				continue
+			}
+		}
+
+		buf.WriteByte(input[i])
+		i++
+	}
+
+	res := html.UnescapeString(buf.String())
+	return strings.Join(strings.Fields(res), " ")
 }
