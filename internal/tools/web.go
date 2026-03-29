@@ -26,9 +26,6 @@ const (
 )
 
 var (
-	htmlScriptRe    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	htmlStyleRe     = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	htmlTagRe       = regexp.MustCompile(`(?s)<[^>]+>`)
 	ddgResultLinkRe = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
 )
 
@@ -344,11 +341,70 @@ func NewWebFetchTool() (tool.InvokableTool, error) {
 	return utils.InferTool("web_fetch", "Fetch content from a URL", impl.execute)
 }
 
+// htmlToText extracts plain text from HTML by removing scripts, styles, and tags.
+// Optimized to avoid expensive regex allocations by using a single-pass strings.Builder iteration.
 func htmlToText(input string) string {
-	s := htmlScriptRe.ReplaceAllString(input, " ")
-	s = htmlStyleRe.ReplaceAllString(s, " ")
-	s = htmlTagRe.ReplaceAllString(s, " ")
-	s = html.UnescapeString(s)
-	s = strings.Join(strings.Fields(s), " ")
-	return strings.TrimSpace(s)
+	var b strings.Builder
+	b.Grow(len(input))
+
+	i := 0
+	for i < len(input) {
+		if input[i] == '<' {
+			// Check for <script...
+			if i+7 <= len(input) && strings.EqualFold(input[i:i+7], "<script") && (i+7 == len(input) || isSpaceOrBracket(input[i+7])) {
+				end := indexOfFold(input[i+7:], "</script>")
+				if end != -1 {
+					i += end + 7 + 9
+					b.WriteByte(' ')
+					continue
+				}
+			}
+			// Check for <style...
+			if i+6 <= len(input) && strings.EqualFold(input[i:i+6], "<style") && (i+6 == len(input) || isSpaceOrBracket(input[i+6])) {
+				end := indexOfFold(input[i+6:], "</style>")
+				if end != -1 {
+					i += end + 6 + 8
+					b.WriteByte(' ')
+					continue
+				}
+			}
+
+			// Strip generic HTML tags
+			end := strings.IndexByte(input[i:], '>')
+			if end != -1 {
+				i += end + 1
+				b.WriteByte(' ')
+				continue
+			}
+		}
+
+		b.WriteByte(input[i])
+		i++
+	}
+
+	s := html.UnescapeString(b.String())
+	return strings.TrimSpace(strings.Join(strings.Fields(s), " "))
+}
+
+// indexOfFold performs a case-insensitive search for a substring within a string.
+func indexOfFold(s, substr string) int {
+	lenS := len(s)
+	lenSub := len(substr)
+	if lenSub == 0 {
+		return 0
+	}
+	if lenSub > lenS {
+		return -1
+	}
+	for i := 0; i <= lenS-lenSub; i++ {
+		if strings.EqualFold(s[i:i+lenSub], substr) {
+			return i
+		}
+	}
+	return -1
+}
+
+// isSpaceOrBracket checks if a character is a whitespace or a bracket for tag parsing.
+func isSpaceOrBracket(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '>' || c == '/'
 }
