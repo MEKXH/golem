@@ -74,3 +74,51 @@ Finally, I will formulate my answer.
 		t.Errorf("expected response='Here is the final answer.', got %q", response)
 	}
 }
+
+func TestSplitThink_UnclosedThinkBlock(t *testing.T) {
+	input := "Before think <think>inside unclosed think block"
+
+	think, response, found := SplitThink(input)
+
+	if !found {
+		t.Fatal("expected found=true for unclosed think block, got false")
+	}
+	if think != "inside unclosed think block" {
+		t.Errorf("expected think='inside unclosed think block', got %q", think)
+	}
+	if response != "Before think" {
+		t.Errorf("expected response='Before think', got %q", response)
+	}
+}
+
+func TestSplitThink_OnlyThinkStart(t *testing.T) {
+	input := "<think>"
+
+	think, response, found := SplitThink(input)
+
+	if !found {
+		t.Fatal("expected found=true for unclosed think block, got false")
+	}
+	if think != "" {
+		t.Errorf("expected think='', got %q", think)
+	}
+	if response != "" {
+		t.Errorf("expected response='', got %q", response)
+	}
+}
+
+func TestSplitThink_StartAfterText(t *testing.T) {
+	input := "Regular text here<think>And thinking here</think>And some more text here"
+
+	think, response, found := SplitThink(input)
+
+	if !found {
+		t.Fatal("expected found=true, got false")
+	}
+	if think != "And thinking here" {
+		t.Errorf("expected think='And thinking here', got %q", think)
+	}
+	if response != "Regular text hereAnd some more text here" {
+		t.Errorf("expected response='Regular text hereAnd some more text here', got %q", response)
+	}
+}

@@ -2,12 +2,8 @@
 package render
 
 import (
-	"regexp"
 	"strings"
 )
-
-// thinkBlockRe 是用于匹配并提取模型输出中 <think> 标签内容的正则表达式。
-var thinkBlockRe = regexp.MustCompile(`(?s)<think>(.*?)</think>`)
 
 // SplitThink 将原始文本内容拆分为“思考过程”和“最终回复”两部分。
 // 返回值:
@@ -15,11 +11,24 @@ var thinkBlockRe = regexp.MustCompile(`(?s)<think>(.*?)</think>`)
 // - response: 移除思考标签后的回复内容
 // - found: 是否在文本中找到了思考标签
 func SplitThink(content string) (think, response string, found bool) {
-	matches := thinkBlockRe.FindStringSubmatch(content)
-	if len(matches) > 1 {
-		think = strings.TrimSpace(matches[1])
-		response = strings.TrimSpace(thinkBlockRe.ReplaceAllString(content, ""))
+	startIdx := strings.Index(content, "<think>")
+	if startIdx == -1 {
+		return "", content, false
+	}
+
+	endIdx := strings.Index(content[startIdx+7:], "</think>")
+	if endIdx == -1 {
+		// Handle unclosed <think> tag by considering everything after it as thought process
+		think = strings.TrimSpace(content[startIdx+7:])
+		response = strings.TrimSpace(content[:startIdx])
 		return think, response, true
 	}
-	return "", content, false
+
+	// Adjust endIdx to be relative to the entire content string
+	endIdx += startIdx + 7
+
+	think = strings.TrimSpace(content[startIdx+7 : endIdx])
+	response = strings.TrimSpace(content[:startIdx] + content[endIdx+8:])
+
+	return think, response, true
 }
