@@ -144,9 +144,17 @@ func (l *Loader) RenderPattern(name string, values map[string]string) (*Rendered
 	}
 
 	sql := found.Template
+	// Bolt optimization: Replace sequential strings.ReplaceAll inside a map loop with a single-pass
+	// strings.NewReplacer. This avoids O(N) intermediate string allocations and prevents unpredictable
+	// cascading replacements caused by random map iteration order.
+	replacements := make([]string, 0, len(resolved)*2)
 	for key, value := range resolved {
-		sql = strings.ReplaceAll(sql, "{{"+key+"}}", value)
+		replacements = append(replacements, "{{"+key+"}}", value)
 	}
+	if len(replacements) > 0 {
+		sql = strings.NewReplacer(replacements...).Replace(sql)
+	}
+
 	if strings.Contains(sql, "{{") {
 		return nil, fmt.Errorf("unresolved placeholders remain in rendered SQL")
 	}
