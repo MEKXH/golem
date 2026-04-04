@@ -32,3 +32,7 @@
 ## 2026-04-14 - Custom Toggle Button Accessibility
 **Learning:** A group of toggle buttons (like a Locale switcher `[EN | 中]`) that changes state dynamically needs explicit ARIA attributes to be understandable to screen reader users. The visual active state (e.g., a darker background) is not automatically conveyed to assistive technologies.
 **Action:** For custom toggle button groups in Vue, wrap the group in an element with `role="group"` (and optionally `aria-label`) to denote the relationship, and use the dynamically bound `:aria-pressed="condition"` attribute on individual buttons so screen readers announce which option is currently active.
+
+## 2024-04-04 - Accessible Auto-scrolling Chat Timelines
+**Learning:** Dynamic chat logs require `role="log"` and `aria-live="polite"` for screen readers to announce new messages, and manual `scrollTop` management on watch triggers for visual tracking.
+**Action:** Always combine semantic ARIA log attributes with `nextTick`-based auto-scrolling when building dynamic chat interfaces in Vue.
