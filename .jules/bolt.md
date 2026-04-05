@@ -65,3 +65,7 @@
 ## 2026-03-22 - Fast Whitespace Normalization
 **Learning:** Normalizing multiple spaces to a single space using a regular expression like `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` is heavily reliant on the regex state machine and engine, which is slow and requires multiple allocations in the execution path. For large HTML documents or strings, this causes measurable performance degradation.
 **Action:** Replace `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` with the highly optimized Go standard library functions `strings.Join(strings.Fields(s), " ")`. `strings.Fields` is optimized to split strings by whitespace fast, and `strings.Join` pre-allocates the exact required buffer length, leading to zero intermediate string allocations and drastically faster execution times.
+
+## 2026-04-05 - Replacing multiple strings.ReplaceAll with strings.NewReplacer
+**Learning:** Using a `for` loop to sequentially call `strings.ReplaceAll` for variable replacements (e.g. from a map) causes O(N) intermediate memory allocations. Furthermore, when iterating over maps, the non-deterministic order can lead to unpredictable cascading replacements.
+**Action:** When replacing multiple dynamic variables in a string, gather the key-value pairs into a `[]string` slice and perform a single-pass replacement using `strings.NewReplacer(replacements...).Replace(str)`. This is safer, more performant, and correctly handles nested or overlapping replacement values.
