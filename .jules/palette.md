@@ -21,6 +21,7 @@
 ## 2026-03-24 - Dynamic ARIA Labels in Vue
 **Learning:** Screen readers cannot infer the purpose of an input element from a Vue dynamic `placeholder` alone. Hardcoding an `aria-label` string disrupts existing `vue-i18n` workflows and creates translation drift.
 **Action:** When adding accessible names to form inputs in Vue, bind the `aria-label` attribute directly to the existing translation token (e.g., `:aria-label="consoleCopy.composer.placeholder"`) to maintain accessibility without duplicating translation efforts.
+
 ## 2026-03-30 - Disabled Button Visual State
 **Learning:** When using global classes like `.button` with hover animations (e.g., `transform: translateY`), simply adding a `:disabled` property in Vue templates isn't enough. Without explicit CSS targeting, the button remains visually active and animates on hover, confusing users.
 **Action:** When styling buttons, explicitly restrict hover effects using `:not(:disabled)` and ensure a visual disabled state is defined globally (e.g., `opacity: 0.5` and `cursor: not-allowed`) so that all buttons uniformly communicate unavailability.
@@ -32,3 +33,7 @@
 ## 2026-04-14 - Custom Toggle Button Accessibility
 **Learning:** A group of toggle buttons (like a Locale switcher `[EN | 中]`) that changes state dynamically needs explicit ARIA attributes to be understandable to screen reader users. The visual active state (e.g., a darker background) is not automatically conveyed to assistive technologies.
 **Action:** For custom toggle button groups in Vue, wrap the group in an element with `role="group"` (and optionally `aria-label`) to denote the relationship, and use the dynamically bound `:aria-pressed="condition"` attribute on individual buttons so screen readers announce which option is currently active.
+
+## 2026-04-16 - Dynamic Chat Interface Accessibility & Auto-Scrolling
+**Learning:** Dynamic chat or log interfaces can be frustrating for screen reader users if updates aren't announced, and for all users if they have to manually scroll down to see new messages.
+**Action:** For dynamic chat or log interfaces in Vue, implement auto-scrolling by binding a `ref` to the scrollable container, watching the data source length (and loading states), and using `nextTick()` to set `scrollTop = scrollHeight`. To ensure accessibility, apply `role="log"`, `aria-live="polite"`, and `aria-busy="true"` (during loading states) to the container so screen readers actively announce new content.
