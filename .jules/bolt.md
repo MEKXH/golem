@@ -65,3 +65,7 @@
 ## 2026-03-22 - Fast Whitespace Normalization
 **Learning:** Normalizing multiple spaces to a single space using a regular expression like `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` is heavily reliant on the regex state machine and engine, which is slow and requires multiple allocations in the execution path. For large HTML documents or strings, this causes measurable performance degradation.
 **Action:** Replace `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` with the highly optimized Go standard library functions `strings.Join(strings.Fields(s), " ")`. `strings.Fields` is optimized to split strings by whitespace fast, and `strings.Join` pre-allocates the exact required buffer length, leading to zero intermediate string allocations and drastically faster execution times.
+
+## 2026-03-23 - Zero-Allocation Parsing for Simple XML/HTML Tags
+**Learning:** Extracting content between simple, static tags like `<think>` and `</think>` using `regexp.MustCompile` and `ReplaceAllString` is slow due to regex engine overhead and multiple string allocations.
+**Action:** When extracting content between simple, static XML/HTML tags (e.g., `<think>` blocks from LLM outputs), avoid using regular expressions. Instead, use `strings.Index` to find the start and end boundaries and extract the content using simple string slicing (`content[start:end]`). This eliminates regex engine overhead and allows for zero-allocation parsing.
