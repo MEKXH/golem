@@ -74,3 +74,11 @@ Finally, I will formulate my answer.
 		t.Errorf("expected response='Here is the final answer.', got %q", response)
 	}
 }
+
+func BenchmarkSplitThink(b *testing.B) {
+	content := "Hello <think> thought 1 </think> world <think> thought 2 </think> !"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		SplitThink(content)
+	}
+}
