@@ -26,9 +26,6 @@ const (
 )
 
 var (
-	htmlScriptRe    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	htmlStyleRe     = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	htmlTagRe       = regexp.MustCompile(`(?s)<[^>]+>`)
 	ddgResultLinkRe = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
 )
 
@@ -345,10 +342,102 @@ func NewWebFetchTool() (tool.InvokableTool, error) {
 }
 
 func htmlToText(input string) string {
-	s := htmlScriptRe.ReplaceAllString(input, " ")
-	s = htmlStyleRe.ReplaceAllString(s, " ")
-	s = htmlTagRe.ReplaceAllString(s, " ")
-	s = html.UnescapeString(s)
+	var b strings.Builder
+	b.Grow(len(input))
+
+	i := 0
+	for i < len(input) {
+		if input[i] == '<' {
+			endOffset := strings.IndexByte(input[i:], '>')
+			if endOffset == -1 {
+				b.WriteByte('<')
+				i++
+				continue
+			}
+
+			end := i + endOffset
+			tagContent := input[i+1 : end]
+			isScript := false
+			isStyle := false
+
+			if len(tagContent) >= 6 && strings.EqualFold(tagContent[:6], "script") {
+				if len(tagContent) == 6 || tagContent[6] == ' ' || tagContent[6] == '\t' || tagContent[6] == '\n' || tagContent[6] == '\r' {
+					isScript = true
+				}
+			} else if len(tagContent) >= 5 && strings.EqualFold(tagContent[:5], "style") {
+				if len(tagContent) == 5 || tagContent[5] == ' ' || tagContent[5] == '\t' || tagContent[5] == '\n' || tagContent[5] == '\r' {
+					isStyle = true
+				}
+			}
+
+			if isScript {
+				closeStr := "</script>"
+				remaining := input[end+1:]
+				idx := -1
+
+				curr := 0
+				for {
+					nextIdx := strings.IndexByte(remaining[curr:], '<')
+					if nextIdx == -1 {
+						break
+					}
+					curr += nextIdx
+					if curr+len(closeStr) <= len(remaining) && strings.EqualFold(remaining[curr:curr+len(closeStr)], closeStr) {
+						idx = curr
+						break
+					}
+					curr++
+				}
+
+				if idx != -1 {
+					i = end + 1 + idx + len(closeStr)
+					b.WriteByte(' ')
+					continue
+				} else {
+					i = end + 1
+					b.WriteByte(' ')
+					continue
+				}
+			} else if isStyle {
+				closeStr := "</style>"
+				remaining := input[end+1:]
+				idx := -1
+
+				curr := 0
+				for {
+					nextIdx := strings.IndexByte(remaining[curr:], '<')
+					if nextIdx == -1 {
+						break
+					}
+					curr += nextIdx
+					if curr+len(closeStr) <= len(remaining) && strings.EqualFold(remaining[curr:curr+len(closeStr)], closeStr) {
+						idx = curr
+						break
+					}
+					curr++
+				}
+
+				if idx != -1 {
+					i = end + 1 + idx + len(closeStr)
+					b.WriteByte(' ')
+					continue
+				} else {
+					i = end + 1
+					b.WriteByte(' ')
+					continue
+				}
+			} else {
+				i = end + 1
+				b.WriteByte(' ')
+				continue
+			}
+		}
+
+		b.WriteByte(input[i])
+		i++
+	}
+
+	s := html.UnescapeString(b.String())
 	s = strings.Join(strings.Fields(s), " ")
 	return strings.TrimSpace(s)
 }

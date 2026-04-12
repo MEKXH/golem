@@ -65,3 +65,7 @@
 ## 2026-03-22 - Fast Whitespace Normalization
 **Learning:** Normalizing multiple spaces to a single space using a regular expression like `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` is heavily reliant on the regex state machine and engine, which is slow and requires multiple allocations in the execution path. For large HTML documents or strings, this causes measurable performance degradation.
 **Action:** Replace `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` with the highly optimized Go standard library functions `strings.Join(strings.Fields(s), " ")`. `strings.Fields` is optimized to split strings by whitespace fast, and `strings.Join` pre-allocates the exact required buffer length, leading to zero intermediate string allocations and drastically faster execution times.
+
+## 2026-04-12 - Fast HTML-to-Text Parsing
+**Learning:** `htmlToText` in `internal/tools/web.go` used multiple `regexp.MustCompile` and `ReplaceAllString` calls to strip tags. This caused significant regex engine overhead and multiple intermediate string allocations, as measured in benchmarks (from ~8075 ns/op down to ~863.2 ns/op, and 15 allocs down to 3 allocs).
+**Action:** For basic HTML-to-text conversion or tag stripping, avoid using multiple `regexp.MustCompile` and `ReplaceAllString` calls. Instead, use a fast, single-pass character iteration loop using `strings.Builder` to manually track tag states, significantly improving performance and reducing memory usage.
