@@ -65,3 +65,7 @@
 ## 2026-03-22 - Fast Whitespace Normalization
 **Learning:** Normalizing multiple spaces to a single space using a regular expression like `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` is heavily reliant on the regex state machine and engine, which is slow and requires multiple allocations in the execution path. For large HTML documents or strings, this causes measurable performance degradation.
 **Action:** Replace `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` with the highly optimized Go standard library functions `strings.Join(strings.Fields(s), " ")`. `strings.Fields` is optimized to split strings by whitespace fast, and `strings.Join` pre-allocates the exact required buffer length, leading to zero intermediate string allocations and drastically faster execution times.
+
+## 2026-03-22 - YAML Parsing Overhead in High-Frequency Loaders
+**Learning:** The `loadPatterns()` function in `internal/geocodebook/loader.go` was reading and unmarshaling YAML files on every invocation. Since it's called frequently during interactions (like `ListPatterns`, `RenderPattern`, `BuildSummary`), this caused redundant disk I/O and expensive unmarshaling overhead (~200µs per call vs ~20µs cached).
+**Action:** Implement caching based on directory and file modification times (`info.ModTime().UnixNano()`). Use an `RWMutex` to guard a cache map keyed by the root path. Compare the cached modification times with current file modification times, and only re-read/re-unmarshal files when a file has been added, removed, or its modification time has changed.

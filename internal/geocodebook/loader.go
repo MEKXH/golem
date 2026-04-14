@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -28,6 +29,16 @@ type Pattern struct {
 	Verified    bool                `yaml:"verified" json:"verified"`
 	SuccessRate float64             `yaml:"success_rate" json:"success_rate"`
 	Source      string              `yaml:"-" json:"source"`
+}
+
+var (
+	patternsCacheMu sync.RWMutex
+	patternsCache   = make(map[string]patternsCacheEntry)
+)
+
+type patternsCacheEntry struct {
+	patterns []Pattern
+	modTimes map[string]int64
 }
 
 type document struct {
@@ -205,6 +216,42 @@ func (l *Loader) loadPatterns() ([]Pattern, error) {
 		return nil, fmt.Errorf("read geo-codebook directory: %w", err)
 	}
 
+	currentModTimes := make(map[string]int64)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		if ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+		if info, err := entry.Info(); err == nil {
+			currentModTimes[entry.Name()] = info.ModTime().UnixNano()
+		}
+	}
+
+	patternsCacheMu.RLock()
+	cached, ok := patternsCache[l.root]
+	patternsCacheMu.RUnlock()
+
+	// ⚡ Bolt optimization: Return cached patterns if no relevant files have been added, removed, or modified.
+	if ok {
+		changed := len(cached.modTimes) != len(currentModTimes)
+		if !changed {
+			for k, v := range currentModTimes {
+				if cached.modTimes[k] != v {
+					changed = true
+					break
+				}
+			}
+		}
+		if !changed {
+			res := make([]Pattern, len(cached.patterns))
+			copy(res, cached.patterns)
+			return res, nil
+		}
+	}
+
 	patterns := make([]Pattern, 0)
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -214,7 +261,6 @@ func (l *Loader) loadPatterns() ([]Pattern, error) {
 		if ext != ".yaml" && ext != ".yml" {
 			continue
 		}
-
 		path := filepath.Join(l.root, entry.Name())
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -234,6 +280,13 @@ func (l *Loader) loadPatterns() ([]Pattern, error) {
 			patterns = append(patterns, pattern)
 		}
 	}
+
+	patternsCacheMu.Lock()
+	patternsCache[l.root] = patternsCacheEntry{
+		patterns: patterns,
+		modTimes: currentModTimes,
+	}
+	patternsCacheMu.Unlock()
 
 	return patterns, nil
 }
