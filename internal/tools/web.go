@@ -26,9 +26,6 @@ const (
 )
 
 var (
-	htmlScriptRe    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	htmlStyleRe     = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	htmlTagRe       = regexp.MustCompile(`(?s)<[^>]+>`)
 	ddgResultLinkRe = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
 )
 
@@ -344,11 +341,93 @@ func NewWebFetchTool() (tool.InvokableTool, error) {
 	return utils.InferTool("web_fetch", "Fetch content from a URL", impl.execute)
 }
 
+func hasPrefixIgnoreCase(s, prefix string) bool {
+	if len(s) < len(prefix) {
+		return false
+	}
+	for i := 0; i < len(prefix); i++ {
+		c1 := s[i]
+		c2 := prefix[i]
+		if c1 == c2 {
+			continue
+		}
+		if c1 >= 'A' && c1 <= 'Z' {
+			c1 += 'a' - 'A'
+		}
+		if c2 >= 'A' && c2 <= 'Z' {
+			c2 += 'a' - 'A'
+		}
+		if c1 != c2 {
+			return false
+		}
+	}
+	return true
+}
+
+func indexIgnoreCase(s, substr string) int {
+	if len(substr) == 0 {
+		return 0
+	}
+	if len(s) < len(substr) {
+		return -1
+	}
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if hasPrefixIgnoreCase(s[i:], substr) {
+			return i
+		}
+	}
+	return -1
+}
+
+func isSpaceOrGreater(s string, idx int) bool {
+	if idx >= len(s) {
+		return false
+	}
+	c := s[idx]
+	return c == '>' || c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == '/'
+}
+
 func htmlToText(input string) string {
-	s := htmlScriptRe.ReplaceAllString(input, " ")
-	s = htmlStyleRe.ReplaceAllString(s, " ")
-	s = htmlTagRe.ReplaceAllString(s, " ")
-	s = html.UnescapeString(s)
+	var sb strings.Builder
+	sb.Grow(len(input))
+
+	i := 0
+	for i < len(input) {
+		if input[i] == '<' {
+			// Check for script or style tags specifically
+			if hasPrefixIgnoreCase(input[i:], "<script") && isSpaceOrGreater(input, i+7) {
+				endIdx := indexIgnoreCase(input[i:], "</script>")
+				if endIdx != -1 {
+					i += endIdx + len("</script>")
+					sb.WriteByte(' ')
+					continue
+				}
+			} else if hasPrefixIgnoreCase(input[i:], "<style") && isSpaceOrGreater(input, i+6) {
+				endIdx := indexIgnoreCase(input[i:], "</style>")
+				if endIdx != -1 {
+					i += endIdx + len("</style>")
+					sb.WriteByte(' ')
+					continue
+				}
+			}
+
+			// For any other tag, skip until >
+			endIdx := strings.IndexByte(input[i:], '>')
+			if endIdx == -1 {
+				sb.WriteByte(input[i])
+				i++
+				continue
+			}
+			i += endIdx + 1
+			sb.WriteByte(' ')
+			continue
+		}
+
+		sb.WriteByte(input[i])
+		i++
+	}
+
+	s := html.UnescapeString(sb.String())
 	s = strings.Join(strings.Fields(s), " ")
 	return strings.TrimSpace(s)
 }
