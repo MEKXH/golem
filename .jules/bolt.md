@@ -65,3 +65,7 @@
 ## 2026-03-22 - Fast Whitespace Normalization
 **Learning:** Normalizing multiple spaces to a single space using a regular expression like `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` is heavily reliant on the regex state machine and engine, which is slow and requires multiple allocations in the execution path. For large HTML documents or strings, this causes measurable performance degradation.
 **Action:** Replace `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` with the highly optimized Go standard library functions `strings.Join(strings.Fields(s), " ")`. `strings.Fields` is optimized to split strings by whitespace fast, and `strings.Join` pre-allocates the exact required buffer length, leading to zero intermediate string allocations and drastically faster execution times.
+
+## 2026-03-22 - Zero-Allocation Parsing Bug: Unclosed Tags
+**Learning:** When replacing regex with manual `strings.Index` to parse tag blocks (like `<think>`), failing to handle an unclosed start tag correctly will cause the parser to drop the remaining string completely, causing massive data loss.
+**Action:** When a closing tag is missing (`strings.Index == -1`), you must write the *entire* remaining string (`builder.WriteString(curr)`) to the builder instead of jumping ahead, to safely replicate ungreedy regex matching.
