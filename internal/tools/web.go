@@ -26,11 +26,42 @@ const (
 )
 
 var (
-	htmlScriptRe    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	htmlStyleRe     = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	htmlTagRe       = regexp.MustCompile(`(?s)<[^>]+>`)
 	ddgResultLinkRe = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
 )
+
+func indexIgnoreCase(s, substr string) int {
+	if len(substr) == 0 {
+		return 0
+	}
+	if len(substr) > len(s) {
+		return -1
+	}
+	for i := 0; i <= len(s)-len(substr); i++ {
+		match := true
+		for j := 0; j < len(substr); j++ {
+			c1 := s[i+j]
+			c2 := substr[j]
+			if c1 >= 'A' && c1 <= 'Z' {
+				c1 += 'a' - 'A'
+			}
+			if c2 >= 'A' && c2 <= 'Z' {
+				c2 += 'a' - 'A'
+			}
+			if c1 != c2 {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}
+
+func isSpaceOrGreater(b byte) bool {
+	return b == ' ' || b == '>' || b == '\t' || b == '\n' || b == '\r' || b == '/'
+}
 
 // WebSearchInput 定义了 web_search 工具的输入参数。
 type WebSearchInput struct {
@@ -344,11 +375,58 @@ func NewWebFetchTool() (tool.InvokableTool, error) {
 	return utils.InferTool("web_fetch", "Fetch content from a URL", impl.execute)
 }
 
+// htmlToText converts an HTML string to plain text by stripping scripts,
+// styles, and all other HTML tags. It uses an allocation-free manual
+// iteration instead of regular expressions to avoid O(N) intermediate
+// string allocations and regex engine overhead.
 func htmlToText(input string) string {
-	s := htmlScriptRe.ReplaceAllString(input, " ")
-	s = htmlStyleRe.ReplaceAllString(s, " ")
-	s = htmlTagRe.ReplaceAllString(s, " ")
-	s = html.UnescapeString(s)
+	var sb strings.Builder
+	sb.Grow(len(input))
+
+	i := 0
+	for i < len(input) {
+		next := strings.IndexByte(input[i:], '<')
+		if next == -1 {
+			sb.WriteString(input[i:])
+			break
+		}
+
+		sb.WriteString(input[i : i+next])
+		sb.WriteByte(' ') // replace tags with space
+		i += next
+
+		rem := input[i:] // rem starts with '<'
+
+		// Check for <script
+		if len(rem) >= 7 && strings.EqualFold(rem[:7], "<script") && (len(rem) == 7 || isSpaceOrGreater(rem[7])) {
+			end := indexIgnoreCase(rem[7:], "</script>")
+			if end != -1 {
+				i += 7 + end + 9 // skip to after </script>
+				continue
+			}
+		}
+
+		// Check for <style
+		if len(rem) >= 6 && strings.EqualFold(rem[:6], "<style") && (len(rem) == 6 || isSpaceOrGreater(rem[6])) {
+			end := indexIgnoreCase(rem[6:], "</style>")
+			if end != -1 {
+				i += 6 + end + 8 // skip to after </style>
+				continue
+			}
+		}
+
+		// Standard tag <[^>]+>
+		closeIdx := strings.IndexByte(rem, '>')
+		if closeIdx != -1 {
+			i += closeIdx + 1
+		} else {
+			// Unclosed tag
+			sb.WriteByte('<')
+			i++
+		}
+	}
+
+	s := html.UnescapeString(sb.String())
 	s = strings.Join(strings.Fields(s), " ")
 	return strings.TrimSpace(s)
 }
