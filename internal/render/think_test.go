@@ -74,3 +74,15 @@ Finally, I will formulate my answer.
 		t.Errorf("expected response='Here is the final answer.', got %q", response)
 	}
 }
+
+func BenchmarkSplitThink(b *testing.B) {
+	input := `<think>
+First, I should analyze the problem.
+Then, I should consider edge cases.
+Finally, I will formulate my answer.
+</think>Here is the final answer.`
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		SplitThink(input)
+	}
+}
