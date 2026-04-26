@@ -65,3 +65,11 @@
 ## 2026-03-22 - Fast Whitespace Normalization
 **Learning:** Normalizing multiple spaces to a single space using a regular expression like `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` is heavily reliant on the regex state machine and engine, which is slow and requires multiple allocations in the execution path. For large HTML documents or strings, this causes measurable performance degradation.
 **Action:** Replace `regexp.MustCompile("\\s+").ReplaceAllString(s, " ")` with the highly optimized Go standard library functions `strings.Join(strings.Fields(s), " ")`. `strings.Fields` is optimized to split strings by whitespace fast, and `strings.Join` pre-allocates the exact required buffer length, leading to zero intermediate string allocations and drastically faster execution times.
+
+## 2025-04-26 - Zero-allocation Parsing for Static Tags
+**Learning:** When extracting content between simple, static XML/HTML tags (e.g., `<think>` blocks from LLM outputs), avoid using regular expressions (`regexp.MustCompile`). Instead, use `strings.Index` to find the start and end boundaries and extract the content using simple string slicing (`content[start:end]`). This eliminates regex engine overhead and allows for zero-allocation parsing.
+**Action:** Replace `regexp` based block extractors with `strings.Index` loops when parsing strictly defined tags.
+
+## 2025-04-26 - Handling Unclosed Tags in Manual Parsing
+**Learning:** When manually parsing paired tags using `strings.Index` to replace regex matching, explicitly handle unclosed tags (a start tag with no end tag). If a closing tag is not found (`Index == -1`), the parser must append the entire remaining string (including the unclosed start tag) to the result to mirror ungreedy regex behavior and prevent data loss.
+**Action:** When writing `strings.Index` based parsers, always add an explicit `if endIdx == -1 { builder.WriteString(remaining); break }` check to gracefully handle incomplete tags.
