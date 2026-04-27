@@ -132,6 +132,7 @@ func (l *Loader) RenderPattern(name string, values map[string]string) (*Rendered
 	}
 
 	resolved := make(map[string]string, len(found.Variables))
+	replacements := make([]string, 0, len(found.Variables)*2)
 	for key, spec := range found.Variables {
 		value := strings.TrimSpace(values[key])
 		if value == "" {
@@ -141,12 +142,10 @@ func (l *Loader) RenderPattern(name string, values map[string]string) (*Rendered
 			return nil, fmt.Errorf("missing required variable %q", key)
 		}
 		resolved[key] = value
+		replacements = append(replacements, "{{"+key+"}}", value)
 	}
 
-	sql := found.Template
-	for key, value := range resolved {
-		sql = strings.ReplaceAll(sql, "{{"+key+"}}", value)
-	}
+	sql := strings.NewReplacer(replacements...).Replace(found.Template)
 	if strings.Contains(sql, "{{") {
 		return nil, fmt.Errorf("unresolved placeholders remain in rendered SQL")
 	}
