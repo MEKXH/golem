@@ -26,9 +26,6 @@ const (
 )
 
 var (
-	htmlScriptRe    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	htmlStyleRe     = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	htmlTagRe       = regexp.MustCompile(`(?s)<[^>]+>`)
 	ddgResultLinkRe = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
 )
 
@@ -344,11 +341,93 @@ func NewWebFetchTool() (tool.InvokableTool, error) {
 	return utils.InferTool("web_fetch", "Fetch content from a URL", impl.execute)
 }
 
+// indexIgnoreCase returns the index of the first instance of substr in s
+// using a case-insensitive ASCII comparison, avoiding strings.ToLower allocations.
+func indexIgnoreCase(s, substr string) int {
+	if len(substr) == 0 {
+		return 0
+	}
+	if len(substr) > len(s) {
+		return -1
+	}
+	for i := 0; i <= len(s)-len(substr); i++ {
+		match := true
+		for j := 0; j < len(substr); j++ {
+			c1 := s[i+j]
+			c2 := substr[j]
+			if c1 >= 'A' && c1 <= 'Z' {
+				c1 += 'a' - 'A'
+			}
+			if c2 >= 'A' && c2 <= 'Z' {
+				c2 += 'a' - 'A'
+			}
+			if c1 != c2 {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}
+
+// isSpaceOrGreater returns true if the character is a space, > or /.
+func isSpaceOrGreater(c byte) bool {
+	return c == ' ' || c == '>' || c == '\t' || c == '\n' || c == '\r' || c == '/'
+}
+
 func htmlToText(input string) string {
-	s := htmlScriptRe.ReplaceAllString(input, " ")
-	s = htmlStyleRe.ReplaceAllString(s, " ")
-	s = htmlTagRe.ReplaceAllString(s, " ")
-	s = html.UnescapeString(s)
+	var sb strings.Builder
+	// In the worst case, the output length is at most the input length.
+	sb.Grow(len(input))
+
+	i := 0
+	for i < len(input) {
+		if input[i] == '<' {
+			// Look ahead to check for script or style tags
+			rem := input[i+1:]
+			if len(rem) >= 6 && indexIgnoreCase(rem[:6], "script") == 0 && (len(rem) == 6 || isSpaceOrGreater(rem[6])) {
+				// Find closing </script>
+				endIdx := indexIgnoreCase(input[i:], "</script>")
+				if endIdx == -1 {
+					i = len(input) // Skip to end if unclosed
+				} else {
+					i += endIdx + 9
+				}
+				sb.WriteByte(' ')
+				continue
+			}
+			if len(rem) >= 5 && indexIgnoreCase(rem[:5], "style") == 0 && (len(rem) == 5 || isSpaceOrGreater(rem[5])) {
+				// Find closing </style>
+				endIdx := indexIgnoreCase(input[i:], "</style>")
+				if endIdx == -1 {
+					i = len(input) // Skip to end if unclosed
+				} else {
+					i += endIdx + 8
+				}
+				sb.WriteByte(' ')
+				continue
+			}
+
+			// Find closing >
+			endIdx := strings.IndexByte(rem, '>')
+			if endIdx == -1 {
+				// Unclosed tag, just treat '<' literally to avoid losing data
+				sb.WriteByte('<')
+				i++
+			} else {
+				i += endIdx + 2 // Skip the tag
+				sb.WriteByte(' ')
+			}
+		} else {
+			sb.WriteByte(input[i])
+			i++
+		}
+	}
+
+	s := html.UnescapeString(sb.String())
 	s = strings.Join(strings.Fields(s), " ")
 	return strings.TrimSpace(s)
 }
